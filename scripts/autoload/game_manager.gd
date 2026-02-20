@@ -149,21 +149,21 @@ var stat_definitions: Dictionary = {
 	"water_value": {
 		"name": "Water Value",
 		"base_value": 1.0,
-		"growth_rate": 1.30,
+		"growth_rate": 1.12,
 		"scale": "exponential",
 		"base_cost": 50.0,
-		"cost_exponent": 1.22,
-		"max_value": 100.0,
+		"cost_exponent": 1.45,
+		"max_value": 15.0,
 		"format": "multiplier"
 	},
 	"scoop_power": {
 		"name": "Scoop Power",
 		"base_value": 1.0,
-		"growth_rate": 1.28,
+		"growth_rate": 1.12,
 		"scale": "exponential",
 		"base_cost": 35.0,
-		"cost_exponent": 1.20,
-		"max_value": 100.0,
+		"cost_exponent": 1.40,
+		"max_value": 10.0,
 		"format": "multiplier"
 	}
 }

@@ -15,8 +15,8 @@ var terrain_points: Array[Vector2] = [
 	# Left shore (shop area) — indices 6-7
 	Vector2(-40, 136), Vector2(80, 136),
 	# Puddle (7 pts) — indices 2-8: shallow worn dip, left-leaning
-	Vector2(108, 160),   # entry top
-	Vector2(130, 168),   # entry mid-shelf
+	Vector2(112, 152),   # entry top
+	Vector2(135, 164),   # entry mid-shelf (~28°)
 	Vector2(142, 163),   # small notch up
 	Vector2(155, 168),   # basin dip
 	Vector2(165, 166),   # basin bump
@@ -24,9 +24,9 @@ var terrain_points: Array[Vector2] = [
 	Vector2(200, 148),   # exit top (gradual climb)
 	# Ridge 1 — smooth hump — indices 9-10
 	Vector2(230, 142), Vector2(270, 155),
-	# Pond (9 pts) — indices 11-19: off-center V, one steep wall
-	Vector2(310, 195),   # entry top
-	Vector2(330, 204),   # entry shelf
+	# Pond (9 pts) — indices 11-19: off-center V
+	Vector2(305, 188),   # entry top (~28°)
+	Vector2(328, 200),   # entry shelf (~28°)
 	Vector2(348, 200),   # step back up
 	Vector2(370, 210),   # deeper dip (off-center V)
 	Vector2(395, 212),   # basin floor
@@ -37,8 +37,8 @@ var terrain_points: Array[Vector2] = [
 	# Ridge 2 — plateau — indices 20-22
 	Vector2(520, 178), Vector2(555, 180), Vector2(595, 192),
 	# Marsh (13 pts) — indices 23-35: wide, lumpy, organic
-	Vector2(650, 240),   # entry top
-	Vector2(670, 248),   # entry slope
+	Vector2(650, 228),   # entry top
+	Vector2(675, 244),   # entry slope (~30°)
 	Vector2(688, 244),   # bump up
 	Vector2(705, 252),   # dip
 	Vector2(720, 250),   # rise
@@ -70,13 +70,13 @@ var terrain_points: Array[Vector2] = [
 	Vector2(1300, 290),  # exit top (dx=28,dy=16 up → 30°)
 	# Ridge 4 — cracked flat — indices 54-57
 	Vector2(1320, 280), Vector2(1345, 276), Vector2(1370, 278), Vector2(1400, 294),
-	# Swamp (17 pts) — indices 58-74: lopsided canyon, left cliff, gradual right slope
-	Vector2(1450, 340),  # entry top (steep left cliff)
-	Vector2(1462, 360),  # steep drop
-	Vector2(1472, 354),  # notch
-	Vector2(1486, 370),  # deeper
-	Vector2(1505, 376),  # ledge
-	Vector2(1528, 382),  # basin left
+	# Swamp (17 pts) — indices 58-74: lopsided canyon, gradual right slope
+	Vector2(1450, 336),  # entry top
+	Vector2(1475, 350),  # entry slope (~30°)
+	Vector2(1498, 362),  # mid slope (~28°)
+	Vector2(1518, 372),  # lower slope (~27°)
+	Vector2(1536, 378),  # ledge (~18°)
+	Vector2(1555, 384),  # basin left (~17°)
 	Vector2(1555, 386),  # deep basin
 	Vector2(1582, 390),  # deepest (far off-center right)
 	Vector2(1608, 388),  # slight rise
@@ -91,9 +91,9 @@ var terrain_points: Array[Vector2] = [
 	# Ridge 5 — narrow spike — indices 75-77
 	Vector2(1820, 326), Vector2(1850, 318), Vector2(1885, 332),
 	# Lake (19 pts) — indices 78-96: wide open, underwater ridges
-	Vector2(1940, 380),  # entry top
-	Vector2(1960, 396),  # entry slope
-	Vector2(1985, 404),  # shelf
+	Vector2(1940, 372),  # entry top
+	Vector2(1965, 390),  # entry slope (~30°)
+	Vector2(1988, 402),  # shelf (~28°)
 	Vector2(2010, 398),  # ridge up
 	Vector2(2035, 410),  # trench
 	Vector2(2065, 416),  # deep
@@ -112,13 +112,13 @@ var terrain_points: Array[Vector2] = [
 	Vector2(2455, 372),  # exit top
 	# Ridge 6 — stepped — indices 97-99
 	Vector2(2495, 364), Vector2(2525, 358), Vector2(2560, 370),
-	# Reservoir (21 pts) — indices 100-120: angular, dam-like, near-vertical walls
-	Vector2(2610, 412),  # entry top
-	Vector2(2622, 440),  # near-vertical drop
-	Vector2(2636, 436),  # angular ledge
-	Vector2(2650, 450),  # deeper
-	Vector2(2668, 454),  # step
-	Vector2(2690, 460),  # deep
+	# Reservoir (21 pts) — indices 100-120: angular, dam-like
+	Vector2(2610, 400),  # entry top
+	Vector2(2632, 416),  # entry slope (~30°)
+	Vector2(2652, 432),  # mid slope (~29°)
+	Vector2(2670, 444),  # lower slope (~28°)
+	Vector2(2688, 452),  # step (~24°)
+	Vector2(2708, 460),  # deep (~22°)
 	Vector2(2715, 464),  # deeper
 	Vector2(2740, 466),  # basin
 	Vector2(2770, 468),  # deepest
@@ -137,10 +137,10 @@ var terrain_points: Array[Vector2] = [
 	# Ridge 7 — jagged — indices 121-123
 	Vector2(3088, 396), Vector2(3115, 388), Vector2(3148, 400),
 	# Lagoon (23 pts) — indices 124-146: winding irregular, sub-basins
-	Vector2(3200, 440),  # entry top
-	Vector2(3218, 458),  # drop
-	Vector2(3240, 462),  # shelf
-	Vector2(3265, 468),  # sub-basin 1
+	Vector2(3200, 430),  # entry top
+	Vector2(3225, 446),  # entry slope (~30°)
+	Vector2(3248, 458),  # shelf (~28°)
+	Vector2(3268, 466),  # sub-basin 1 (~22°)
 	Vector2(3288, 472),  # deep
 	Vector2(3310, 468),  # pinch point rise
 	Vector2(3332, 464),  # narrow
@@ -163,11 +163,11 @@ var terrain_points: Array[Vector2] = [
 	# Ridge 8 — broken — indices 147-150
 	Vector2(3725, 422), Vector2(3755, 414), Vector2(3780, 420), Vector2(3810, 432),
 	# Bayou (25 pts) — indices 151-175: collapsed, twisted, chaotic
-	Vector2(3865, 468),  # entry top
-	Vector2(3878, 486),  # steep collapse
-	Vector2(3895, 480),  # root protrusion up
-	Vector2(3912, 492),  # deeper
-	Vector2(3932, 498),  # collapsed section
+	Vector2(3865, 458),  # entry top
+	Vector2(3888, 472),  # entry slope (~31°)
+	Vector2(3910, 484),  # mid slope (~28°)
+	Vector2(3930, 494),  # lower slope (~27°)
+	Vector2(3950, 500),  # collapsed section (~17°)
 	Vector2(3955, 494),  # bump
 	Vector2(3978, 502),  # deeper
 	Vector2(4002, 508),  # basin
@@ -195,9 +195,9 @@ var terrain_points: Array[Vector2] = [
 	Vector2(4575, 496),  # shelf slope
 	Vector2(4600, 504),  # shelf
 	Vector2(4630, 508),  # shelf edge
-	Vector2(4660, 520),  # steep drop begins
-	Vector2(4688, 540),  # cliff
-	Vector2(4710, 558),  # deep drop
+	Vector2(4660, 516),  # steep drop begins
+	Vector2(4692, 534),  # cliff (smoothed)
+	Vector2(4722, 552),  # deep drop (smoothed)
 	Vector2(4735, 572),  # trench approach
 	Vector2(4762, 582),  # trench
 	Vector2(4790, 590),  # deep trench
