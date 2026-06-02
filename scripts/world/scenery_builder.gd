@@ -169,7 +169,7 @@ static func build_surface_props(parent: Node3D) -> void:
 		if r.randf() < tree_chance:
 			var z := r.randf_range(pzb, pzf - 2.0)
 			var s := r.randf_range(0.7, 1.4)
-			var tf := Transform3D(Basis().rotated(Vector3.UP, r.randf_range(0, TAU)).scaled(Vector3(s, s, s)), Vector3(wx, sy, z))
+			var tf := Transform3D(Basis().rotated(Vector3.UP, r.randf_range(0, TAU)).scaled(Vector3(s, s, s)), Vector3(wx, sy + TerrainBuilder.back_rise(z), z))
 			# per-tree tint: vary brightness + a touch of hue (autumnal/lush mix)
 			var v := r.randf_range(0.80, 1.12)
 			var tint := Color(v * r.randf_range(0.9, 1.05), v, v * r.randf_range(0.78, 0.97))
@@ -182,7 +182,8 @@ static func build_surface_props(parent: Node3D) -> void:
 
 		if r.randf() < 0.14:
 			var bs := r.randf_range(0.7, 1.3)
-			bush_tf.append(Transform3D(Basis().rotated(Vector3.UP, r.randf_range(0, TAU)).scaled(Vector3(bs, bs, bs)), Vector3(wx, sy, r.randf_range(pzb, pzf))))
+			var bz := r.randf_range(pzb, pzf)
+			bush_tf.append(Transform3D(Basis().rotated(Vector3.UP, r.randf_range(0, TAU)).scaled(Vector3(bs, bs, bs)), Vector3(wx, sy + TerrainBuilder.back_rise(bz), bz)))
 
 		# dense grass — 2-5 tufts per step (kept off the walking path at z≈0)
 		for _g in range(r.randi_range(2, 5)):
@@ -191,25 +192,30 @@ static func build_surface_props(parent: Node3D) -> void:
 				continue
 			var gs := r.randf_range(0.65, 1.35)
 			grass_tf.append(Transform3D(Basis().rotated(Vector3.UP, r.randf_range(0, TAU)).scaled(Vector3(gs, gs, gs)),
-				Vector3(wx + r.randf_range(-1.0, 1.0), sy, gz)))
+				Vector3(wx + r.randf_range(-1.0, 1.0), sy + TerrainBuilder.back_rise(gz), gz)))
 
 		# ferns cluster near water + forest
 		if (near_water or forest) and r.randf() < 0.25:
 			var fs := r.randf_range(0.8, 1.3)
-			fern_tf.append(Transform3D(Basis().rotated(Vector3.UP, r.randf_range(0, TAU)).scaled(Vector3(fs, fs, fs)), Vector3(wx, sy, r.randf_range(pzb, pzf))))
+			var fz := r.randf_range(pzb, pzf)
+			fern_tf.append(Transform3D(Basis().rotated(Vector3.UP, r.randf_range(0, TAU)).scaled(Vector3(fs, fs, fs)), Vector3(wx, sy + TerrainBuilder.back_rise(fz), fz)))
 
 		if r.randf() < 0.20:
-			flower_tf.append(Transform3D(Basis(), Vector3(wx, sy, r.randf_range(pzb, pzf))))
+			var flz := r.randf_range(pzb, pzf)
+			flower_tf.append(Transform3D(Basis(), Vector3(wx, sy + TerrainBuilder.back_rise(flz), flz)))
 			flower_cols.append(_FLOWER_COLS[r.randi() % _FLOWER_COLS.size()])
 
 		if forest and r.randf() < 0.06:
-			mush_tf.append(Transform3D(Basis().scaled(Vector3.ONE * r.randf_range(0.8, 1.3)), Vector3(wx, sy, r.randf_range(pzb, pzf))))
+			var mz := r.randf_range(pzb, pzf)
+			mush_tf.append(Transform3D(Basis().scaled(Vector3.ONE * r.randf_range(0.8, 1.3)), Vector3(wx, sy + TerrainBuilder.back_rise(mz), mz)))
 
 		if r.randf() < 0.03:
-			rock_tf.append(Transform3D(Basis().rotated(Vector3.UP, r.randf_range(0, TAU)).scaled(Vector3(r.randf_range(0.6, 1.5), r.randf_range(0.5, 1.1), r.randf_range(0.6, 1.5))), Vector3(wx, sy, r.randf_range(pzb, pzf))))
+			var rz := r.randf_range(pzb, pzf)
+			rock_tf.append(Transform3D(Basis().rotated(Vector3.UP, r.randf_range(0, TAU)).scaled(Vector3(r.randf_range(0.6, 1.5), r.randf_range(0.5, 1.1), r.randf_range(0.6, 1.5))), Vector3(wx, sy + TerrainBuilder.back_rise(rz), rz)))
 
 		if forest and r.randf() < 0.02:
-			log_tf.append(Transform3D(Basis().rotated(Vector3.UP, r.randf_range(-0.3, 0.3)), Vector3(wx, sy + 0.15, r.randf_range(pzb, pzf - 2.0))))
+			var lz := r.randf_range(pzb, pzf - 2.0)
+			log_tf.append(Transform3D(Basis().rotated(Vector3.UP, r.randf_range(-0.3, 0.3)), Vector3(wx, sy + 0.15 + TerrainBuilder.back_rise(lz), lz)))
 
 	_spawn_mm(parent, "Trees", _tree_mesh(), tree_tf, tree_cols, 0.035)
 	_spawn_mm(parent, "Pines", _pine_mesh(), pine_tf, pine_cols, 0.02)

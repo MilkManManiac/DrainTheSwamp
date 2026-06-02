@@ -29,15 +29,22 @@ func _ready() -> void:
 	if _wants_capture():
 		if "--player" in OS.get_cmdline_user_args():
 			_spawn_player()
-			var cx := 300.0   # open area (between pools), away from the dense forest
+			var hill := "--hill" in OS.get_cmdline_user_args()
+			var cx := 395.0 if hill else 300.0   # 395 = deepest point of the Pond basin
 			player.position = Vector3(cx * WorldData.SCALE, WorldData.surface_y_at(cx) + 1.0, 0.0)
 			var pcam := Camera3D.new()
 			pcam.projection = Camera3D.PROJECTION_ORTHOGONAL
-			pcam.size = 4.0
 			add_child(pcam)
-			var look := player.position + Vector3(0, 0.3, 0)
-			pcam.position = look + Vector3(2.6, 1.0, 4.5)
-			pcam.look_at(look, Vector3.UP)
+			if hill:
+				pcam.size = 24.0
+				var look := player.position + Vector3(0, 1.0, 0)
+				pcam.position = look + cam_offset
+				pcam.look_at(look, Vector3.UP)
+			else:
+				pcam.size = 4.0
+				var look := player.position + Vector3(0, 0.3, 0)
+				pcam.position = look + Vector3(2.6, 1.0, 4.5)
+				pcam.look_at(look, Vector3.UP)
 			pcam.make_current()
 		else:
 			_build_camera()
@@ -69,7 +76,14 @@ func _process(delta: float) -> void:
 		return
 	var look := player.global_position + Vector3(0, 1.0, 0)
 	var want := look + cam_offset
-	follow_cam.global_position = follow_cam.global_position.lerp(want, clampf(delta * 6.0, 0.0, 1.0))
+	# smooth the horizontal scroll, but track height TIGHTLY so climbing a hill never
+	# lags the camera down and exposes the void below the terrain
+	var p := follow_cam.global_position
+	var k := clampf(delta * 6.0, 0.0, 1.0)
+	p.x = lerpf(p.x, want.x, k)
+	p.z = lerpf(p.z, want.z, k)
+	p.y = lerpf(p.y, want.y, clampf(delta * 18.0, 0.0, 1.0))
+	follow_cam.global_position = p
 	follow_cam.look_at(look, Vector3.UP)
 
 func _build_environment() -> void:

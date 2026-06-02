@@ -13,6 +13,15 @@ const SMOOTH_PASSES: int = 5         # round off sharp corners → gentle walkab
 const WALL_DEPTH: float = 30.0       # dig-face depth (fills bottom of frame)
 const COLLISION_DEPTH: float = 44.0
 const BEVEL: float = 0.6             # rounded grass lip at the top-front edge
+const BACK_RISE: float = 16.0        # land rises this much into hills behind the play band
+
+# how much the surface lifts at a given z (0 in the play band z>=0, rising toward the back)
+static func back_rise(z: float) -> float:
+	if z >= 0.0:
+		return 0.0
+	var back: float = WorldData.FRONT_Z - WorldData.DEPTH
+	var t: float = clampf(z / back, 0.0, 1.0)
+	return BACK_RISE * t * t
 
 # Swampy, grimy palette — dark mossy green-brown turf over wet muddy soil
 const GRASS_A := Color(0.26, 0.32, 0.17)
@@ -62,11 +71,24 @@ static func build(parent: Node3D) -> void:
 		var g0 := _tint(GRASS_A if (i % 2 == 0) else GRASS_B, ao0)
 		var g1 := _tint(GRASS_A if ((i + 1) % 2 == 0) else GRASS_B, ao1)
 
-		# rounded top grass surface (smooth-shaded across X)
-		_quad_n(st,
-			Vector3(x0, h0, back_z), Vector3(x1, h1, back_z),
-			Vector3(x1, h1, front_top_z), Vector3(x0, h0, front_top_z),
-			g0, g1, g1, g0, n0, n1, n1, n0)
+		# top grass surface — flat through the play band (front..z0), then RISES into
+		# forested hills toward the back so there's never a sky-gap edge (anti-floating)
+		var zbands := [front_top_z, 0.0, back_z * 0.34, back_z * 0.67, back_z]
+		for zi in range(zbands.size() - 1):
+			var za: float = zbands[zi]        # nearer (front)
+			var zc: float = zbands[zi + 1]    # farther (back)
+			var ra := back_rise(za)
+			var rc := back_rise(zc)
+			var zslope: float = (rc - ra) / (zc - za) if zc != za else 0.0
+			var na0 := Vector3(n0.x, n0.y, -zslope).normalized()
+			var na1 := Vector3(n1.x, n1.y, -zslope).normalized()
+			var sh: float = 1.0 - 0.14 * clampf(-zc / maxf(-back_z, 0.001), 0.0, 1.0)
+			var c0 := _tint(g0, sh)
+			var c1 := _tint(g1, sh)
+			_quad_n(st,
+				Vector3(x0, h0 + rc, zc), Vector3(x1, h1 + rc, zc),
+				Vector3(x1, h1 + ra, za), Vector3(x0, h0 + ra, za),
+				c0, c1, c1, c0, na0, na1, na1, na0)
 
 		# soft grass bevel rolling over the front edge
 		var nb0 := (n0 + Vector3(0, 0, 1)).normalized()
