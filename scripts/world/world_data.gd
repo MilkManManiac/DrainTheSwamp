@@ -131,11 +131,11 @@ static func elev(orig_y: float) -> float:
 # big slow sweep so it curves quite a bit in places. (player + path mesh + prop-clearing
 # all follow this.)
 static func path_z(world_x: float) -> float:
-	return sin(world_x * 0.022) * 2.7 + sin(world_x * 0.06) * 1.2 + sin(world_x * 0.0095 + 1.0) * 1.3
+	return sin(world_x * 0.018) * 5.2 + sin(world_x * 0.05) * 2.2 + sin(world_x * 0.0078 + 1.0) * 3.2
 
 static func path_tangent_yaw(world_x: float) -> float:
 	# yaw to face along the path (derivative of path_z gives the local heading)
-	var dz := 0.022 * 2.7 * cos(world_x * 0.022) + 0.06 * 1.2 * cos(world_x * 0.06) + 0.0095 * 1.3 * cos(world_x * 0.0095 + 1.0)
+	var dz := 0.018 * 5.2 * cos(world_x * 0.018) + 0.05 * 2.2 * cos(world_x * 0.05) + 0.0078 * 3.2 * cos(world_x * 0.0078 + 1.0)
 	return atan2(dz, 1.0)
 
 # ── Land extension ───────────────────────────────────────────────────────────────
@@ -205,7 +205,7 @@ static func _land_mask(orig_x: float) -> float:
 # rolling-hill undulation on the land sections (3D units), faded at pools — more
 # pronounced so the path climbs and dips over real hills
 static func land_roll(orig_x: float) -> float:
-	var roll: float = sin(orig_x * 0.0055) * 3.1 + sin(orig_x * 0.014 + 1.3) * 1.6 + sin(orig_x * 0.03) * 0.7
+	var roll: float = sin(orig_x * 0.0048) * 6.0 + sin(orig_x * 0.012 + 1.3) * 3.2 + sin(orig_x * 0.027) * 1.4
 	return roll * _land_mask(orig_x)
 
 static func surface_y_at(orig_x: float) -> float:

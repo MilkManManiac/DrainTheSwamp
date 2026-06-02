@@ -193,9 +193,8 @@ static func build_surface_props(parent: Node3D) -> void:
 				var bs := r.randf_range(0.7, 1.3)
 				bush_tf.append(Transform3D(Basis().rotated(Vector3.UP, r.randf_range(0, TAU)).scaled(Vector3(bs, bs, bs)), Vector3(wx, sy, bz)))
 
-		# THICK grass with SIZE LAYERING (tertiary short carpet + secondary medium +
-		# occasional primary tall clumps) — kept off the walking path
-		for _g in range(r.randi_range(16, 30)):
+		# THICK grass with SIZE LAYERING (curved higher-poly tufts) — off the path
+		for _g in range(r.randi_range(10, 18)):
 			var gz := r.randf_range(pzb, pzf)
 			if absf(gz - pz) < 2.1:
 				continue
@@ -312,10 +311,11 @@ static func _tree_mesh() -> ArrayMesh:
 	var lo := Color(0.24, 0.40, 0.21)
 	var hi := Color(0.36, 0.55, 0.29)
 	_cyl(st, Vector3(0, 0, 0), 0.26, 0.20, 1.8, trunk, trunk.darkened(0.15))
-	_sphere(st, Vector3(0, 2.3, 0), Vector3(1.15, 1.05, 1.15), 5, 8, hi, lo)
-	_sphere(st, Vector3(0.55, 2.85, 0.1), Vector3(0.8, 0.78, 0.8), 4, 7, hi, lo)
-	_sphere(st, Vector3(-0.45, 2.7, -0.15), Vector3(0.78, 0.74, 0.78), 4, 7, hi, lo)
-	_sphere(st, Vector3(0.1, 3.35, 0.05), Vector3(0.72, 0.7, 0.72), 4, 7, hi, lo)
+	# smoother, higher-poly canopy blobs
+	_sphere(st, Vector3(0, 2.3, 0), Vector3(1.2, 1.1, 1.2), 8, 14, hi, lo)
+	_sphere(st, Vector3(0.58, 2.9, 0.1), Vector3(0.82, 0.8, 0.82), 7, 12, hi, lo)
+	_sphere(st, Vector3(-0.48, 2.7, -0.18), Vector3(0.8, 0.76, 0.8), 7, 12, hi, lo)
+	_sphere(st, Vector3(0.1, 3.4, 0.05), Vector3(0.74, 0.72, 0.74), 6, 11, hi, lo)
 	return st.commit()
 
 static func _rock_mesh() -> ArrayMesh:
@@ -330,29 +330,46 @@ static func _rock_mesh() -> ArrayMesh:
 static func _grass_mesh() -> ArrayMesh:
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
-	# lush tapered blades, mossy-swamp gradient (dark wet base → pale mossy tip)
-	var base_c := Color(0.18, 0.24, 0.12)
-	var tip_c := Color(0.44, 0.50, 0.25)
-	var blades := 7
+	# lush CURVED multi-segment blades, mossy-swamp gradient (dark base → pale tip)
+	var base_c := Color(0.20, 0.27, 0.13)
+	var tip_c := Color(0.46, 0.54, 0.27)
+	var blades := 11
 	for i in range(blades):
 		var ang := TAU * float(i) / blades + float(i) * 0.7
-		var rad := 0.08 + float(i % 3) * 0.05
+		var rad := 0.07 + float(i % 3) * 0.05
 		var bx := cos(ang) * rad
 		var bz := sin(ang) * rad
 		var h := 0.55 + float(i % 4) * 0.12
-		var lean := 0.18 + float(i % 2) * 0.1
+		var lean := 0.22 + float(i % 2) * 0.12
 		_blade(st, Vector3(bx, 0, bz), h, Vector3(cos(ang) * lean, 0, sin(ang) * lean), base_c, tip_c)
 	return st.commit()
 
+# a single curved tapering blade: 3 quad segments that bend toward the lean direction
 static func _blade(st: SurfaceTool, base: Vector3, height: float, lean: Vector3, cbase: Color, ctip: Color) -> void:
-	var w := 0.045
-	var perp := Vector3(-lean.z, 0, lean.x).normalized() * w
+	var segs := 3
+	var w := 0.05
+	var perp := Vector3(-lean.z, 0, lean.x).normalized()
 	if perp.length() < 0.001:
-		perp = Vector3(w, 0, 0)
-	var tip := base + Vector3(lean.x, height, lean.z)
-	var nrm := Vector3(lean.x, 0.6, lean.z).normalized()
-	for item in [[base - perp, cbase], [base + perp, cbase], [tip, ctip]]:
-		st.set_color(item[1]); st.set_normal(nrm); st.add_vertex(item[0])
+		perp = Vector3(1, 0, 0)
+	var nrm := Vector3(lean.x, 0.8, lean.z).normalized()
+	var prev_c := base
+	var prev_w := perp * w
+	var prev_col := cbase
+	for s in range(1, segs + 1):
+		var t := float(s) / segs
+		var pos := base + Vector3(lean.x * t * t, height * t, lean.z * t * t)
+		var wv := perp * (w * (1.0 - t * 0.9))   # taper to a point
+		var col := cbase.lerp(ctip, t)
+		_tri(st, prev_c - prev_w, pos - wv, pos + wv, prev_col, col, col, nrm)
+		_tri(st, prev_c - prev_w, pos + wv, prev_c + prev_w, prev_col, col, prev_col, nrm)
+		prev_c = pos
+		prev_w = wv
+		prev_col = col
+
+static func _tri(st: SurfaceTool, a: Vector3, b: Vector3, c: Vector3, ca: Color, cb: Color, cc: Color, n: Vector3) -> void:
+	st.set_color(ca); st.set_normal(n); st.add_vertex(a)
+	st.set_color(cb); st.set_normal(n); st.add_vertex(b)
+	st.set_color(cc); st.set_normal(n); st.add_vertex(c)
 
 static func _flower_mesh() -> ArrayMesh:
 	var st := SurfaceTool.new()
