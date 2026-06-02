@@ -81,9 +81,11 @@ func _physics_process(delta: float) -> void:
 	move_and_slide()
 	global_position.z = RAIL_Z
 
+	# turn to face the direction of travel (profile), smoothly
 	if dir != 0.0:
 		facing = signf(dir)
-		visual.rotation.y = 0.0 if facing > 0.0 else PI
+	var target_yaw: float = PI * 0.5 * facing   # +X (right) → +90°, -X (left) → -90°
+	visual.rotation.y = lerp_angle(visual.rotation.y, target_yaw, clampf(delta * 12.0, 0.0, 1.0))
 
 	var walking: bool = absf(dir) > 0.01 and is_on_floor()
 	if walking:
