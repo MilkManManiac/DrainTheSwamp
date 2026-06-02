@@ -421,6 +421,37 @@ static func _log_mesh() -> ArrayMesh:
 	_box(st, Vector3(-1.0, 0.22, 0), Vector3(0.06, 0.4, 0.4), ring)
 	return st.commit()
 
+# ── Forest walls bounding the play corridor (RPG-map style: frame is all terrain) ──
+static func build_tree_walls(parent: Node3D) -> void:
+	var x_start: float = WorldData.TERRAIN_POINTS[0].x
+	var x_end: float = WorldData.TERRAIN_POINTS[WorldData.TERRAIN_POINTS.size() - 1].x
+	var tree_tf: Array[Transform3D] = []
+	var tree_cols: Array[Color] = []
+	var pine_tf: Array[Transform3D] = []
+	var pine_cols: Array[Color] = []
+	var r := _rng(50)
+	var ox := x_start
+	while ox < x_end:
+		ox += r.randf_range(2.4, 4.6)
+		var wx: float = ox * WorldData.SCALE
+		var sy: float = TerrainBuilder.surface_height(ox)
+		# a deep, dense band of big trees behind the corridor → fills the top of frame
+		for _t in range(r.randi_range(1, 2)):
+			var z := r.randf_range(-22.0, -12.0)
+			var s := r.randf_range(1.4, 2.3)
+			var tf := Transform3D(Basis().rotated(Vector3.UP, r.randf_range(0, TAU)).scaled(Vector3(s, s, s)), Vector3(wx, sy, z))
+			# darker, receding into shade
+			var d := r.randf_range(0.6, 0.85)
+			var tint := Color(d * 0.95, d, d * 0.85)
+			if r.randf() < 0.45:
+				pine_tf.append(tf)
+				pine_cols.append(tint)
+			else:
+				tree_tf.append(tf)
+				tree_cols.append(tint)
+	_spawn_mm(parent, "WallTrees", _tree_mesh(), tree_tf, tree_cols, 0.02)
+	_spawn_mm(parent, "WallPines", _pine_mesh(), pine_tf, pine_cols, 0.015)
+
 # ── Water-edge props (reeds, lily pads) ──────────────────────────────────────────
 static func build_water_props(parent: Node3D) -> void:
 	var reed_tf: Array[Transform3D] = []

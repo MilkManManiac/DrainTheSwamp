@@ -12,7 +12,7 @@ var player: CharacterBody3D
 var follow_cam: Camera3D
 # camera Z (12) sits IN FRONT of the terrain front edge (FRONT_Z=14) so the dig-face
 # cross-section is behind the camera and never rendered — foreground is pure top-surface ground
-var cam_offset := Vector3(2.0, 6.5, 14.0)
+var cam_offset := Vector3(1.5, 13.0, 10.5)
 
 func _ready() -> void:
 	_build_environment()
@@ -20,6 +20,7 @@ func _ready() -> void:
 		SceneryBuilder.build_background(self)
 	TerrainBuilder.build(self)
 	SceneryBuilder.build_surface_props(self)
+	SceneryBuilder.build_tree_walls(self)
 	SceneryBuilder.build_digface_detail(self)
 	water = WaterBuilder.new()
 	water.build(self)
@@ -31,7 +32,7 @@ func _ready() -> void:
 		if "--player" in OS.get_cmdline_user_args():
 			_spawn_player()
 			var hill := "--hill" in OS.get_cmdline_user_args()
-			var cx := 395.0 if hill else 300.0   # 395 = deepest point of the Pond basin
+			var cx := 520.0 if hill else 300.0   # 520 = flat ridge (between pools)
 			player.position = Vector3(cx * WorldData.SCALE, WorldData.surface_y_at(cx) + 1.0, 0.0)
 			var pcam := Camera3D.new()
 			pcam.projection = Camera3D.PROJECTION_ORTHOGONAL
@@ -181,7 +182,7 @@ func _build_camera() -> void:
 	var tx := 40.0 if wide else 18.0
 	var ty: float = WorldData.surface_y_at(tx / WorldData.SCALE) - (3.0 if wide else 1.5)
 	var target := Vector3(tx, ty, 0.0)
-	cam.position = target + Vector3(3.0, 16.0, 26.0) if wide else target + Vector3(2.0, 6.5, 14.0)
+	cam.position = target + Vector3(3.0, 16.0, 26.0) if wide else target + Vector3(1.5, 13.0, 10.5)
 	cam.look_at(target, Vector3.UP)
 	cam.make_current()
 
