@@ -281,12 +281,29 @@ static func _rock_mesh() -> ArrayMesh:
 static func _grass_mesh() -> ArrayMesh:
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
-	var blade := Color(0.39, 0.55, 0.27)
-	var blade2 := Color(0.43, 0.59, 0.30)
-	_box(st, Vector3(0, 0.26, 0), Vector3(0.11, 0.52, 0.11), blade)
-	_box(st, Vector3(0.13, 0.22, 0.06), Vector3(0.09, 0.44, 0.09), blade2)
-	_box(st, Vector3(-0.11, 0.2, -0.07), Vector3(0.09, 0.4, 0.09), blade)
+	# lush tapered blades, mossy-swamp gradient (dark wet base → pale mossy tip)
+	var base_c := Color(0.18, 0.24, 0.12)
+	var tip_c := Color(0.44, 0.50, 0.25)
+	var blades := 7
+	for i in range(blades):
+		var ang := TAU * float(i) / blades + float(i) * 0.7
+		var rad := 0.08 + float(i % 3) * 0.05
+		var bx := cos(ang) * rad
+		var bz := sin(ang) * rad
+		var h := 0.55 + float(i % 4) * 0.12
+		var lean := 0.18 + float(i % 2) * 0.1
+		_blade(st, Vector3(bx, 0, bz), h, Vector3(cos(ang) * lean, 0, sin(ang) * lean), base_c, tip_c)
 	return st.commit()
+
+static func _blade(st: SurfaceTool, base: Vector3, height: float, lean: Vector3, cbase: Color, ctip: Color) -> void:
+	var w := 0.045
+	var perp := Vector3(-lean.z, 0, lean.x).normalized() * w
+	if perp.length() < 0.001:
+		perp = Vector3(w, 0, 0)
+	var tip := base + Vector3(lean.x, height, lean.z)
+	var nrm := Vector3(lean.x, 0.6, lean.z).normalized()
+	for item in [[base - perp, cbase], [base + perp, cbase], [tip, ctip]]:
+		st.set_color(item[1]); st.set_normal(nrm); st.add_vertex(item[0])
 
 static func _flower_mesh() -> ArrayMesh:
 	var st := SurfaceTool.new()

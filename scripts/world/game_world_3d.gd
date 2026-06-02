@@ -12,7 +12,7 @@ var player: CharacterBody3D
 var follow_cam: Camera3D
 # camera Z (12) sits IN FRONT of the terrain front edge (FRONT_Z=14) so the dig-face
 # cross-section is behind the camera and never rendered — foreground is pure top-surface ground
-var cam_offset := Vector3(2.0, 6.5, 14.0)
+var cam_offset := Vector3(2.0, 10.5, 13.0)
 
 func _ready() -> void:
 	_build_environment()
@@ -27,7 +27,20 @@ func _ready() -> void:
 		water.update_fill(i, GameManager.get_swamp_fill_fraction(i)))
 
 	if _wants_capture():
-		_build_camera()
+		if "--player" in OS.get_cmdline_user_args():
+			_spawn_player()
+			var cx := 300.0   # open area (between pools), away from the dense forest
+			player.position = Vector3(cx * WorldData.SCALE, WorldData.surface_y_at(cx) + 1.0, 0.0)
+			var pcam := Camera3D.new()
+			pcam.projection = Camera3D.PROJECTION_ORTHOGONAL
+			pcam.size = 4.0
+			add_child(pcam)
+			var look := player.position + Vector3(0, 0.3, 0)
+			pcam.position = look + Vector3(2.6, 1.0, 4.5)
+			pcam.look_at(look, Vector3.UP)
+			pcam.make_current()
+		else:
+			_build_camera()
 		_capture_and_quit()
 	else:
 		# crisp full-res 3D (don't use the 640x360 pixel-art viewport for 3D)
@@ -153,7 +166,7 @@ func _build_camera() -> void:
 	var tx := 40.0 if wide else 18.0
 	var ty: float = WorldData.surface_y_at(tx / WorldData.SCALE) - (3.0 if wide else 1.5)
 	var target := Vector3(tx, ty, 0.0)
-	cam.position = target + Vector3(3.0, 16.0, 26.0) if wide else target + Vector3(2.0, 6.5, 14.0)
+	cam.position = target + Vector3(3.0, 16.0, 26.0) if wide else target + Vector3(2.0, 10.5, 13.0)
 	cam.look_at(target, Vector3.UP)
 	cam.make_current()
 

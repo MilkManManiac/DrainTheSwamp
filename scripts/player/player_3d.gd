@@ -50,27 +50,45 @@ func _box(parent: Node3D, pos: Vector3, size: Vector3, col: Color) -> MeshInstan
 func _build_visual() -> void:
 	visual = Node3D.new()
 	add_child(visual)
-	# palette — a swamp worker
-	var boot := Color(0.28, 0.20, 0.12)
-	var pants := Color(0.27, 0.34, 0.52)
-	var shirt := Color(0.74, 0.36, 0.26)
-	var skin := Color(0.85, 0.66, 0.50)
-	var hat := Color(0.45, 0.34, 0.18)
+	# palette — a grizzled swamp worker (faces local +Z = travel direction)
+	var boot := Color(0.20, 0.14, 0.09)
+	var denim := Color(0.23, 0.29, 0.44)     # muddy overalls
+	var shirt := Color(0.62, 0.34, 0.27)     # faded flannel
+	var skin := Color(0.80, 0.60, 0.45)
+	var hat := Color(0.40, 0.31, 0.17)
+	var dark := Color(0.12, 0.10, 0.07)
+	var beardc := Color(0.46, 0.42, 0.36)
+	var metal := Color(0.44, 0.46, 0.50)
 
-	leg_l = _box(visual, Vector3(-0.16, 0.42, 0), Vector3(0.26, 0.5, 0.3), pants)
-	leg_r = _box(visual, Vector3(0.16, 0.42, 0), Vector3(0.26, 0.5, 0.3), pants)
-	_box(visual, Vector3(-0.16, 0.12, 0.02), Vector3(0.28, 0.2, 0.36), boot)
-	_box(visual, Vector3(0.16, 0.12, 0.02), Vector3(0.28, 0.2, 0.36), boot)
+	leg_l = _box(visual, Vector3(-0.16, 0.42, 0), Vector3(0.26, 0.5, 0.3), denim)
+	leg_r = _box(visual, Vector3(0.16, 0.42, 0), Vector3(0.26, 0.5, 0.3), denim)
+	_box(visual, Vector3(-0.16, 0.12, 0.03), Vector3(0.3, 0.2, 0.4), boot)
+	_box(visual, Vector3(0.16, 0.12, 0.03), Vector3(0.3, 0.2, 0.4), boot)
 
 	torso = Node3D.new()
 	torso.position = Vector3(0, 0.95, 0)
 	visual.add_child(torso)
 	_box(torso, Vector3(0, 0.18, 0), Vector3(0.62, 0.66, 0.42), shirt)
+	# overall straps down the chest
+	_box(torso, Vector3(-0.14, 0.2, 0.20), Vector3(0.08, 0.54, 0.05), denim)
+	_box(torso, Vector3(0.14, 0.2, 0.20), Vector3(0.08, 0.54, 0.05), denim)
+	_box(torso, Vector3(0, -0.05, 0.20), Vector3(0.5, 0.28, 0.06), denim)   # overall bib
+
 	arm_l = _box(torso, Vector3(-0.40, 0.12, 0), Vector3(0.18, 0.55, 0.22), shirt)
 	arm_r = _box(torso, Vector3(0.40, 0.12, 0), Vector3(0.18, 0.55, 0.22), shirt)
-	_box(torso, Vector3(0, 0.62, 0), Vector3(0.4, 0.4, 0.4), skin)        # head
-	_box(torso, Vector3(0, 0.86, 0), Vector3(0.52, 0.12, 0.52), hat)     # hat brim
-	_box(torso, Vector3(0, 0.96, 0), Vector3(0.34, 0.16, 0.34), hat)     # hat top
+	_box(arm_l, Vector3(0, -0.34, 0), Vector3(0.2, 0.16, 0.24), skin)        # hand
+	_box(arm_r, Vector3(0, -0.34, 0), Vector3(0.2, 0.16, 0.24), skin)        # hand
+	# a battered bucket swinging in his right hand
+	_box(arm_r, Vector3(0, -0.56, 0.04), Vector3(0.28, 0.26, 0.28), metal)
+	_box(arm_r, Vector3(0, -0.44, 0.04), Vector3(0.3, 0.05, 0.3), metal.lightened(0.1))
+
+	_box(torso, Vector3(0, 0.62, 0), Vector3(0.4, 0.4, 0.4), skin)           # head
+	_box(torso, Vector3(-0.10, 0.69, 0.21), Vector3(0.07, 0.09, 0.04), dark) # eye
+	_box(torso, Vector3(0.10, 0.69, 0.21), Vector3(0.07, 0.09, 0.04), dark)  # eye
+	_box(torso, Vector3(0, 0.61, 0.23), Vector3(0.09, 0.08, 0.08), skin)     # nose
+	_box(torso, Vector3(0, 0.50, 0.17), Vector3(0.34, 0.22, 0.14), beardc)   # beard
+	_box(torso, Vector3(0, 0.86, 0), Vector3(0.6, 0.1, 0.6), hat)            # wide hat brim
+	_box(torso, Vector3(0, 0.99, 0), Vector3(0.36, 0.24, 0.36), hat)         # hat crown
 
 func _physics_process(delta: float) -> void:
 	if not is_on_floor():
