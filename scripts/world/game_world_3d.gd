@@ -12,7 +12,7 @@ var player: CharacterBody3D
 var follow_cam: Camera3D
 # camera Z (12) sits IN FRONT of the terrain front edge (FRONT_Z=14) so the dig-face
 # cross-section is behind the camera and never rendered — foreground is pure top-surface ground
-var cam_offset := Vector3(2.0, 13.5, 10.5)
+var cam_offset := Vector3(2.0, 6.5, 14.0)
 
 func _ready() -> void:
 	_build_environment()
@@ -111,10 +111,8 @@ func _build_environment() -> void:
 	sky_mat.sky_top_color = Color(0.40, 0.50, 0.55)
 	sky_mat.sky_horizon_color = Color(0.62, 0.66, 0.58)
 	sky_mat.sky_curve = 0.18
-	# lower hemisphere = dark swamp murk so any ground-gap at the frame edges reads as
-	# murky atmosphere, not a pale void
-	sky_mat.ground_bottom_color = Color(0.16, 0.17, 0.12)
-	sky_mat.ground_horizon_color = Color(0.34, 0.37, 0.30)
+	sky_mat.ground_bottom_color = Color(0.50, 0.54, 0.48)
+	sky_mat.ground_horizon_color = Color(0.62, 0.66, 0.58)
 	sky_mat.sun_angle_max = 22.0
 	sky_mat.sun_curve = 0.08
 	sky_mat.energy_multiplier = 0.5
@@ -183,7 +181,7 @@ func _build_camera() -> void:
 	var tx := 40.0 if wide else 18.0
 	var ty: float = WorldData.surface_y_at(tx / WorldData.SCALE) - (3.0 if wide else 1.5)
 	var target := Vector3(tx, ty, 0.0)
-	cam.position = target + Vector3(3.0, 16.0, 26.0) if wide else target + Vector3(2.0, 13.5, 10.5)
+	cam.position = target + Vector3(3.0, 16.0, 26.0) if wide else target + Vector3(2.0, 6.5, 14.0)
 	cam.look_at(target, Vector3.UP)
 	cam.make_current()
 

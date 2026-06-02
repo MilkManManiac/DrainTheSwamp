@@ -26,10 +26,9 @@ func build(parent: Node3D) -> void:
 		var full_top_y: float = WorldData.elev(full_orig_y) - RIM_DROP
 		var full_h: float = maxf(full_top_y - floor_y, 0.05)
 
-		# keep the pond in the flat play floor only (z in [-5,5]) so it doesn't climb the
-		# rising banks front/back
-		var zf := 5.0
-		var zb := -5.0
+		# full-depth channel pond (fills the screen) — the look the user preferred
+		var zf := WorldData.FRONT_Z - 1.5
+		var zb := WorldData.FRONT_Z - WorldData.DEPTH + 1.5
 		var width := x1 - x0
 		var depth := zf - zb
 

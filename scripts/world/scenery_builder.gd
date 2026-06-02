@@ -28,11 +28,10 @@ static func build_background(parent: Node3D) -> Node3D:
 	var x0: float = WorldData.TERRAIN_POINTS[0].x * WorldData.SCALE - 60.0
 	var x1: float = WorldData.TERRAIN_POINTS[WorldData.TERRAIN_POINTS.size() - 1].x * WorldData.SCALE + 60.0
 
-	# far mountains (jagged blue) → mid → low green hills — pushed well behind the risen
-	# terrain (back edge ~ z=-22) so they don't poke through it
-	_ridge(bg, x0, x1, -78.0, 6.0, 9.0, 18.0, 24.0, FAR_MTN, 1)
-	_ridge(bg, x0, x1, -58.0, 3.0, 6.0, 12.0, 22.0, MID_MTN, 2)
-	_ridge(bg, x0, x1, -40.0, 1.0, 4.0, 9.0, 16.0, NEAR_HILL, 3)
+	# far mountains (jagged blue) → mid → low green hills, near the horizon band
+	_ridge(bg, x0, x1, -46.0, 2.0, 7.0, 14.0, 20.0, FAR_MTN, 1)
+	_ridge(bg, x0, x1, -30.0, -1.0, 4.0, 9.0, 22.0, MID_MTN, 2)
+	_ridge(bg, x0, x1, -17.0, -4.0, 2.0, 6.0, 14.0, NEAR_HILL, 3)
 	_build_bg_trees(bg, x0, x1)
 	_build_clouds(bg, x0, x1)
 	return bg
@@ -46,7 +45,7 @@ static func _build_bg_trees(parent: Node3D, x0: float, x1: float) -> void:
 		x += r.randf_range(2.5, 6.0)
 		var hy: float = -4.0 + r.randf_range(1.0, 4.0)
 		var s := r.randf_range(0.8, 1.6)
-		tf.append(Transform3D(Basis().scaled(Vector3(s, s, s)), Vector3(x, hy, -40.0 + r.randf_range(-1.5, 1.5))))
+		tf.append(Transform3D(Basis().scaled(Vector3(s, s, s)), Vector3(x, hy, -17.0 + r.randf_range(-1.0, 1.0))))
 	if tf.is_empty():
 		return
 	var mm := MultiMesh.new()

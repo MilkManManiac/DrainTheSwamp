@@ -17,15 +17,8 @@ const PLAY_HALF: float = 5.0         # flat valley floor: z in [-PLAY_HALF, +PLA
 const FRONT_RISE: float = 9.0        # bank rising toward the camera (fills frame bottom)
 const BACK_RISE: float = 16.0        # big hills rising away from camera (fills frame top)
 
-# the surface lifts into a valley: flat play band in the middle, rising banks front+back
-static func back_rise(z: float) -> float:
-	if z > PLAY_HALF:
-		var t: float = clampf((z - PLAY_HALF) / (WorldData.FRONT_Z - PLAY_HALF), 0.0, 1.0)
-		return FRONT_RISE * t   # linear bank rising toward the camera, fills the frame bottom
-	if z < -PLAY_HALF:
-		var back: float = WorldData.FRONT_Z - WorldData.DEPTH
-		var t2: float = clampf((z + PLAY_HALF) / (back + PLAY_HALF), 0.0, 1.0)
-		return BACK_RISE * t2 * t2
+# flat terrain in Z (valley rise reverted — the user preferred the original look)
+static func back_rise(_z: float) -> float:
 	return 0.0
 
 # Swampy, grimy palette — dark mossy green-brown turf over wet muddy soil
@@ -160,8 +153,8 @@ static func build(parent: Node3D) -> void:
 	var body := StaticBody3D.new()
 	body.name = "TerrainBody"
 	parent.add_child(body)
-	var z_lo := -PLAY_HALF - 1.0
-	var z_hi := PLAY_HALF + 1.0
+	var z_lo := -8.0
+	var z_hi := WorldData.FRONT_Z
 	var faces := PackedVector3Array()
 	for i in range(n - 1):
 		var x0 := xs[i] * WorldData.SCALE
