@@ -140,15 +140,20 @@ static func build_surface_props(parent: Node3D) -> void:
 
 	var tree_tf: Array[Transform3D] = []
 	var tree_cols: Array[Color] = []
+	var tree_var: Array[int] = []
 	var pine_tf: Array[Transform3D] = []
 	var pine_cols: Array[Color] = []
 	var bush_tf: Array[Transform3D] = []
 	var rock_tf: Array[Transform3D] = []
 	var grass_tf: Array[Transform3D] = []
+	var grass2_tf: Array[Transform3D] = []
+	var grass3_tf: Array[Transform3D] = []
 	var smallgrass_tf: Array[Transform3D] = []
 	var fern_tf: Array[Transform3D] = []
 	var mush_tf: Array[Transform3D] = []
 	var log_tf: Array[Transform3D] = []
+	var stump_tf: Array[Transform3D] = []
+	var fallen_tf: Array[Transform3D] = []
 	var flower_tf: Array[Transform3D] = []
 	var flower_cols: Array[Color] = []
 	var cypress_tf: Array[Transform3D] = []
@@ -187,6 +192,7 @@ static func build_surface_props(parent: Node3D) -> void:
 				else:
 					tree_tf.append(tf)
 					tree_cols.append(tint)
+					tree_var.append(r.randi() % TREE_VARIANTS)
 
 		if r.randf() < 0.14:
 			var bz := r.randf_range(pzb, pzf)
@@ -202,8 +208,16 @@ static func build_surface_props(parent: Node3D) -> void:
 			var gs := r.randf_range(0.35, 1.0)        # short→medium carpet
 			if r.randf() < 0.18:
 				gs = r.randf_range(1.3, 2.3)          # occasional tall clump
-			grass_tf.append(Transform3D(Basis().rotated(Vector3.UP, r.randf_range(0, TAU)).scaled(Vector3(gs * r.randf_range(0.85, 1.2), gs, gs * r.randf_range(0.85, 1.2))),
-				Vector3(wx + r.randf_range(-1.5, 1.5), sy, gz)))
+			var gtf := Transform3D(Basis().rotated(Vector3.UP, r.randf_range(0, TAU)).scaled(Vector3(gs * r.randf_range(0.85, 1.2), gs, gs * r.randf_range(0.85, 1.2))),
+				Vector3(wx + r.randf_range(-1.5, 1.5), sy, gz))
+			# spread across 3 grass styles (fine tuft / broad-leaf / tall wispy) for variety
+			var gpick := r.randf()
+			if gpick < 0.58:
+				grass_tf.append(gtf)
+			elif gpick < 0.82:
+				grass2_tf.append(gtf)
+			else:
+				grass3_tf.append(gtf)
 
 		# SMALL filler grass — packs the bare gaps with short medium/small tufts
 		for _sg in range(r.randi_range(40, 70)):
@@ -266,16 +280,42 @@ static func build_surface_props(parent: Node3D) -> void:
 			if absf(lz - pz) >= PATH_CLEAR:
 				log_tf.append(Transform3D(Basis().rotated(Vector3.UP, r.randf_range(-0.3, 0.3)), Vector3(wx, sy + 0.15, lz)))
 
-	_spawn_mm(parent, "Trees", _tree_mesh(), tree_tf, tree_cols, 0.035)
+		# cut stumps — old logging remnants, sit anywhere off the path
+		if r.randf() < 0.022:
+			var stz := r.randf_range(pzb, pzf)
+			if absf(stz - pz) >= 2.4:
+				var sts := r.randf_range(0.8, 1.35)
+				stump_tf.append(Transform3D(Basis().rotated(Vector3.UP, r.randf_range(0, TAU)).scaled(Vector3(sts, sts * r.randf_range(0.8, 1.1), sts)), Vector3(wx, sy, stz)))
+
+		# downed/fallen trunks — bigger, kept off the walking corridor
+		if r.randf() < 0.014:
+			var ftz := r.randf_range(pzb, pzf - 2.0)
+			if absf(ftz - pz) >= PATH_CLEAR:
+				var fts := r.randf_range(0.85, 1.3)
+				fallen_tf.append(Transform3D(Basis().rotated(Vector3.UP, r.randf_range(0, TAU)).scaled(Vector3(fts, fts, fts)), Vector3(wx, sy + 0.12, ftz)))
+
+	var tvariants := _tree_variants()
+	for vi in range(tvariants.size()):
+		var vtf: Array[Transform3D] = []
+		var vcl: Array[Color] = []
+		for j in range(tree_tf.size()):
+			if tree_var[j] == vi:
+				vtf.append(tree_tf[j])
+				vcl.append(tree_cols[j])
+		_spawn_mm(parent, "Trees%d" % vi, tvariants[vi], vtf, vcl, 0.035)
 	_spawn_mm(parent, "Pines", _pine_mesh(), pine_tf, pine_cols, 0.02)
 	_spawn_mm(parent, "Cypress", _cypress_mesh(), cypress_tf, cypress_cols, 0.03)
 	_spawn_mm(parent, "Snags", _snag_mesh(), snag_tf, [], 0.02)
 	_spawn_mm(parent, "Palmettos", _palmetto_mesh(), palm_tf, [], 0.07)
 	_spawn_mm(parent, "Bushes", _bush_mesh(), bush_tf, [], 0.05)
 	_spawn_mm(parent, "Logs", _log_mesh(), log_tf)
+	_spawn_mm(parent, "Stumps", _stump_mesh(), stump_tf)
+	_spawn_mm(parent, "FallenTrunks", _fallentrunk_mesh(), fallen_tf)
 	_spawn_mm(parent, "Rocks", _rock_mesh(), rock_tf)
 	_spawn_mm(parent, "Ferns", _fern_mesh(), fern_tf, [], 0.09, false)
 	_spawn_mm(parent, "GrassTufts", _grass_mesh(), grass_tf, [], 0.11, false)
+	_spawn_mm(parent, "GrassBroad", _grass_broad_mesh(), grass2_tf, [], 0.10, false)
+	_spawn_mm(parent, "GrassWispy", _grass_wispy_mesh(), grass3_tf, [], 0.14, false)
 	_spawn_mm(parent, "SmallGrass", _smallgrass_mesh(), smallgrass_tf, [], 0.13, false)
 	_spawn_mm(parent, "Mushrooms", _mushroom_mesh(), mush_tf)
 	_spawn_mm(parent, "Flowers", _flower_mesh(), flower_tf, flower_cols, 0.10, false)
@@ -318,31 +358,65 @@ static func _spawn_mm(parent: Node3D, nm: String, mesh: Mesh, tfs: Array[Transfo
 		mmi.material_override = mat
 	parent.add_child(mmi)
 
+const TREE_VARIANTS := 4
+
 static func _tree_mesh() -> ArrayMesh:
+	return _tree_mesh_v(0)
+
+# build a SET of distinct tree silhouettes so neighbours don't look copy-pasted.
+# each is seeded → stable; per-instance scale/rotation/tint vary on top of these.
+static func _tree_variants() -> Array:
+	var out: Array = []
+	for v in range(TREE_VARIANTS):
+		out.append(_tree_mesh_v(v))
+	return out
+
+# one procedurally-varied broadleaf: random trunk height, branch count/spread, crown
+# clumps, and a per-tree hue shift (some yellow-green, some deep shade).
+static func _tree_mesh_v(variant: int) -> ArrayMesh:
+	var r := _rng(700 + variant * 23)
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
 	var trunk := Color(0.42, 0.31, 0.19)
 	var trunkd := Color(0.28, 0.20, 0.12)
-	var lo := Color(0.17, 0.31, 0.15)     # shadowed underside
-	var mid := Color(0.28, 0.44, 0.22)
-	var hi := Color(0.45, 0.61, 0.32)     # sun-kissed top
-	# flared root base → tapered trunk
-	_cyl(st, Vector3(0, 0, 0), 0.23, 0.5, 0.55, trunk, trunkd)
-	_cyl(st, Vector3(0, 0.55, 0), 0.15, 0.23, 1.35, trunk, trunkd)
-	# the trunk SPLITS into a few branches reaching into the canopy (fractal structure)
-	_tube(st, Vector3(0, 1.7, 0), Vector3(0.72, 2.5, 0.25), 0.1, 5, trunk, trunkd)
-	_tube(st, Vector3(0, 1.7, 0), Vector3(-0.62, 2.6, -0.18), 0.09, 5, trunk, trunkd)
-	_tube(st, Vector3(0, 1.8, 0), Vector3(0.12, 2.75, -0.55), 0.08, 5, trunk, trunkd)
-	# FACETED, irregular foliage clumps clustered on the branch ends → jagged crown,
-	# not a smooth bubble. Upper clumps sun-kissed (hi→mid), lower shadowed (mid→lo).
-	_facet_blob(st, Vector3(0.72, 2.65, 0.25), Vector3(0.78, 0.72, 0.78), 3, 6, hi, mid)
-	_facet_blob(st, Vector3(-0.62, 2.7, -0.18), Vector3(0.72, 0.66, 0.72), 3, 6, hi, mid)
-	_facet_blob(st, Vector3(0.12, 2.95, -0.55), Vector3(0.68, 0.62, 0.68), 3, 6, hi, mid)
-	_facet_blob(st, Vector3(0.0, 2.45, 0.05), Vector3(0.92, 0.85, 0.92), 3, 7, mid, lo)
-	_facet_blob(st, Vector3(0.34, 3.15, 0.0), Vector3(0.6, 0.55, 0.6), 2, 6, hi, mid)
-	_facet_blob(st, Vector3(-0.3, 2.35, 0.34), Vector3(0.55, 0.5, 0.55), 2, 5, mid, lo)
-	_facet_blob(st, Vector3(0.5, 2.3, -0.32), Vector3(0.46, 0.44, 0.46), 2, 5, mid, lo)
-	_facet_blob(st, Vector3(-0.46, 3.0, 0.28), Vector3(0.48, 0.45, 0.48), 2, 5, hi, mid)
+	# per-variant canopy hue (warm sun-green ↔ cool deep-green)
+	var warm := r.randf_range(-0.04, 0.07)
+	var lo := Color(0.17 + warm * 0.4, 0.31, 0.15 - warm * 0.3)
+	var mid := Color(0.28 + warm, 0.44, 0.22 - warm * 0.5)
+	var hi := Color(0.45 + warm, 0.61, 0.32 - warm * 0.6)
+	# flared root base → tapered trunk of varying height
+	var th := r.randf_range(1.15, 1.75)
+	_cyl(st, Vector3(0, 0, 0), 0.22, 0.5, 0.55, trunk, trunkd)
+	_cyl(st, Vector3(0, 0.55, 0), 0.15, 0.22, th, trunk, trunkd)
+	var fork_y := 0.55 + th
+	# trunk SPLITS into a varying number of branches at varying angles
+	var nb := r.randi_range(3, 4)
+	var ends: Array = []
+	var a0 := r.randf_range(0.0, TAU)
+	for b in range(nb):
+		var ang := a0 + TAU * float(b) / nb + r.randf_range(-0.35, 0.35)
+		var reach := r.randf_range(0.45, 0.95)
+		var rise := r.randf_range(0.7, 1.25)
+		var end := Vector3(cos(ang) * reach, fork_y + rise, sin(ang) * reach)
+		_tube(st, Vector3(0, fork_y - 0.15, 0), end, r.randf_range(0.08, 0.11), 5, trunk, trunkd)
+		ends.append(end)
+	# FACETED foliage clumps on each branch end (sun-kissed) + a central mass (shaded)
+	for e in ends:
+		var rad := r.randf_range(0.52, 0.82)
+		_facet_blob(st, e, Vector3(rad, rad * 0.92, rad), 3, r.randi_range(5, 7), hi, mid)
+	var cy := fork_y + r.randf_range(0.55, 0.95)
+	_facet_blob(st, Vector3(0, cy, 0),
+		Vector3(r.randf_range(0.84, 1.06), r.randf_range(0.78, 0.96), r.randf_range(0.84, 1.06)),
+		3, 7, mid, lo)
+	# a few extra small clumps → irregular, non-spherical crown
+	for k in range(r.randi_range(2, 4)):
+		var ka := r.randf_range(0.0, TAU)
+		var kr := r.randf_range(0.32, 0.72)
+		var kh := cy + r.randf_range(-0.45, 0.6)
+		var ks := r.randf_range(0.4, 0.6)
+		var hot := r.randf() < 0.5
+		_facet_blob(st, Vector3(cos(ka) * kr, kh, sin(ka) * kr), Vector3(ks, ks, ks),
+			2, 5, hi if hot else mid, mid if hot else lo)
 	return st.commit()
 
 # a low-poly FLAT-SHADED blob (faceted, gem-like) — reads as stylized foliage, not a bubble
@@ -433,6 +507,70 @@ static func _smallgrass_mesh() -> ArrayMesh:
 		var ang := TAU * float(i) / 5.0 + float(i) * 0.6
 		var rad := 0.04 + float(i % 2) * 0.04
 		_blade(st, Vector3(cos(ang) * rad, 0, sin(ang) * rad), 0.28 + float(i % 3) * 0.07, Vector3(cos(ang) * 0.12, 0, sin(ang) * 0.12), bc, tc)
+	return st.commit()
+
+# broad-leaf swamp grass — fewer, wider arching fronds, cooler blue-green
+static func _grass_broad_mesh() -> ArrayMesh:
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var bc := Color(0.17, 0.29, 0.15)
+	var tc := Color(0.36, 0.49, 0.27)
+	for i in range(7):
+		var ang := TAU * float(i) / 7.0 + float(i) * 0.5
+		var rad := 0.08 + float(i % 2) * 0.07
+		var lean := 0.85 + float(i % 3) * 0.2
+		_frond(st, Vector3(cos(ang) * rad, 0.0, sin(ang) * rad), 0.62 + float(i % 3) * 0.16,
+			Vector3(cos(ang) * lean, 0.95, sin(ang) * lean), bc, tc)
+	return st.commit()
+
+# tall wispy seed-grass — many thin blades with pale, almost-blond tips
+static func _grass_wispy_mesh() -> ArrayMesh:
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var bc := Color(0.24, 0.31, 0.16)
+	var tc := Color(0.58, 0.56, 0.34)
+	for i in range(14):
+		var ang := TAU * float(i) / 14.0 + float(i) * 0.9
+		var rad := 0.05 + float(i % 3) * 0.035
+		var h := 0.85 + float(i % 4) * 0.2
+		var lean := 0.12 + float(i % 2) * 0.1
+		_blade(st, Vector3(cos(ang) * rad, 0, sin(ang) * rad), h, Vector3(cos(ang) * lean, 0, sin(ang) * lean), bc, tc)
+	return st.commit()
+
+# cut tree stump — flared base, exposed growth rings on top, a few surface roots
+static func _stump_mesh() -> ArrayMesh:
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var bark := Color(0.34, 0.25, 0.16)
+	var barkd := Color(0.23, 0.17, 0.11)
+	var ring := Color(0.56, 0.44, 0.29)
+	var ringd := Color(0.45, 0.34, 0.22)
+	_cyl(st, Vector3(0, 0, 0), 0.4, 0.52, 0.62, bark, barkd)
+	# concentric rings on the sawn top
+	_disc(st, Vector3(0, 0.62, 0), 0.4, 14, ring)
+	_disc(st, Vector3(0, 0.625, 0), 0.27, 12, ringd)
+	_disc(st, Vector3(0, 0.63, 0), 0.13, 10, ring)
+	# surface roots flaring out at the base
+	for k in range(4):
+		var ka := float(k) * TAU / 4.0 + 0.4
+		_tube(st, Vector3(cos(ka) * 0.32, 0.12, sin(ka) * 0.32), Vector3(cos(ka) * 0.72, 0.0, sin(ka) * 0.72), 0.08, 5, bark, barkd)
+	return st.commit()
+
+# fallen/downed trunk lying on the ground — sawn ends, mossy top, broken branch stub
+static func _fallentrunk_mesh() -> ArrayMesh:
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var bark := Color(0.33, 0.24, 0.15)
+	var barkd := Color(0.23, 0.16, 0.10)
+	var ring := Color(0.52, 0.40, 0.27)
+	var moss := Color(0.29, 0.40, 0.21)
+	_tube(st, Vector3(-1.7, 0.32, 0), Vector3(1.55, 0.30, 0.1), 0.32, 9, bark, barkd)
+	_sphere(st, Vector3(-1.7, 0.32, 0), Vector3(0.32, 0.32, 0.32), 4, 9, ring, ring.darkened(0.1))
+	_sphere(st, Vector3(1.55, 0.30, 0.1), Vector3(0.3, 0.3, 0.3), 4, 9, ring, ring.darkened(0.12))
+	# moss draped along the top
+	_sphere(st, Vector3(0.0, 0.56, 0.04), Vector3(0.8, 0.12, 0.34), 4, 10, moss, moss.darkened(0.12))
+	# a broken branch stub sticking up
+	_tube(st, Vector3(-0.4, 0.5, 0), Vector3(-0.72, 1.15, 0.22), 0.09, 5, bark, barkd)
 	return st.commit()
 
 static func _flower_mesh() -> ArrayMesh:
@@ -657,6 +795,7 @@ static func build_tree_walls(parent: Node3D) -> void:
 	var x_end: float = WorldData.points()[WorldData.points().size() - 1].x
 	var tree_tf: Array[Transform3D] = []
 	var tree_cols: Array[Color] = []
+	var tree_var: Array[int] = []
 	var pine_tf: Array[Transform3D] = []
 	var pine_cols: Array[Color] = []
 	var r := _rng(50)
@@ -679,7 +818,16 @@ static func build_tree_walls(parent: Node3D) -> void:
 			else:
 				tree_tf.append(tf)
 				tree_cols.append(tint)
-	_spawn_mm(parent, "WallTrees", _tree_mesh(), tree_tf, tree_cols, 0.02)
+				tree_var.append(r.randi() % TREE_VARIANTS)
+	var tvariants := _tree_variants()
+	for vi in range(tvariants.size()):
+		var vtf: Array[Transform3D] = []
+		var vcl: Array[Color] = []
+		for j in range(tree_tf.size()):
+			if tree_var[j] == vi:
+				vtf.append(tree_tf[j])
+				vcl.append(tree_cols[j])
+		_spawn_mm(parent, "WallTrees%d" % vi, tvariants[vi], vtf, vcl, 0.02)
 	_spawn_mm(parent, "WallPines", _pine_mesh(), pine_tf, pine_cols, 0.015)
 
 # ── Road detail: embedded stones, wet puddles, stepping stones along the path ──────
@@ -698,9 +846,10 @@ static func build_path_detail(parent: Node3D) -> void:
 		var wx: float = x * WorldData.SCALE
 		var sy: float = TerrainBuilder.surface_height(x)
 		var pz: float = WorldData.path_z(wx)
-		for _p in range(r.randi_range(1, 3)):
-			var ss := r.randf_range(0.28, 0.72)
-			stone_tf.append(Transform3D(Basis().rotated(Vector3.UP, r.randf_range(0, TAU)).scaled(Vector3(ss, ss * 0.6, ss)),
+		# sparse embedded stones (was a dense scatter — thinned right down)
+		if r.randf() < 0.4:
+			var ss := r.randf_range(0.3, 0.66)
+			stone_tf.append(Transform3D(Basis().rotated(Vector3.UP, r.randf_range(0, TAU)).scaled(Vector3(ss, ss * 0.55, ss)),
 				Vector3(wx + r.randf_range(-0.4, 0.4), sy + 0.03, pz + r.randf_range(-1.7, 1.7))))
 		if r.randf() < 0.13:
 			var ps := r.randf_range(0.8, 1.6)
@@ -734,7 +883,9 @@ static func build_path_detail(parent: Node3D) -> void:
 static func _pathstone_mesh() -> ArrayMesh:
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
-	_sphere(st, Vector3(0, 0.08, 0), Vector3(0.3, 0.18, 0.26), 4, 8, Color(0.46, 0.44, 0.43), Color(0.33, 0.32, 0.33))
+	# faceted, gem-cut cobble (two lobes) — reads as a real stone, not a smooth blob
+	_facet_blob(st, Vector3(0, 0.07, 0), Vector3(0.28, 0.15, 0.24), 3, 6, Color(0.52, 0.50, 0.47), Color(0.34, 0.33, 0.33))
+	_facet_blob(st, Vector3(0.13, 0.13, 0.05), Vector3(0.14, 0.1, 0.13), 2, 5, Color(0.56, 0.53, 0.50), Color(0.37, 0.36, 0.35))
 	return st.commit()
 
 static func _puddle_mesh() -> ArrayMesh:

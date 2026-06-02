@@ -37,21 +37,40 @@ const STRATA: Array[Color] = [
 const MOSS := Color(0.16, 0.25, 0.12)
 const MUD := Color(0.30, 0.24, 0.14)
 const DRY := Color(0.34, 0.35, 0.18)
+# bare trodden brown earth — bigger scattered patches so the ground isn't all green
+const BARE := Color(0.40, 0.31, 0.18)
+const BARE_DK := Color(0.31, 0.24, 0.14)
 
 static func _ground_color(i: int, ao: float) -> Color:
 	var base: Color = GRASS_A if (i % 2 == 0) else GRASS_B
-	var p := int(floor(float(i) / 5.0))
-	var hv: float = sin(float(p) * 12.9898) * 43758.5453
-	var h: float = hv - floor(hv)
 	var c := base
-	# mostly green turf; only occasional mud / dark-moss / dry patches
-	if h < 0.10:
-		c = base.lerp(MUD, 0.5)
-	elif h < 0.20:
-		c = base.lerp(MOSS, 0.45)
-	elif h < 0.27:
-		c = base.lerp(DRY, 0.35)
-	# fine per-cell green variation so the field isn't a flat sheet
+	# coarse bare-earth patches (large blocks) — read as natural brown dirt scattered
+	# through the turf, with a soft transition fringe so they don't hard-cut
+	var pb := int(floor(float(i) / 13.0))
+	var hbv: float = sin(float(pb) * 91.17 + 4.3) * 27182.818
+	var hb: float = hbv - floor(hbv)
+	var bare_amt := 0.0
+	if hb < 0.14:
+		bare_amt = 0.72                         # core bare dirt
+	elif hb < 0.20:
+		bare_amt = 0.36                         # fringe blending into grass
+	if bare_amt > 0.0:
+		# vary the dirt itself (lighter dry crust ↔ darker damp mud)
+		var dv: float = sin(float(i) * 33.7) * 9871.23
+		dv = dv - floor(dv)
+		c = base.lerp(BARE.lerp(BARE_DK, dv), bare_amt)
+	else:
+		# fine green patches: occasional mud / dark-moss / dry patches
+		var p := int(floor(float(i) / 5.0))
+		var hv: float = sin(float(p) * 12.9898) * 43758.5453
+		var h: float = hv - floor(hv)
+		if h < 0.10:
+			c = base.lerp(MUD, 0.5)
+		elif h < 0.20:
+			c = base.lerp(MOSS, 0.45)
+		elif h < 0.27:
+			c = base.lerp(DRY, 0.35)
+	# fine per-cell variation so the field isn't a flat sheet
 	var hv2: float = sin(float(i) * 78.233) * 12345.678
 	var h2: float = hv2 - floor(hv2)
 	c = c.lerp(c.lightened(0.12), h2 * 0.6)
