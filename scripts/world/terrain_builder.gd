@@ -189,10 +189,13 @@ static func _build_path(parent: Node3D, xs: PackedFloat32Array, hs: PackedFloat3
 		var w1 := PATH_HALF * (0.85 + 0.15 * sin(xs[i + 1] * 0.5))
 		var y0 := hs[i] + 0.04
 		var y1 := hs[i + 1] + 0.04
+		# follow the winding centreline in Z
+		var p0 := WorldData.path_z(x0)
+		var p1 := WorldData.path_z(x1)
 		# centre strip (dark wet mud) + two lighter edge strips that blend to turf
-		_strip(st, x0, x1, y0, y1, -w0 * 0.5, w0 * 0.5, -w1 * 0.5, w1 * 0.5, PATH_MUD, PATH_MUD)
-		_strip(st, x0, x1, y0, y1, w0 * 0.5, w0, w1 * 0.5, w1, PATH_MUD, PATH_EDGE)
-		_strip(st, x0, x1, y0, y1, -w0, -w0 * 0.5, -w1, -w1 * 0.5, PATH_EDGE, PATH_MUD)
+		_strip(st, x0, x1, y0, y1, p0 - w0 * 0.5, p0 + w0 * 0.5, p1 - w1 * 0.5, p1 + w1 * 0.5, PATH_MUD, PATH_MUD)
+		_strip(st, x0, x1, y0, y1, p0 + w0 * 0.5, p0 + w0, p1 + w1 * 0.5, p1 + w1, PATH_MUD, PATH_EDGE)
+		_strip(st, x0, x1, y0, y1, p0 - w0, p0 - w0 * 0.5, p1 - w1, p1 - w1 * 0.5, PATH_EDGE, PATH_MUD)
 	var mi := MeshInstance3D.new()
 	mi.name = "Path"
 	mi.mesh = st.commit()

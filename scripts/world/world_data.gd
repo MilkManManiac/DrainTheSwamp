@@ -127,6 +127,16 @@ static func elev(orig_y: float) -> float:
 	# higher terrain (smaller orig_y) → larger 3D y
 	return (REF_Y - orig_y) * SCALE
 
+# gentle winding of the walking path in Z, as a function of 3D world-x.
+# (the player follows this; terrain path mesh + prop-clearing use it too)
+static func path_z(world_x: float) -> float:
+	return sin(world_x * 0.045) * 1.8 + sin(world_x * 0.013 + 1.0) * 1.0
+
+static func path_tangent_yaw(world_x: float) -> float:
+	# yaw to face along the path (derivative of path_z gives the local heading)
+	var dz := 0.045 * 1.8 * cos(world_x * 0.045) + 0.013 * 1.0 * cos(world_x * 0.013 + 1.0)
+	return atan2(dz, 1.0)
+
 static func in_pool(orig_x: float) -> bool:
 	for r in SWAMP_RANGES:
 		if orig_x >= TERRAIN_POINTS[r[0]].x and orig_x <= TERRAIN_POINTS[r[1]].x:

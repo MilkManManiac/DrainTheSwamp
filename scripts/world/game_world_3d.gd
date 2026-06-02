@@ -76,7 +76,8 @@ func _build_follow_camera() -> void:
 func _process(delta: float) -> void:
 	if follow_cam == null or player == null:
 		return
-	var look := player.global_position + Vector3(0, 1.0, 0)
+	# track the player's x/y; hold z centred so the camera doesn't sway as the path winds
+	var look := Vector3(player.global_position.x, player.global_position.y + 1.0, 0.0)
 	var want := look + cam_offset
 	# smooth the horizontal scroll, but track height TIGHTLY so climbing a hill never
 	# lags the camera down and exposes the void below the terrain

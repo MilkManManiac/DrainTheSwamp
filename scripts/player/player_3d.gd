@@ -97,12 +97,13 @@ func _physics_process(delta: float) -> void:
 	velocity.x = dir * BASE_SPEED * GameManager.get_movement_speed_multiplier()
 	velocity.z = 0.0
 	move_and_slide()
-	global_position.z = RAIL_Z
+	# follow the winding path in Z
+	global_position.z = WorldData.path_z(global_position.x)
 
-	# turn to face the direction of travel (profile), smoothly
+	# face along the path in the direction of travel, smoothly
 	if dir != 0.0:
 		facing = signf(dir)
-	var target_yaw: float = PI * 0.5 * facing   # +X (right) → +90°, -X (left) → -90°
+	var target_yaw: float = PI * 0.5 * facing - WorldData.path_tangent_yaw(global_position.x)
 	visual.rotation.y = lerp_angle(visual.rotation.y, target_yaw, clampf(delta * 12.0, 0.0, 1.0))
 
 	var walking: bool = absf(dir) > 0.01 and is_on_floor()
