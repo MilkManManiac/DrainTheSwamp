@@ -194,7 +194,7 @@ static func build_surface_props(parent: Node3D) -> void:
 				bush_tf.append(Transform3D(Basis().rotated(Vector3.UP, r.randf_range(0, TAU)).scaled(Vector3(bs, bs, bs)), Vector3(wx, sy, bz)))
 
 		# THICK grass with SIZE LAYERING (curved higher-poly tufts) — off the path
-		for _g in range(r.randi_range(10, 18)):
+		for _g in range(r.randi_range(30, 52)):
 			var gz := r.randf_range(pzb, pzf)
 			if absf(gz - pz) < 2.1:
 				continue
@@ -322,9 +322,9 @@ static func _rock_mesh() -> ArrayMesh:
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
 	var rock := Color(0.50, 0.49, 0.50)
-	var rock2 := Color(0.44, 0.43, 0.45)
-	_box(st, Vector3(0, 0.24, 0), Vector3(1.0, 0.5, 0.8), rock)
-	_box(st, Vector3(0.28, 0.42, 0.12), Vector3(0.55, 0.42, 0.55), rock2)
+	var rock2 := Color(0.39, 0.38, 0.40)
+	_sphere(st, Vector3(0, 0.22, 0), Vector3(0.62, 0.46, 0.56), 5, 9, rock, rock2)
+	_sphere(st, Vector3(0.3, 0.42, 0.12), Vector3(0.34, 0.3, 0.34), 4, 8, rock, rock2)
 	return st.commit()
 
 static func _grass_mesh() -> ArrayMesh:
@@ -374,9 +374,9 @@ static func _tri(st: SurfaceTool, a: Vector3, b: Vector3, c: Vector3, ca: Color,
 static func _flower_mesh() -> ArrayMesh:
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
-	# stem (green) + blossom (white → tinted per-instance via MultiMesh color)
-	_box(st, Vector3(0, 0.22, 0), Vector3(0.06, 0.44, 0.06), Color(0.34, 0.5, 0.24))
-	_box(st, Vector3(0, 0.5, 0), Vector3(0.26, 0.16, 0.26), Color(1, 1, 1))
+	# stem (green) + rounded blossom (white → tinted per-instance via MultiMesh color)
+	_tube(st, Vector3(0, 0, 0), Vector3(0, 0.44, 0), 0.04, 5, Color(0.34, 0.5, 0.24), Color(0.28, 0.42, 0.2))
+	_sphere(st, Vector3(0, 0.52, 0), Vector3(0.17, 0.13, 0.17), 4, 8, Color(1, 1, 1), Color(0.86, 0.86, 0.86))
 	return st.commit()
 
 static func _pine_mesh() -> ArrayMesh:
@@ -386,9 +386,9 @@ static func _pine_mesh() -> ArrayMesh:
 	var lo := Color(0.20, 0.36, 0.21)
 	var hi := Color(0.30, 0.48, 0.27)
 	_cyl(st, Vector3(0, 0, 0), 0.2, 0.16, 1.1, trunk, trunk.darkened(0.15))
-	_cone(st, Vector3(0, 1.0, 0), 1.25, 1.5, 9, hi, lo)
-	_cone(st, Vector3(0, 1.95, 0), 1.0, 1.35, 9, hi, lo)
-	_cone(st, Vector3(0, 2.85, 0), 0.72, 1.2, 9, hi, lo)
+	_cone(st, Vector3(0, 1.0, 0), 1.25, 1.5, 16, hi, lo)
+	_cone(st, Vector3(0, 1.95, 0), 1.0, 1.35, 16, hi, lo)
+	_cone(st, Vector3(0, 2.85, 0), 0.72, 1.2, 16, hi, lo)
 	return st.commit()
 
 static func _bush_mesh() -> ArrayMesh:
@@ -396,9 +396,9 @@ static func _bush_mesh() -> ArrayMesh:
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
 	var lo := Color(0.26, 0.42, 0.23)
 	var hi := Color(0.34, 0.52, 0.29)
-	_sphere(st, Vector3(0, 0.42, 0), Vector3(0.7, 0.5, 0.65), 4, 7, hi, lo)
-	_sphere(st, Vector3(0.42, 0.5, 0.1), Vector3(0.5, 0.46, 0.5), 4, 6, hi, lo)
-	_sphere(st, Vector3(-0.34, 0.46, -0.08), Vector3(0.46, 0.42, 0.46), 4, 6, hi, lo)
+	_sphere(st, Vector3(0, 0.42, 0), Vector3(0.72, 0.52, 0.67), 6, 11, hi, lo)
+	_sphere(st, Vector3(0.42, 0.5, 0.1), Vector3(0.52, 0.48, 0.52), 6, 10, hi, lo)
+	_sphere(st, Vector3(-0.34, 0.46, -0.08), Vector3(0.48, 0.44, 0.48), 6, 10, hi, lo)
 	return st.commit()
 
 # rounded ellipsoid blob with smooth normals + vertical gradient
@@ -470,10 +470,10 @@ static func _cypress_mesh() -> ArrayMesh:
 		var ka := float(k) * TAU / 5.0 + 0.4
 		var kr := 0.75 + (k % 2) * 0.25
 		_cone(st, Vector3(cos(ka) * kr, 0, sin(ka) * kr), 0.13, 0.3 + (k % 3) * 0.12, 5, bark, barkd)
-	# sparse, wispy canopy high up
-	_sphere(st, Vector3(0, 5.7, 0), Vector3(1.45, 0.85, 1.45), 4, 8, hi, lo)
-	_sphere(st, Vector3(0.6, 6.2, 0.2), Vector3(0.85, 0.7, 0.85), 4, 7, hi, lo)
-	_sphere(st, Vector3(-0.55, 6.0, -0.25), Vector3(0.8, 0.65, 0.8), 4, 7, hi, lo)
+	# sparse, wispy canopy high up (smoother)
+	_sphere(st, Vector3(0, 5.7, 0), Vector3(1.5, 0.9, 1.5), 7, 13, hi, lo)
+	_sphere(st, Vector3(0.6, 6.2, 0.2), Vector3(0.88, 0.72, 0.88), 6, 11, hi, lo)
+	_sphere(st, Vector3(-0.55, 6.0, -0.25), Vector3(0.82, 0.67, 0.82), 6, 11, hi, lo)
 	# hanging Spanish moss strands draping from the canopy
 	for m in range(10):
 		var ma := float(m) * TAU / 10.0
@@ -481,7 +481,7 @@ static func _cypress_mesh() -> ArrayMesh:
 		var mx := cos(ma) * mr
 		var mz := sin(ma) * mr
 		var ml := 0.9 + (m % 4) * 0.45
-		_box(st, Vector3(mx, 5.3 - ml * 0.5, mz), Vector3(0.09, ml, 0.09), moss)
+		_tube(st, Vector3(mx, 5.3, mz), Vector3(mx * 1.06, 5.3 - ml, mz * 1.06), 0.05, 4, moss, moss.darkened(0.12))
 	return st.commit()
 
 static func _snag_mesh() -> ArrayMesh:
@@ -490,12 +490,12 @@ static func _snag_mesh() -> ArrayMesh:
 	var dead := Color(0.44, 0.40, 0.33)
 	var deadd := Color(0.30, 0.27, 0.22)
 	_cyl(st, Vector3(0, 0, 0), 0.16, 0.42, 4.3, dead, deadd)
-	# a few broken bare branch stubs near the top
-	_box(st, Vector3(0.7, 3.4, 0), Vector3(1.3, 0.14, 0.14), deadd)
-	_box(st, Vector3(-0.5, 3.9, 0.1), Vector3(0.9, 0.12, 0.12), deadd)
-	_box(st, Vector3(0.15, 4.2, -0.5), Vector3(0.12, 0.12, 0.9), deadd)
-	# a wisp of moss on the dead branch
-	_box(st, Vector3(1.1, 2.9, 0), Vector3(0.08, 0.8, 0.08), Color(0.54, 0.56, 0.46))
+	# a few broken bare branch stubs near the top (rounded, angled)
+	_tube(st, Vector3(0.05, 3.3, 0), Vector3(1.2, 3.7, 0.1), 0.08, 6, dead, deadd)
+	_tube(st, Vector3(-0.05, 3.8, 0.05), Vector3(-0.85, 4.2, 0.15), 0.07, 6, dead, deadd)
+	_tube(st, Vector3(0.1, 4.1, -0.05), Vector3(0.2, 4.5, -0.8), 0.06, 6, dead, deadd)
+	# a wisp of moss hanging off the branch
+	_tube(st, Vector3(1.05, 3.55, 0.05), Vector3(1.1, 2.8, 0.05), 0.05, 4, Color(0.54, 0.56, 0.46), Color(0.46, 0.48, 0.4))
 	return st.commit()
 
 static func _palmetto_mesh() -> ArrayMesh:
@@ -525,32 +525,63 @@ static func _frond(st: SurfaceTool, base: Vector3, length: float, dir: Vector3, 
 		st.set_color(tri[3]); st.set_normal(nrm); st.add_vertex(tri[2])
 		st.set_color(tri[5]); st.set_normal(nrm); st.add_vertex(tri[4])
 
+# a smooth tube/cylinder between two points (rounded logs, branches, stalks)
+static func _tube(st: SurfaceTool, p0: Vector3, p1: Vector3, rad: float, segs: int, c0: Color, c1: Color) -> void:
+	var axis := p1 - p0
+	var ln := axis.length()
+	if ln < 0.0001:
+		return
+	axis /= ln
+	var up := Vector3.UP if absf(axis.y) < 0.9 else Vector3.RIGHT
+	var u := axis.cross(up).normalized() * rad
+	var v := axis.cross(u.normalized()).normalized() * rad
+	for s in range(segs):
+		var a0 := TAU * float(s) / segs
+		var a1 := TAU * float(s + 1) / segs
+		var r0 := u * cos(a0) + v * sin(a0)
+		var r1 := u * cos(a1) + v * sin(a1)
+		var n0 := r0.normalized()
+		var n1 := r1.normalized()
+		_tri(st, p0 + r0, p0 + r1, p1 + r1, c0, c0, c1, n1)
+		_tri(st, p0 + r0, p1 + r1, p1 + r0, c0, c1, c1, n0)
+
+# a flat n-gon disc (lily pads)
+static func _disc(st: SurfaceTool, center: Vector3, radius: float, segs: int, col: Color) -> void:
+	for s in range(segs):
+		var a0 := TAU * float(s) / segs
+		var a1 := TAU * float(s + 1) / segs
+		var p0 := center + Vector3(cos(a0) * radius, 0, sin(a0) * radius)
+		var p1 := center + Vector3(cos(a1) * radius, 0, sin(a1) * radius)
+		_tri(st, center, p1, p0, col, col, col, Vector3.UP)
+
 static func _fern_mesh() -> ArrayMesh:
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
-	var frond := Color(0.26, 0.46, 0.22)
-	# splayed blades leaning outward
-	for i in range(5):
-		var ang := -0.6 + i * 0.3
-		var bx := sin(ang) * 0.35
-		_box(st, Vector3(bx, 0.45, cos(ang) * 0.05), Vector3(0.12, 0.95, 0.12), frond)
+	var fbase := Color(0.20, 0.34, 0.16)
+	var ftip := Color(0.34, 0.50, 0.24)
+	# splayed CURVED fronds arching outward
+	for i in range(7):
+		var ang := -0.95 + i * 0.32
+		_blade(st, Vector3(sin(ang) * 0.18, 0, cos(ang) * 0.1), 1.0, Vector3(sin(ang) * 0.55, 0.4, cos(ang) * 0.25), fbase, ftip)
 	return st.commit()
 
 static func _mushroom_mesh() -> ArrayMesh:
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
-	_box(st, Vector3(0, 0.16, 0), Vector3(0.12, 0.32, 0.12), Color(0.90, 0.86, 0.78))  # stem
-	_box(st, Vector3(0, 0.34, 0), Vector3(0.34, 0.16, 0.34), Color(0.78, 0.26, 0.22))  # red cap
+	_tube(st, Vector3(0, 0, 0), Vector3(0, 0.3, 0), 0.08, 7, Color(0.90, 0.86, 0.78), Color(0.78, 0.74, 0.66))  # stem
+	_sphere(st, Vector3(0, 0.32, 0), Vector3(0.3, 0.2, 0.3), 5, 10, Color(0.80, 0.27, 0.22), Color(0.6, 0.18, 0.15))  # rounded cap
 	return st.commit()
 
 static func _log_mesh() -> ArrayMesh:
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
 	var bark := Color(0.36, 0.26, 0.16)
+	var barkd := Color(0.26, 0.18, 0.11)
 	var ring := Color(0.55, 0.42, 0.28)
-	_box(st, Vector3(0, 0.22, 0), Vector3(2.0, 0.44, 0.44), bark)
-	_box(st, Vector3(1.0, 0.22, 0), Vector3(0.06, 0.4, 0.4), ring)
-	_box(st, Vector3(-1.0, 0.22, 0), Vector3(0.06, 0.4, 0.4), ring)
+	# rounded horizontal log with sawn ends
+	_tube(st, Vector3(-1.0, 0.26, 0), Vector3(1.0, 0.26, 0), 0.26, 9, bark, barkd)
+	_sphere(st, Vector3(1.0, 0.26, 0), Vector3(0.26, 0.26, 0.26), 4, 8, ring, ring.darkened(0.1))
+	_sphere(st, Vector3(-1.0, 0.26, 0), Vector3(0.26, 0.26, 0.26), 4, 8, ring, ring.darkened(0.1))
 	return st.commit()
 
 # ── Forest walls bounding the play corridor (RPG-map style: frame is all terrain) ──
@@ -666,20 +697,22 @@ static func _strata_mesh() -> ArrayMesh:
 static func _lilypad_mesh() -> ArrayMesh:
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
-	_box(st, Vector3(0, 0, 0), Vector3(0.6, 0.05, 0.6), Color(0.27, 0.46, 0.26))
-	_box(st, Vector3(0.18, 0.01, 0.12), Vector3(0.34, 0.05, 0.34), Color(0.31, 0.51, 0.29))
+	_disc(st, Vector3(0, 0, 0), 0.56, 10, Color(0.27, 0.46, 0.26))
+	_disc(st, Vector3(0.12, 0.012, 0.08), 0.3, 8, Color(0.32, 0.52, 0.30))
 	return st.commit()
 
 static func _reed_mesh() -> ArrayMesh:
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
 	var stalk := Color(0.34, 0.48, 0.24)
-	var tip := Color(0.45, 0.30, 0.16)
+	var stalkd := Color(0.26, 0.38, 0.18)
+	var tip := Color(0.42, 0.28, 0.15)
 	var offs := [Vector3(0, 0, 0), Vector3(0.16, 0, 0.1), Vector3(-0.14, 0, -0.08), Vector3(0.05, 0, -0.16)]
 	for o in offs:
-		_box(st, o + Vector3(0, 0.6, 0), Vector3(0.09, 1.2, 0.09), stalk)
-	_box(st, offs[0] + Vector3(0, 1.25, 0), Vector3(0.16, 0.34, 0.16), tip)
-	_box(st, offs[1] + Vector3(0, 1.2, 0), Vector3(0.15, 0.30, 0.15), tip)
+		_tube(st, o, o + Vector3(0, 1.2, 0), 0.045, 5, stalk, stalkd)
+	# rounded cattail sausage tips
+	_sphere(st, offs[0] + Vector3(0, 1.3, 0), Vector3(0.1, 0.24, 0.1), 5, 8, tip, tip.darkened(0.12))
+	_sphere(st, offs[1] + Vector3(0, 1.25, 0), Vector3(0.09, 0.21, 0.09), 5, 8, tip, tip.darkened(0.12))
 	return st.commit()
 
 static func _box(st: SurfaceTool, center: Vector3, size: Vector3, col: Color) -> void:
