@@ -167,20 +167,18 @@ Running list of art/feel passes still to do. Done so far on this branch: RPG-map
 ground-fill + back forest wall, winding N/S brown path, dense layered grass, faceted
 de-bubbled trees, brown alpha-blended path edges, grass shadow-casting off (flicker fix).
 
-### Next up — requested 2026-06-02
-- [ ] **Tree variety** — some trees still read as copy-pasted. Add more per-instance
-  variation (more size/shape/lean/hue jitter) and 1–2 additional canopy silhouettes so
-  no two neighbours look identical. `_tree_mesh` / spawn loop in `scenery_builder.gd`.
-- [ ] **Road rocks** — current stones look poor and there are too many. Improve the rock
-  mesh (rounder/faceted, better color) and cut the spawn density. `build_path_detail`.
-- [ ] **Brown dirt patches in base land** — scatter brown bare-earth patches through the
-  green ground (not all green) so it reads more natural/realistic. `_ground_color` /
-  patch logic in `terrain_builder.gd`.
-- [ ] **More grass styles** — add a couple more grass blade/clump variants for variety in
-  the dense cover. New `_*_mesh` builders + mix into `build_surface_props`.
-- [ ] **Downed trees / stumps** — scatter fallen logs and tree stumps as ground detail.
-  (Have `_log_mesh` + `_snag_mesh` — add a true stump mesh + a downed-trunk variant and
-  sprinkle them along the land between pools.)
+### Done 2026-06-02 (commit 8c40650)
+- [x] **Tree variety** — 4 procedural broadleaf variants (`_tree_mesh_v`) with varying
+  trunk height, branch count/spread, crown clumps + per-tree hue, distributed across
+  surface trees AND the back forest wall. No longer copy-pasted.
+- [x] **Road rocks** — faceted cobble (`_pathstone_mesh` via `_facet_blob`) and density
+  cut (1–3 per step → ~40% chance of one) in `build_path_detail`.
+- [x] **Brown dirt patches** — coarse bare-earth blocks (`BARE`/`BARE_DK`, dry-dirt tone,
+  soft fringe) scattered through the turf in `_ground_color`.
+- [x] **More grass styles** — `_grass_broad_mesh` (arching broad leaves) + `_grass_wispy_mesh`
+  (tall blond seed-grass) mixed ~58/24/18 with the original tuft.
+- [x] **Downed trees / stumps** — `_stump_mesh` (ringed top + roots) + `_fallentrunk_mesh`
+  (mossy log) scattered off-path.
 
 ### Carried over
 - [ ] **De-bubble cypress + bushes** — still use smooth `_sphere`; convert to faceted
