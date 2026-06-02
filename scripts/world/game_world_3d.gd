@@ -13,6 +13,7 @@ var follow_cam: Camera3D
 # camera Z (12) sits IN FRONT of the terrain front edge (FRONT_Z=14) so the dig-face
 # cross-section is behind the camera and never rendered — foreground is pure top-surface ground
 var cam_offset := Vector3(1.5, 13.0, 10.5)
+var cam_look := Vector3.ZERO
 
 func _ready() -> void:
 	_build_environment()
@@ -69,26 +70,26 @@ func _build_follow_camera() -> void:
 	follow_cam.projection = Camera3D.PROJECTION_ORTHOGONAL
 	follow_cam.size = 24.0
 	add_child(follow_cam)
-	follow_cam.position = player.position + cam_offset
-	follow_cam.look_at(player.position + Vector3(0, 1.0, 0), Vector3.UP)
+	cam_look = player.position + Vector3(0, 1.0, 0)
+	follow_cam.position = cam_look + cam_offset
+	follow_cam.look_at(cam_look, Vector3.UP)
 	follow_cam.make_current()
 
 func _process(delta: float) -> void:
 	if follow_cam == null or player == null:
 		return
-	# track x/y tightly; follow the winding z PARTIALLY so the character stays framed on
-	# the big curves while the road still visibly winds across the screen
-	var look := Vector3(player.global_position.x, player.global_position.y + 1.0, player.global_position.z * 0.6)
-	var want := look + cam_offset
-	# smooth the horizontal scroll, but track height TIGHTLY so climbing a hill never
-	# lags the camera down and exposes the void below the terrain
+	# SMOOTHED aim point — follow the winding z partially so the character stays framed
+	# while the road still visibly sweeps. Smoothing both the aim and the position keeps
+	# the camera steady (no jitter) even as the path/terrain change.
+	var target_look := Vector3(player.global_position.x, player.global_position.y + 1.0, player.global_position.z * 0.6)
+	cam_look = cam_look.lerp(target_look, clampf(delta * 7.0, 0.0, 1.0))
+	var want := cam_look + cam_offset
 	var p := follow_cam.global_position
-	var k := clampf(delta * 6.0, 0.0, 1.0)
-	p.x = lerpf(p.x, want.x, k)
-	p.z = lerpf(p.z, want.z, k)
-	p.y = lerpf(p.y, want.y, clampf(delta * 18.0, 0.0, 1.0))
+	p.x = lerpf(p.x, want.x, clampf(delta * 6.0, 0.0, 1.0))
+	p.z = lerpf(p.z, want.z, clampf(delta * 6.0, 0.0, 1.0))
+	p.y = lerpf(p.y, want.y, clampf(delta * 9.0, 0.0, 1.0))
 	follow_cam.global_position = p
-	follow_cam.look_at(look, Vector3.UP)
+	follow_cam.look_at(cam_look, Vector3.UP)
 
 func _build_environment() -> void:
 	# Forward+ renderer — gorgeous desktop/Steam path. MSAA for crisp edges.
