@@ -193,13 +193,16 @@ static func build_surface_props(parent: Node3D) -> void:
 				var bs := r.randf_range(0.7, 1.3)
 				bush_tf.append(Transform3D(Basis().rotated(Vector3.UP, r.randf_range(0, TAU)).scaled(Vector3(bs, bs, bs)), Vector3(wx, sy, bz)))
 
-		# THICK grass — a carpet of tufts per step (kept off the walking path)
+		# THICK grass with SIZE LAYERING (tertiary short carpet + secondary medium +
+		# occasional primary tall clumps) — kept off the walking path
 		for _g in range(r.randi_range(16, 30)):
 			var gz := r.randf_range(pzb, pzf)
 			if absf(gz - pz) < 2.1:
 				continue
-			var gs := r.randf_range(0.55, 1.45)
-			grass_tf.append(Transform3D(Basis().rotated(Vector3.UP, r.randf_range(0, TAU)).scaled(Vector3(gs, gs, gs)),
+			var gs := r.randf_range(0.35, 1.0)        # short→medium carpet
+			if r.randf() < 0.18:
+				gs = r.randf_range(1.3, 2.3)          # occasional tall clump
+			grass_tf.append(Transform3D(Basis().rotated(Vector3.UP, r.randf_range(0, TAU)).scaled(Vector3(gs * r.randf_range(0.85, 1.2), gs, gs * r.randf_range(0.85, 1.2))),
 				Vector3(wx + r.randf_range(-1.5, 1.5), sy, gz)))
 
 		# ferns — dense ground cover everywhere (thicker near water/forest)

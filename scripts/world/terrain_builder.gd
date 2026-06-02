@@ -21,9 +21,10 @@ const BACK_RISE: float = 16.0        # big hills rising away from camera (fills 
 static func back_rise(_z: float) -> float:
 	return 0.0
 
-# Swampy, grimy palette — dark mossy green-brown turf over wet muddy soil
-const GRASS_A := Color(0.26, 0.32, 0.17)
-const GRASS_B := Color(0.21, 0.27, 0.14)
+# Swampy turf — GREEN base so the ground itself reads as grass (gaps between blades
+# don't show brown dirt → no patchiness), with only occasional mud/moss patches
+const GRASS_A := Color(0.31, 0.41, 0.21)
+const GRASS_B := Color(0.27, 0.37, 0.19)
 const DIRT_TOP := Color(0.34, 0.28, 0.18)
 const DIRT_BOT := Color(0.13, 0.10, 0.08)
 # layered wet soil strata top→bottom (mossy mud, peat, clay, deep muck)
@@ -39,16 +40,21 @@ const DRY := Color(0.34, 0.35, 0.18)
 
 static func _ground_color(i: int, ao: float) -> Color:
 	var base: Color = GRASS_A if (i % 2 == 0) else GRASS_B
-	var p := int(floor(float(i) / 6.0))
+	var p := int(floor(float(i) / 5.0))
 	var hv: float = sin(float(p) * 12.9898) * 43758.5453
 	var h: float = hv - floor(hv)
 	var c := base
-	if h < 0.22:
-		c = base.lerp(MUD, 0.55)
-	elif h < 0.42:
-		c = base.lerp(MOSS, 0.6)
-	elif h < 0.58:
-		c = base.lerp(DRY, 0.45)
+	# mostly green turf; only occasional mud / dark-moss / dry patches
+	if h < 0.10:
+		c = base.lerp(MUD, 0.5)
+	elif h < 0.20:
+		c = base.lerp(MOSS, 0.45)
+	elif h < 0.27:
+		c = base.lerp(DRY, 0.35)
+	# fine per-cell green variation so the field isn't a flat sheet
+	var hv2: float = sin(float(i) * 78.233) * 12345.678
+	var h2: float = hv2 - floor(hv2)
+	c = c.lerp(c.lightened(0.12), h2 * 0.6)
 	return _tint(c, ao)
 
 static func build(parent: Node3D) -> void:

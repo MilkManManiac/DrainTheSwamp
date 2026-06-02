@@ -127,14 +127,15 @@ static func elev(orig_y: float) -> float:
 	# higher terrain (smaller orig_y) → larger 3D y
 	return (REF_Y - orig_y) * SCALE
 
-# gentle winding of the walking path in Z, as a function of 3D world-x.
-# (the player follows this; terrain path mesh + prop-clearing use it too)
+# winding of the walking path in Z, as a function of 3D world-x. Multi-octave with a
+# big slow sweep so it curves quite a bit in places. (player + path mesh + prop-clearing
+# all follow this.)
 static func path_z(world_x: float) -> float:
-	return sin(world_x * 0.045) * 1.8 + sin(world_x * 0.013 + 1.0) * 1.0
+	return sin(world_x * 0.022) * 2.7 + sin(world_x * 0.06) * 1.2 + sin(world_x * 0.0095 + 1.0) * 1.3
 
 static func path_tangent_yaw(world_x: float) -> float:
 	# yaw to face along the path (derivative of path_z gives the local heading)
-	var dz := 0.045 * 1.8 * cos(world_x * 0.045) + 0.013 * 1.0 * cos(world_x * 0.013 + 1.0)
+	var dz := 0.022 * 2.7 * cos(world_x * 0.022) + 0.06 * 1.2 * cos(world_x * 0.06) + 0.0095 * 1.3 * cos(world_x * 0.0095 + 1.0)
 	return atan2(dz, 1.0)
 
 # ── Land extension ───────────────────────────────────────────────────────────────
@@ -201,9 +202,10 @@ static func _land_mask(orig_x: float) -> float:
 		min_d = minf(min_d, minf(absf(orig_x - a), absf(orig_x - b)))
 	return clampf(min_d / 45.0, 0.0, 1.0)
 
-# gentle rolling-hill undulation on the land sections (3D units), faded at pools
+# rolling-hill undulation on the land sections (3D units), faded at pools — more
+# pronounced so the path climbs and dips over real hills
 static func land_roll(orig_x: float) -> float:
-	var roll: float = sin(orig_x * 0.0075) * 1.6 + sin(orig_x * 0.017 + 1.3) * 0.9 + sin(orig_x * 0.034) * 0.5
+	var roll: float = sin(orig_x * 0.0055) * 3.1 + sin(orig_x * 0.014 + 1.3) * 1.6 + sin(orig_x * 0.03) * 0.7
 	return roll * _land_mask(orig_x)
 
 static func surface_y_at(orig_x: float) -> float:
