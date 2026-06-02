@@ -208,7 +208,7 @@ static func build_surface_props(parent: Node3D) -> void:
 		# SMALL filler grass — packs the bare gaps with short medium/small tufts
 		for _sg in range(r.randi_range(40, 70)):
 			var sgz := r.randf_range(pzb, pzf)
-			if absf(sgz - pz) < 2.0:
+			if absf(sgz - pz) < 1.6:   # let grass creep onto the faded path edge
 				continue
 			var sgs := r.randf_range(0.5, 1.1)
 			smallgrass_tf.append(Transform3D(Basis().rotated(Vector3.UP, r.randf_range(0, TAU)).scaled(Vector3(sgs, sgs, sgs)),
@@ -274,11 +274,11 @@ static func build_surface_props(parent: Node3D) -> void:
 	_spawn_mm(parent, "Bushes", _bush_mesh(), bush_tf, [], 0.05)
 	_spawn_mm(parent, "Logs", _log_mesh(), log_tf)
 	_spawn_mm(parent, "Rocks", _rock_mesh(), rock_tf)
-	_spawn_mm(parent, "Ferns", _fern_mesh(), fern_tf, [], 0.09)
-	_spawn_mm(parent, "GrassTufts", _grass_mesh(), grass_tf, [], 0.11)
-	_spawn_mm(parent, "SmallGrass", _smallgrass_mesh(), smallgrass_tf, [], 0.13)
+	_spawn_mm(parent, "Ferns", _fern_mesh(), fern_tf, [], 0.09, false)
+	_spawn_mm(parent, "GrassTufts", _grass_mesh(), grass_tf, [], 0.11, false)
+	_spawn_mm(parent, "SmallGrass", _smallgrass_mesh(), smallgrass_tf, [], 0.13, false)
 	_spawn_mm(parent, "Mushrooms", _mushroom_mesh(), mush_tf)
-	_spawn_mm(parent, "Flowers", _flower_mesh(), flower_tf, flower_cols, 0.10)
+	_spawn_mm(parent, "Flowers", _flower_mesh(), flower_tf, flower_cols, 0.10, false)
 
 const _FLOWER_COLS: Array[Color] = [
 	Color(0.95, 0.95, 0.92), Color(0.97, 0.82, 0.30),
@@ -287,7 +287,7 @@ const _FLOWER_COLS: Array[Color] = [
 
 const FOLIAGE_SHADER = preload("res://shaders/foliage.gdshader")
 
-static func _spawn_mm(parent: Node3D, nm: String, mesh: Mesh, tfs: Array[Transform3D], cols: Array[Color] = [], sway: float = 0.0) -> void:
+static func _spawn_mm(parent: Node3D, nm: String, mesh: Mesh, tfs: Array[Transform3D], cols: Array[Color] = [], sway: float = 0.0, cast_shadows: bool = true) -> void:
 	if tfs.is_empty():
 		return
 	var mm := MultiMesh.new()
@@ -302,6 +302,9 @@ static func _spawn_mm(parent: Node3D, nm: String, mesh: Mesh, tfs: Array[Transfo
 	var mmi := MultiMeshInstance3D.new()
 	mmi.name = nm
 	mmi.multimesh = mm
+	# thin grass/foliage casting shadows flickers badly — let it only RECEIVE shadows
+	if not cast_shadows:
+		mmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	if sway > 0.0:
 		var smat := ShaderMaterial.new()
 		smat.shader = FOLIAGE_SHADER
@@ -320,20 +323,52 @@ static func _tree_mesh() -> ArrayMesh:
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
 	var trunk := Color(0.42, 0.31, 0.19)
 	var trunkd := Color(0.28, 0.20, 0.12)
-	var lo := Color(0.18, 0.32, 0.16)     # shadowed underside
-	var mid := Color(0.29, 0.45, 0.23)
+	var lo := Color(0.17, 0.31, 0.15)     # shadowed underside
+	var mid := Color(0.28, 0.44, 0.22)
 	var hi := Color(0.45, 0.61, 0.32)     # sun-kissed top
 	# flared root base → tapered trunk
 	_cyl(st, Vector3(0, 0, 0), 0.23, 0.5, 0.55, trunk, trunkd)
-	_cyl(st, Vector3(0, 0.55, 0), 0.16, 0.23, 1.55, trunk, trunkd)
-	# fuller organic crown: lower blobs shadowed (mid→lo), upper blobs sun-kissed (hi→mid)
-	_sphere(st, Vector3(0, 2.35, 0), Vector3(1.32, 1.18, 1.32), 8, 14, mid, lo)
-	_sphere(st, Vector3(0.64, 2.55, 0.18), Vector3(0.92, 0.86, 0.92), 7, 12, mid, lo)
-	_sphere(st, Vector3(-0.56, 2.45, -0.2), Vector3(0.86, 0.82, 0.86), 7, 12, mid, lo)
-	_sphere(st, Vector3(0.12, 3.15, 0.06), Vector3(1.0, 0.92, 1.0), 8, 13, hi, mid)
-	_sphere(st, Vector3(-0.36, 2.98, 0.36), Vector3(0.66, 0.62, 0.66), 6, 11, hi, mid)
-	_sphere(st, Vector3(0.42, 3.02, -0.3), Vector3(0.62, 0.58, 0.62), 6, 11, hi, mid)
+	_cyl(st, Vector3(0, 0.55, 0), 0.15, 0.23, 1.35, trunk, trunkd)
+	# the trunk SPLITS into a few branches reaching into the canopy (fractal structure)
+	_tube(st, Vector3(0, 1.7, 0), Vector3(0.72, 2.5, 0.25), 0.1, 5, trunk, trunkd)
+	_tube(st, Vector3(0, 1.7, 0), Vector3(-0.62, 2.6, -0.18), 0.09, 5, trunk, trunkd)
+	_tube(st, Vector3(0, 1.8, 0), Vector3(0.12, 2.75, -0.55), 0.08, 5, trunk, trunkd)
+	# FACETED, irregular foliage clumps clustered on the branch ends → jagged crown,
+	# not a smooth bubble. Upper clumps sun-kissed (hi→mid), lower shadowed (mid→lo).
+	_facet_blob(st, Vector3(0.72, 2.65, 0.25), Vector3(0.78, 0.72, 0.78), 3, 6, hi, mid)
+	_facet_blob(st, Vector3(-0.62, 2.7, -0.18), Vector3(0.72, 0.66, 0.72), 3, 6, hi, mid)
+	_facet_blob(st, Vector3(0.12, 2.95, -0.55), Vector3(0.68, 0.62, 0.68), 3, 6, hi, mid)
+	_facet_blob(st, Vector3(0.0, 2.45, 0.05), Vector3(0.92, 0.85, 0.92), 3, 7, mid, lo)
+	_facet_blob(st, Vector3(0.34, 3.15, 0.0), Vector3(0.6, 0.55, 0.6), 2, 6, hi, mid)
+	_facet_blob(st, Vector3(-0.3, 2.35, 0.34), Vector3(0.55, 0.5, 0.55), 2, 5, mid, lo)
+	_facet_blob(st, Vector3(0.5, 2.3, -0.32), Vector3(0.46, 0.44, 0.46), 2, 5, mid, lo)
+	_facet_blob(st, Vector3(-0.46, 3.0, 0.28), Vector3(0.48, 0.45, 0.48), 2, 5, hi, mid)
 	return st.commit()
+
+# a low-poly FLAT-SHADED blob (faceted, gem-like) — reads as stylized foliage, not a bubble
+static func _facet_blob(st: SurfaceTool, c: Vector3, rad: Vector3, rings: int, segs: int, top: Color, bot: Color) -> void:
+	for ri in range(rings):
+		var p0: float = PI * float(ri) / rings
+		var p1: float = PI * float(ri + 1) / rings
+		var ca := top.lerp(bot, float(ri) / rings)
+		var cb := top.lerp(bot, float(ri + 1) / rings)
+		for si in range(segs):
+			var t0: float = TAU * float(si) / segs
+			var t1: float = TAU * float(si + 1) / segs
+			var a := _spt(c, rad, p0, t0)
+			var b := _spt(c, rad, p1, t0)
+			var d := _spt(c, rad, p1, t1)
+			var e := _spt(c, rad, p0, t1)
+			_facet_tri(st, c, a, b, d, ca, cb, cb)
+			_facet_tri(st, c, a, d, e, ca, cb, ca)
+
+static func _facet_tri(st: SurfaceTool, center: Vector3, a: Vector3, b: Vector3, d: Vector3, ca: Color, cb: Color, cd: Color) -> void:
+	var nrm := (b - a).cross(d - a).normalized()       # flat per-face normal → faceted
+	if nrm.dot((a + b + d) / 3.0 - center) < 0.0:
+		nrm = -nrm
+	st.set_color(ca); st.set_normal(nrm); st.add_vertex(a)
+	st.set_color(cb); st.set_normal(nrm); st.add_vertex(b)
+	st.set_color(cd); st.set_normal(nrm); st.add_vertex(d)
 
 static func _rock_mesh() -> ArrayMesh:
 	var st := SurfaceTool.new()

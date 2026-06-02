@@ -180,8 +180,9 @@ static func build(parent: Node3D) -> void:
 
 # Worn muddy walking path along the player's rail (z=0), draped over the surface
 const PATH_HALF := 1.9
-const PATH_MUD := Color(0.17, 0.13, 0.09)    # dark wet trodden mud
-const PATH_EDGE := Color(0.27, 0.22, 0.14)   # lighter churned earth at the edges
+const PATH_MUD := Color(0.36, 0.27, 0.16, 1.0)   # warm brown trodden dirt
+const PATH_EDGE := Color(0.40, 0.32, 0.20, 1.0)  # lighter churned earth
+const PATH_FADE := Color(0.40, 0.34, 0.22, 0.0)  # dissolves into the grass (alpha 0)
 
 static func _build_path(parent: Node3D, xs: PackedFloat32Array, hs: PackedFloat32Array) -> void:
 	var st := SurfaceTool.new()
@@ -198,16 +199,22 @@ static func _build_path(parent: Node3D, xs: PackedFloat32Array, hs: PackedFloat3
 		# follow the winding centreline in Z
 		var p0 := WorldData.path_z(x0)
 		var p1 := WorldData.path_z(x1)
-		# centre strip (dark wet mud) + two lighter edge strips that blend to turf
+		# centre brown dirt → lighter churned edge → outer band that FADES to alpha 0,
+		# dissolving softly into the grass (no hard cut)
+		var ow0 := w0 * 1.75
+		var ow1 := w1 * 1.75
 		_strip(st, x0, x1, y0, y1, p0 - w0 * 0.5, p0 + w0 * 0.5, p1 - w1 * 0.5, p1 + w1 * 0.5, PATH_MUD, PATH_MUD)
 		_strip(st, x0, x1, y0, y1, p0 + w0 * 0.5, p0 + w0, p1 + w1 * 0.5, p1 + w1, PATH_MUD, PATH_EDGE)
 		_strip(st, x0, x1, y0, y1, p0 - w0, p0 - w0 * 0.5, p1 - w1, p1 - w1 * 0.5, PATH_EDGE, PATH_MUD)
+		_strip(st, x0, x1, y0, y1, p0 + w0, p0 + ow0, p1 + w1, p1 + ow1, PATH_EDGE, PATH_FADE)
+		_strip(st, x0, x1, y0, y1, p0 - ow0, p0 - w0, p1 - ow1, p1 - w1, PATH_FADE, PATH_EDGE)
 	var mi := MeshInstance3D.new()
 	mi.name = "Path"
 	mi.mesh = st.commit()
 	var mat := StandardMaterial3D.new()
 	mat.vertex_color_use_as_albedo = true
-	mat.roughness = 0.6      # wet-mud sheen
+	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA   # soft faded edges
+	mat.roughness = 0.7
 	mat.metallic = 0.0
 	mat.cull_mode = BaseMaterial3D.CULL_DISABLED
 	mi.material_override = mat
