@@ -158,3 +158,36 @@ Re-create the systems that actually add charm, as 3D equivalents, conservatively
 Start with **Phase 0 spike** as a standalone scene (`scenes/_spike_3d.tscn`) so we can
 prove web performance and lock the camera/lighting look before touching the real game.
 Once the slice looks right and runs in-browser, proceed to Phase 1.
+
+---
+
+## Look-dev backlog (v2-3d-overhaul branch)
+
+Running list of art/feel passes still to do. Done so far on this branch: RPG-map
+ground-fill + back forest wall, winding N/S brown path, dense layered grass, faceted
+de-bubbled trees, brown alpha-blended path edges, grass shadow-casting off (flicker fix).
+
+### Next up — requested 2026-06-02
+- [ ] **Tree variety** — some trees still read as copy-pasted. Add more per-instance
+  variation (more size/shape/lean/hue jitter) and 1–2 additional canopy silhouettes so
+  no two neighbours look identical. `_tree_mesh` / spawn loop in `scenery_builder.gd`.
+- [ ] **Road rocks** — current stones look poor and there are too many. Improve the rock
+  mesh (rounder/faceted, better color) and cut the spawn density. `build_path_detail`.
+- [ ] **Brown dirt patches in base land** — scatter brown bare-earth patches through the
+  green ground (not all green) so it reads more natural/realistic. `_ground_color` /
+  patch logic in `terrain_builder.gd`.
+- [ ] **More grass styles** — add a couple more grass blade/clump variants for variety in
+  the dense cover. New `_*_mesh` builders + mix into `build_surface_props`.
+- [ ] **Downed trees / stumps** — scatter fallen logs and tree stumps as ground detail.
+  (Have `_log_mesh` + `_snag_mesh` — add a true stump mesh + a downed-trunk variant and
+  sprinkle them along the land between pools.)
+
+### Carried over
+- [ ] **De-bubble cypress + bushes** — still use smooth `_sphere`; convert to faceted
+  `_facet_blob` to match the new trees if we want consistency.
+- [ ] **Perf / grass LOD** — grass is very dense over the long stretched world. If FPS
+  drops, chunk grass into per-X-region MultiMeshInstances with `visibility_range` LOD.
+- [ ] **POIs in extended land** — shop, cave mouths, decorative rowboat/shack in the
+  longer land stretches.
+- [ ] **Duckweed / moss skim on water**, bayou mist, hanging Spanish moss for vibe.
+- [ ] **Higher-poly character** (currently intentional voxel box style — round if wanted).
