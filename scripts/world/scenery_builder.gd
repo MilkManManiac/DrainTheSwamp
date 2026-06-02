@@ -339,7 +339,22 @@ const _FLOWER_COLS: Array[Color] = [
 	Color(0.90, 0.45, 0.55), Color(0.70, 0.55, 0.85), Color(0.95, 0.60, 0.35),
 ]
 
-const FOLIAGE_SHADER = preload("res://shaders/foliage.gdshader")
+const STYLIZED_SHADER = preload("res://shaders/stylized.gdshader")
+
+# one shared premium stylized material per prop type (painterly light + backlight SSS +
+# rim glow). Cached by (sway, roughness) so we don't make thousands of duplicate shaders.
+static var _mat_cache: Dictionary = {}
+
+static func _stylized_mat(sway: float, roughness: float) -> ShaderMaterial:
+	var key := "%0.3f_%0.2f" % [sway, roughness]
+	if _mat_cache.has(key):
+		return _mat_cache[key]
+	var smat := ShaderMaterial.new()
+	smat.shader = STYLIZED_SHADER
+	smat.set_shader_parameter("sway_strength", sway)
+	smat.set_shader_parameter("surf_roughness", roughness)
+	_mat_cache[key] = smat
+	return smat
 
 static func _spawn_mm(parent: Node3D, nm: String, mesh: Mesh, tfs: Array[Transform3D], cols: Array[Color] = [], sway: float = 0.0, cast_shadows: bool = true) -> void:
 	if tfs.is_empty():
@@ -359,17 +374,7 @@ static func _spawn_mm(parent: Node3D, nm: String, mesh: Mesh, tfs: Array[Transfo
 	# thin grass/foliage casting shadows flickers badly — let it only RECEIVE shadows
 	if not cast_shadows:
 		mmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	if sway > 0.0:
-		var smat := ShaderMaterial.new()
-		smat.shader = FOLIAGE_SHADER
-		smat.set_shader_parameter("sway_strength", sway)
-		mmi.material_override = smat
-	else:
-		var mat := StandardMaterial3D.new()
-		mat.vertex_color_use_as_albedo = true
-		mat.roughness = 0.92
-		mat.cull_mode = BaseMaterial3D.CULL_DISABLED
-		mmi.material_override = mat
+	mmi.material_override = _stylized_mat(sway, 0.92 if sway <= 0.0 else 0.9)
 	parent.add_child(mmi)
 
 const TREE_VARIANTS := 4
@@ -414,27 +419,31 @@ static func _tree_mesh_v(variant: int) -> ArrayMesh:
 		var end := Vector3(cos(ang) * reach, fork_y + rise, sin(ang) * reach)
 		_tube(st, Vector3(0, fork_y - 0.15, 0), end, r.randf_range(0.08, 0.11), 5, trunk, trunkd)
 		ends.append(end)
-	# FACETED foliage clumps on each branch end (sun-kissed) + a central mass (shaded)
+	# foliage clumps on each branch end (sun-kissed) + a central mass (shaded). soft normals
+	# (0.7) make each clump light as a soft volume; the irregular cluster keeps the silhouette.
+	var sft := 0.7
 	for e in ends:
 		var rad := r.randf_range(0.52, 0.82)
-		_facet_blob(st, e, Vector3(rad, rad * 0.92, rad), 3, r.randi_range(5, 7), hi, mid)
+		_facet_blob(st, e, Vector3(rad, rad * 0.92, rad), 4, r.randi_range(7, 9), hi, mid, sft)
 	var cy := fork_y + r.randf_range(0.55, 0.95)
 	_facet_blob(st, Vector3(0, cy, 0),
 		Vector3(r.randf_range(0.84, 1.06), r.randf_range(0.78, 0.96), r.randf_range(0.84, 1.06)),
-		3, 7, mid, lo)
-	# a few extra small clumps → irregular, non-spherical crown
-	for k in range(r.randi_range(2, 4)):
+		4, 9, mid, lo, sft)
+	# a few extra small clumps → irregular, non-spherical crown silhouette
+	for k in range(r.randi_range(3, 5)):
 		var ka := r.randf_range(0.0, TAU)
-		var kr := r.randf_range(0.32, 0.72)
+		var kr := r.randf_range(0.32, 0.75)
 		var kh := cy + r.randf_range(-0.45, 0.6)
-		var ks := r.randf_range(0.4, 0.6)
+		var ks := r.randf_range(0.38, 0.6)
 		var hot := r.randf() < 0.5
 		_facet_blob(st, Vector3(cos(ka) * kr, kh, sin(ka) * kr), Vector3(ks, ks, ks),
-			2, 5, hi if hot else mid, mid if hot else lo)
+			3, 6, hi if hot else mid, mid if hot else lo, sft)
 	return st.commit()
 
-# a low-poly FLAT-SHADED blob (faceted, gem-like) — reads as stylized foliage, not a bubble
-static func _facet_blob(st: SurfaceTool, c: Vector3, rad: Vector3, rings: int, segs: int, top: Color, bot: Color) -> void:
+# a low-poly blob with a faceted SILHOUETTE but optional "inflated" spherical normals so
+# the clump lights as one soft volume (BotW/Europa foliage trick). soft=0 → flat gem-faceted
+# (rocks); soft≈0.7 → smooth volume lighting while geometry stays chunky (premium canopy).
+static func _facet_blob(st: SurfaceTool, c: Vector3, rad: Vector3, rings: int, segs: int, top: Color, bot: Color, soft: float = 0.0) -> void:
 	for ri in range(rings):
 		var p0: float = PI * float(ri) / rings
 		var p1: float = PI * float(ri + 1) / rings
@@ -447,24 +456,31 @@ static func _facet_blob(st: SurfaceTool, c: Vector3, rad: Vector3, rings: int, s
 			var b := _spt(c, rad, p1, t0)
 			var d := _spt(c, rad, p1, t1)
 			var e := _spt(c, rad, p0, t1)
-			_facet_tri(st, c, a, b, d, ca, cb, cb)
-			_facet_tri(st, c, a, d, e, ca, cb, ca)
+			_facet_tri(st, c, a, b, d, ca, cb, cb, soft)
+			_facet_tri(st, c, a, d, e, ca, cb, ca, soft)
 
-static func _facet_tri(st: SurfaceTool, center: Vector3, a: Vector3, b: Vector3, d: Vector3, ca: Color, cb: Color, cd: Color) -> void:
-	var nrm := (b - a).cross(d - a).normalized()       # flat per-face normal → faceted
-	if nrm.dot((a + b + d) / 3.0 - center) < 0.0:
-		nrm = -nrm
-	st.set_color(ca); st.set_normal(nrm); st.add_vertex(a)
-	st.set_color(cb); st.set_normal(nrm); st.add_vertex(b)
-	st.set_color(cd); st.set_normal(nrm); st.add_vertex(d)
+static func _facet_tri(st: SurfaceTool, center: Vector3, a: Vector3, b: Vector3, d: Vector3, ca: Color, cb: Color, cd: Color, soft: float = 0.0) -> void:
+	var face := (b - a).cross(d - a).normalized()       # flat per-face normal
+	if face.dot((a + b + d) / 3.0 - center) < 0.0:
+		face = -face
+	# blend toward the radial (spherical) normal → "inflated" soft-volume lighting
+	# (egg-shaped: squash the vertical so the top catches more light than the sides)
+	for item in [[a, ca], [b, cb], [d, cd]]:
+		var rel: Vector3 = item[0] - center
+		rel.y *= 1.35
+		var radial := rel.normalized()
+		var n := face.lerp(radial, soft).normalized()
+		st.set_color(item[1]); st.set_normal(n); st.add_vertex(item[0])
 
 static func _rock_mesh() -> ArrayMesh:
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
-	var rock := Color(0.50, 0.49, 0.50)
-	var rock2 := Color(0.39, 0.38, 0.40)
-	_sphere(st, Vector3(0, 0.22, 0), Vector3(0.62, 0.46, 0.56), 5, 9, rock, rock2)
-	_sphere(st, Vector3(0.3, 0.42, 0.12), Vector3(0.34, 0.3, 0.34), 4, 8, rock, rock2)
+	var rock := Color(0.52, 0.51, 0.52)
+	var rock2 := Color(0.37, 0.36, 0.38)
+	# faceted "cut" boulder (low soft → keep crisp gem facets) with an irregular silhouette
+	_facet_blob(st, Vector3(0, 0.2, 0), Vector3(0.64, 0.48, 0.58), 4, 9, rock, rock2, 0.12)
+	_facet_blob(st, Vector3(0.32, 0.42, 0.12), Vector3(0.36, 0.32, 0.36), 3, 7, rock, rock2, 0.12)
+	_facet_blob(st, Vector3(-0.28, 0.16, -0.1), Vector3(0.28, 0.24, 0.3), 3, 6, rock, rock2, 0.12)
 	return st.commit()
 
 static func _grass_mesh() -> ArrayMesh:
@@ -484,10 +500,10 @@ static func _grass_mesh() -> ArrayMesh:
 		_blade(st, Vector3(bx, 0, bz), h, Vector3(cos(ang) * lean, 0, sin(ang) * lean), base_c, tip_c)
 	return st.commit()
 
-# a single curved tapering blade: 3 quad segments that bend toward the lean direction
+# a single curved tapering blade: 4 quad segments that bend toward the lean direction
 static func _blade(st: SurfaceTool, base: Vector3, height: float, lean: Vector3, cbase: Color, ctip: Color) -> void:
-	var segs := 3
-	var w := 0.05
+	var segs := 4
+	var w := 0.055
 	var perp := Vector3(-lean.z, 0, lean.x).normalized()
 	if perp.length() < 0.001:
 		perp = Vector3(1, 0, 0)
@@ -627,11 +643,13 @@ static func _pine_mesh() -> ArrayMesh:
 static func _bush_mesh() -> ArrayMesh:
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
-	var lo := Color(0.26, 0.42, 0.23)
-	var hi := Color(0.34, 0.52, 0.29)
-	_sphere(st, Vector3(0, 0.42, 0), Vector3(0.72, 0.52, 0.67), 6, 11, hi, lo)
-	_sphere(st, Vector3(0.42, 0.5, 0.1), Vector3(0.52, 0.48, 0.52), 6, 10, hi, lo)
-	_sphere(st, Vector3(-0.34, 0.46, -0.08), Vector3(0.48, 0.44, 0.48), 6, 10, hi, lo)
+	var lo := Color(0.21, 0.36, 0.20)
+	var hi := Color(0.37, 0.55, 0.31)
+	# de-bubbled: faceted-silhouette clumps with soft-volume normals (matches the trees)
+	_facet_blob(st, Vector3(0, 0.42, 0), Vector3(0.74, 0.54, 0.68), 4, 10, hi, lo, 0.7)
+	_facet_blob(st, Vector3(0.42, 0.5, 0.1), Vector3(0.52, 0.48, 0.52), 4, 8, hi, lo, 0.7)
+	_facet_blob(st, Vector3(-0.34, 0.46, -0.08), Vector3(0.48, 0.44, 0.48), 4, 8, hi, lo, 0.7)
+	_facet_blob(st, Vector3(0.08, 0.74, 0.05), Vector3(0.4, 0.36, 0.4), 3, 7, hi, lo, 0.7)
 	return st.commit()
 
 # rounded ellipsoid blob with smooth normals + vertical gradient
@@ -733,13 +751,13 @@ static func _cypress_mesh_v(variant: int) -> ArrayMesh:
 		var end := Vector3(cos(ang) * reach, top_y + r.randf_range(0.15, 0.7), sin(ang) * reach)
 		_tube(st, Vector3(0, top_y - 0.35, 0), end, 0.07, 5, bark, barkd)
 		ends.append(end)
-	# FACETED wispy canopy clumps (de-bubbled) on branch ends + a central mass
+	# wispy canopy clumps with soft-volume normals on branch ends + a central mass
 	for e in ends:
 		var rad := r.randf_range(0.68, 1.02)
-		_facet_blob(st, e, Vector3(rad, rad * 0.72, rad), 3, r.randi_range(6, 7), hi, mid)
+		_facet_blob(st, e, Vector3(rad, rad * 0.72, rad), 4, r.randi_range(8, 9), hi, mid, 0.72)
 	_facet_blob(st, Vector3(0, top_y + 0.3, 0),
 		Vector3(r.randf_range(1.1, 1.45), r.randf_range(0.7, 0.92), r.randf_range(1.1, 1.45)),
-		3, 8, mid, lo)
+		4, 10, mid, lo, 0.72)
 	# LOTS of hanging Spanish moss / vines draping from canopy + branch ends (varied)
 	var nm := r.randi_range(12, 18)
 	for m in range(nm):

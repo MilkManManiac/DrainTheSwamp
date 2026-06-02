@@ -1,6 +1,8 @@
 class_name TerrainBuilder
 extends RefCounted
 
+const STYLIZED_SHADER = preload("res://shaders/stylized.gdshader")
+
 # Smooth, solid landmass (NOT stair-stepped voxels):
 #   • rounded rolling top surface (smoothed contour + smooth shading along X)
 #   • deep dig-face cross-section at the front that fills the bottom of the view
@@ -167,10 +169,12 @@ static func build(parent: Node3D) -> void:
 	var mi := MeshInstance3D.new()
 	mi.name = "TerrainMesh"
 	mi.mesh = st.commit()
-	var mat := StandardMaterial3D.new()
-	mat.vertex_color_use_as_albedo = true
-	mat.roughness = 0.95
-	mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+	# shared stylized painterly shading (no sway/backlight/rim — it's the ground)
+	var mat := ShaderMaterial.new()
+	mat.shader = STYLIZED_SHADER
+	mat.set_shader_parameter("surf_roughness", 0.95)
+	mat.set_shader_parameter("backlight_strength", 0.0)
+	mat.set_shader_parameter("rim_strength", 0.0)
 	mi.material_override = mat
 	parent.add_child(mi)
 

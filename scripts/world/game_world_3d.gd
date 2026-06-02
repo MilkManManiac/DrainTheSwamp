@@ -97,21 +97,29 @@ func _process(delta: float) -> void:
 	follow_cam.look_at(cam_look, Vector3.UP)
 
 func _build_environment() -> void:
-	# Forward+ renderer — gorgeous desktop/Steam path. MSAA for crisp edges.
-	get_viewport().msaa_3d = Viewport.MSAA_4X
+	# Forward+ renderer — gorgeous desktop/Steam path. MSAA + TAA: TAA cleans the soft-shadow
+	# dithering, SDFGI and volumetric-fog noise so those premium effects read cleanly.
+	get_viewport().msaa_3d = Viewport.MSAA_2X
+	get_viewport().use_taa = true
 
-	# Warm key sun with SOFT shadows (angular size gives a real penumbra)
+	# Warm golden key sun with contact-hardening soft shadows
 	var sun := DirectionalLight3D.new()
 	sun.name = "Sun"
 	sun.rotation_degrees = Vector3(-42, 44, 0)
-	sun.light_color = Color(1.0, 0.91, 0.73)   # warm, hazy swamp sun
-	sun.light_energy = 1.2
+	sun.light_color = Color(1.0, 0.92, 0.76)   # warm, hazy swamp sun
+	sun.light_energy = 1.25
+	sun.light_indirect_energy = 1.25           # boost the SDFGI bounce warmth
 	sun.shadow_enabled = true
-	sun.light_angular_distance = 1.4          # soft-edged shadows
-	sun.directional_shadow_mode = DirectionalLight3D.SHADOW_PARALLEL_4_SPLITS
-	sun.shadow_blur = 1.3
-	sun.directional_shadow_max_distance = 140.0
+	sun.light_angular_distance = 1.4           # contact-hardening penumbra
+	sun.directional_shadow_mode = DirectionalLight3D.SHADOW_PARALLEL_2_SPLITS
+	sun.shadow_blur = 1.5
+	sun.shadow_bias = 0.04
 	sun.shadow_normal_bias = 1.2
+	sun.directional_shadow_split_1 = 0.12
+	sun.directional_shadow_max_distance = 60.0   # tighter → crisper texels for the diorama
+	sun.directional_shadow_fade_start = 0.85
+	if not ("--nofog" in OS.get_cmdline_user_args()):
+		sun.light_volumetric_fog_energy = 3.0    # makes the god-ray shafts glow
 	add_child(sun)
 
 	# Procedural gradient sky → ambient source (cool sky fill in shadows)
@@ -120,61 +128,94 @@ func _build_environment() -> void:
 	sky_mat.sky_top_color = Color(0.40, 0.50, 0.55)
 	sky_mat.sky_horizon_color = Color(0.62, 0.66, 0.58)
 	sky_mat.sky_curve = 0.18
-	sky_mat.ground_bottom_color = Color(0.50, 0.54, 0.48)
-	sky_mat.ground_horizon_color = Color(0.62, 0.66, 0.58)
+	sky_mat.ground_bottom_color = Color(0.46, 0.52, 0.50)
+	sky_mat.ground_horizon_color = Color(0.60, 0.65, 0.60)
 	sky_mat.sun_angle_max = 22.0
 	sky_mat.sun_curve = 0.08
-	sky_mat.energy_multiplier = 0.5
+	sky_mat.energy_multiplier = 0.55
 	var sky := Sky.new()
 	sky.sky_material = sky_mat
 
 	var env := Environment.new()
 	env.background_mode = Environment.BG_SKY
 	env.sky = sky
+	# SDFGI provides the indirect fill now → keep flat ambient LOW or it double-fills/flattens
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_SKY
-	env.ambient_light_energy = 0.30
-	env.ambient_light_sky_contribution = 0.7
+	env.ambient_light_energy = 0.12
+	env.ambient_light_sky_contribution = 1.0
 
-	# LINEAR keeps the stylized colours rich (FILMIC/ACES desaturate these LDR colours)
-	env.tonemap_mode = Environment.TONE_MAPPER_LINEAR
+	# Global illumination — colored bounce light (warm sun → green foliage bounce into shade,
+	# sky-blue fill in crevices). The single biggest "hand-crafted" depth win for a diorama.
+	env.sdfgi_enabled = not ("--nogi" in OS.get_cmdline_user_args())
+	env.sdfgi_use_occlusion = true
+	env.sdfgi_read_sky_light = true
+	env.sdfgi_bounce_feedback = 0.5
+	env.sdfgi_cascades = 4
+	env.sdfgi_min_cell_size = 0.2
+	env.sdfgi_y_scale = Environment.SDFGI_Y_SCALE_75_PERCENT
+	env.sdfgi_energy = 1.0
+	env.sdfgi_normal_bias = 1.1
+	env.sdfgi_probe_bias = 1.1
+	# short-range colored contact bounce on top of SDFGI
+	env.ssil_enabled = true
+	env.ssil_radius = 2.5
+	env.ssil_intensity = 1.2
+	env.ssil_sharpness = 0.98
+
+	# AgX tonemap — rolls highlights off softly (cozy, no harsh clip) and preserves hue far
+	# better than Filmic/ACES; re-saturate to bring the stylized vertex colours back rich.
+	env.tonemap_mode = Environment.TONE_MAPPER_AGX
 	env.tonemap_exposure = 1.0
+	env.tonemap_white = 6.0
 
-	# Bloom — only the brightest highlights (water sparkle) glow; don't wash the grass
+	# Soft dreamy glow (SOFTLIGHT blend = halo, not additive blow-out)
 	env.glow_enabled = not ("--noglow" in OS.get_cmdline_user_args())
-	env.glow_intensity = 0.45
+	env.glow_intensity = 0.55
 	env.glow_strength = 1.0
 	env.glow_bloom = 0.05
-	env.glow_blend_mode = Environment.GLOW_BLEND_MODE_SCREEN
-	env.glow_hdr_threshold = 1.15
+	env.glow_blend_mode = Environment.GLOW_BLEND_MODE_SOFTLIGHT
+	env.glow_hdr_threshold = 1.0
+	env.set("glow_levels/3", 0.7)
+	env.set("glow_levels/4", 1.0)
+	env.set("glow_levels/5", 0.6)
 
-	# SSAO — contact shadows in crevices, under trees/grass (depth + grounding)
+	# SSAO — grounding contact darkening (low light_affect so lit areas don't get grimy)
 	env.ssao_enabled = true
-	env.ssao_radius = 1.1
-	env.ssao_intensity = 2.4
-	env.ssao_power = 1.6
-	env.ssao_detail = 0.6
+	env.ssao_radius = 1.5
+	env.ssao_intensity = 2.0
+	env.ssao_power = 1.5
+	env.ssao_detail = 1.0
+	env.ssao_light_affect = 0.1
+	env.ssao_sharpness = 0.98
 
-	# SSIL — short-range colored indirect light bounce
-	env.ssil_enabled = false
-
-	# Volumetric fog off — it milks out this bright daytime scene
-	env.volumetric_fog_enabled = false
-
-	# Murky swamp haze — grounds the scene (no floating slab) + fades distance into murk
+	# Murky swamp haze — grounds the scene + aerial perspective bleeds distance toward sky
 	env.fog_enabled = not ("--nofog" in OS.get_cmdline_user_args())
 	env.fog_mode = Environment.FOG_MODE_DEPTH
-	env.fog_light_color = Color(0.52, 0.58, 0.50)   # grey-green swamp murk
-	env.fog_sky_affect = 0.4
-	env.fog_density = 1.0
-	env.fog_depth_begin = 26.0
-	env.fog_depth_end = 115.0
-	env.fog_depth_curve = 0.5
+	env.fog_light_color = Color(0.60, 0.68, 0.60)   # grey-green swamp murk
+	env.fog_sun_scatter = 0.2
+	env.fog_aerial_perspective = 0.28               # gentle distance-to-sky bleed only
+	env.fog_sky_affect = 0.35
+	env.fog_density = 0.0                            # let volumetric carry the near haze
+	env.fog_depth_begin = 48.0                       # keep the foreground crisp
+	env.fog_depth_end = 150.0
+	env.fog_depth_curve = 0.7
 
-	# Subtle grade — a touch more contrast + saturation (AgX desaturates highlights)
+	# Volumetric fog — SUBTLE haze + god-ray shafts raking through the cypress (the swamp's
+	# signature). Low density + high light fog-energy = shafts without milking the frame.
+	env.volumetric_fog_enabled = not ("--nofog" in OS.get_cmdline_user_args())
+	env.volumetric_fog_density = 0.005
+	env.volumetric_fog_albedo = Color(0.86, 0.92, 0.83)
+	env.volumetric_fog_anisotropy = 0.45
+	env.volumetric_fog_length = 55.0
+	env.volumetric_fog_gi_inject = 0.4
+	env.volumetric_fog_ambient_inject = 0.05
+	env.volumetric_fog_sky_affect = 0.2
+
+	# Re-saturate after AgX + gentle cozy contrast (punchy, not washed)
 	env.adjustment_enabled = true
-	env.adjustment_brightness = 0.97
-	env.adjustment_contrast = 1.08
-	env.adjustment_saturation = 0.98   # grimy, slightly desaturated
+	env.adjustment_brightness = 1.0
+	env.adjustment_contrast = 1.16
+	env.adjustment_saturation = 1.3
 
 	var we := WorldEnvironment.new()
 	we.environment = env
