@@ -25,8 +25,8 @@ static func build_background(parent: Node3D) -> Node3D:
 	bg.name = "Background"
 	parent.add_child(bg)
 
-	var x0: float = WorldData.TERRAIN_POINTS[0].x * WorldData.SCALE - 60.0
-	var x1: float = WorldData.TERRAIN_POINTS[WorldData.TERRAIN_POINTS.size() - 1].x * WorldData.SCALE + 60.0
+	var x0: float = WorldData.points()[0].x * WorldData.SCALE - 60.0
+	var x1: float = WorldData.points()[WorldData.points().size() - 1].x * WorldData.SCALE + 60.0
 
 	# far mountains (jagged blue) → mid → low green hills, near the horizon band
 	_ridge(bg, x0, x1, -46.0, 2.0, 7.0, 14.0, 20.0, FAR_MTN, 1)
@@ -135,8 +135,8 @@ static func _build_clouds(parent: Node3D, x0: float, x1: float) -> void:
 
 # ── Surface props (trees, rocks, grass, flowers, bushes, mushrooms, logs) ────────
 static func build_surface_props(parent: Node3D) -> void:
-	var x_start: float = WorldData.TERRAIN_POINTS[0].x
-	var x_end: float = WorldData.TERRAIN_POINTS[WorldData.TERRAIN_POINTS.size() - 1].x
+	var x_start: float = WorldData.points()[0].x
+	var x_end: float = WorldData.points()[WorldData.points().size() - 1].x
 
 	var tree_tf: Array[Transform3D] = []
 	var tree_cols: Array[Color] = []
@@ -535,8 +535,8 @@ static func _log_mesh() -> ArrayMesh:
 
 # ── Forest walls bounding the play corridor (RPG-map style: frame is all terrain) ──
 static func build_tree_walls(parent: Node3D) -> void:
-	var x_start: float = WorldData.TERRAIN_POINTS[0].x
-	var x_end: float = WorldData.TERRAIN_POINTS[WorldData.TERRAIN_POINTS.size() - 1].x
+	var x_start: float = WorldData.points()[0].x
+	var x_end: float = WorldData.points()[WorldData.points().size() - 1].x
 	var tree_tf: Array[Transform3D] = []
 	var tree_cols: Array[Color] = []
 	var pine_tf: Array[Transform3D] = []
@@ -571,8 +571,8 @@ static func build_water_props(parent: Node3D) -> void:
 	var r := _rng(40)
 	for i in range(WorldData.SWAMP_COUNT):
 		var rng: Array = WorldData.SWAMP_RANGES[i]
-		var ea: Vector2 = WorldData.TERRAIN_POINTS[rng[0]]
-		var eb: Vector2 = WorldData.TERRAIN_POINTS[rng[1]]
+		var ea: Vector2 = WorldData.points()[rng[0]]
+		var eb: Vector2 = WorldData.points()[rng[1]]
 		var wx0: float = ea.x * WorldData.SCALE
 		var wx1: float = eb.x * WorldData.SCALE
 		var water_y: float = WorldData.elev(minf(ea.y, eb.y)) - 0.45
@@ -596,8 +596,8 @@ static func build_water_props(parent: Node3D) -> void:
 
 # ── Dig-face detail (pebbles, roots, strata) ─────────────────────────────────────
 static func build_digface_detail(parent: Node3D) -> void:
-	var x_start: float = WorldData.TERRAIN_POINTS[0].x
-	var x_end: float = WorldData.TERRAIN_POINTS[WorldData.TERRAIN_POINTS.size() - 1].x
+	var x_start: float = WorldData.points()[0].x
+	var x_end: float = WorldData.points()[WorldData.points().size() - 1].x
 	var zf: float = WorldData.FRONT_Z + 0.03
 	var pebble_tf: Array[Transform3D] = []
 	var root_tf: Array[Transform3D] = []

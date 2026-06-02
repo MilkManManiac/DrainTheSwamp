@@ -52,7 +52,7 @@ static func _ground_color(i: int, ao: float) -> Color:
 	return _tint(c, ao)
 
 static func build(parent: Node3D) -> void:
-	var pts := WorldData.TERRAIN_POINTS
+	var pts := WorldData.points()
 	var x_start: float = pts[0].x
 	var x_end: float = pts[pts.size() - 1].x
 	var front_z: float = WorldData.FRONT_Z

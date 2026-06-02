@@ -137,19 +137,65 @@ static func path_tangent_yaw(world_x: float) -> float:
 	var dz := 0.045 * 1.8 * cos(world_x * 0.045) + 0.013 * 1.0 * cos(world_x * 0.013 + 1.0)
 	return atan2(dz, 1.0)
 
-static func in_pool(orig_x: float) -> bool:
+# ── Land extension ───────────────────────────────────────────────────────────────
+# The raw TERRAIN_POINTS have short ridges between pools. We remap the X coords once so
+# the LAND segments between pools stretch (proportional to the nearest pool's size →
+# more land than water, a longer journey), while pool segments keep their exact shape
+# and SWAMP_RANGES indices stay valid. Everything reads points() instead of the raw const.
+static var _pts: Array[Vector2] = []
+
+static func points() -> Array[Vector2]:
+	if _pts.is_empty():
+		_pts = _build_stretched()
+	return _pts
+
+static func _build_stretched() -> Array[Vector2]:
+	var raw := TERRAIN_POINTS
+	var pw: Array[float] = []
+	var pc: Array[float] = []
 	for r in SWAMP_RANGES:
-		if orig_x >= TERRAIN_POINTS[r[0]].x and orig_x <= TERRAIN_POINTS[r[1]].x:
+		pw.append(raw[r[1]].x - raw[r[0]].x)
+		pc.append((float(r[0]) + float(r[1])) * 0.5)
+	var out: Array[Vector2] = []
+	var shift := 0.0
+	out.append(raw[0])
+	for j in range(1, raw.size()):
+		var dx := raw[j].x - raw[j - 1].x
+		var is_pool_seg := false
+		for r in SWAMP_RANGES:
+			if j - 1 >= r[0] and j <= r[1]:
+				is_pool_seg = true
+				break
+		var f := 1.0
+		if not is_pool_seg:
+			# stretch land by the nearest pool's size → land scales with the pools
+			var best := 0
+			var bestd := 1.0e9
+			for pi in range(pc.size()):
+				var d: float = absf((float(j) - 0.5) - pc[pi])
+				if d < bestd:
+					bestd = d
+					best = pi
+			f = clampf(1.0 + pw[best] / 150.0, 1.7, 4.0)
+		shift += dx * (f - 1.0)
+		out.append(Vector2(raw[j].x + shift, raw[j].y))
+	return out
+
+static func in_pool(orig_x: float) -> bool:
+	var pts := points()
+	for r in SWAMP_RANGES:
+		if orig_x >= pts[r[0]].x and orig_x <= pts[r[1]].x:
 			return true
 	return false
 
 # 1.0 on land away from pools → 0.0 inside pools (smooth ramp), so the rolling-hill
 # undulation fades out at the water and the basins stay clean
 static func _land_mask(orig_x: float) -> float:
+	var pts := points()
 	var min_d := 1e9
 	for r in SWAMP_RANGES:
-		var a: float = TERRAIN_POINTS[r[0]].x
-		var b: float = TERRAIN_POINTS[r[1]].x
+		var a: float = pts[r[0]].x
+		var b: float = pts[r[1]].x
 		if orig_x >= a and orig_x <= b:
 			return 0.0
 		min_d = minf(min_d, minf(absf(orig_x - a), absf(orig_x - b)))
@@ -162,7 +208,7 @@ static func land_roll(orig_x: float) -> float:
 
 static func surface_y_at(orig_x: float) -> float:
 	# linear interp of 3D elevation at an original-x, plus rolling-hill undulation on land
-	var pts := TERRAIN_POINTS
+	var pts := points()
 	var base: float
 	if orig_x <= pts[0].x:
 		base = elev(pts[0].y)

@@ -13,15 +13,15 @@ func build(parent: Node3D) -> void:
 	pools.clear()
 	for i in range(WorldData.SWAMP_COUNT):
 		var r: Array = WorldData.SWAMP_RANGES[i]
-		var ea: Vector2 = WorldData.TERRAIN_POINTS[r[0]]
-		var eb: Vector2 = WorldData.TERRAIN_POINTS[r[1]]
+		var ea: Vector2 = WorldData.points()[r[0]]
+		var eb: Vector2 = WorldData.points()[r[1]]
 		var x0: float = WorldData.to_world_x(ea.x)
 		var x1: float = WorldData.to_world_x(eb.x)
 
 		var full_orig_y: float = minf(ea.y, eb.y)
 		var floor_orig_y: float = ea.y
 		for idx in range(r[0], r[1] + 1):
-			floor_orig_y = maxf(floor_orig_y, WorldData.TERRAIN_POINTS[idx].y)
+			floor_orig_y = maxf(floor_orig_y, WorldData.points()[idx].y)
 		var floor_y: float = WorldData.elev(floor_orig_y)
 		var full_top_y: float = WorldData.elev(full_orig_y) - RIM_DROP
 		var full_h: float = maxf(full_top_y - floor_y, 0.05)
