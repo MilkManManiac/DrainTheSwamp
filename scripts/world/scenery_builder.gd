@@ -145,6 +145,7 @@ static func build_surface_props(parent: Node3D) -> void:
 	var bush_tf: Array[Transform3D] = []
 	var rock_tf: Array[Transform3D] = []
 	var grass_tf: Array[Transform3D] = []
+	var smallgrass_tf: Array[Transform3D] = []
 	var fern_tf: Array[Transform3D] = []
 	var mush_tf: Array[Transform3D] = []
 	var log_tf: Array[Transform3D] = []
@@ -203,6 +204,15 @@ static func build_surface_props(parent: Node3D) -> void:
 				gs = r.randf_range(1.3, 2.3)          # occasional tall clump
 			grass_tf.append(Transform3D(Basis().rotated(Vector3.UP, r.randf_range(0, TAU)).scaled(Vector3(gs * r.randf_range(0.85, 1.2), gs, gs * r.randf_range(0.85, 1.2))),
 				Vector3(wx + r.randf_range(-1.5, 1.5), sy, gz)))
+
+		# SMALL filler grass — packs the bare gaps with short medium/small tufts
+		for _sg in range(r.randi_range(40, 70)):
+			var sgz := r.randf_range(pzb, pzf)
+			if absf(sgz - pz) < 2.0:
+				continue
+			var sgs := r.randf_range(0.5, 1.1)
+			smallgrass_tf.append(Transform3D(Basis().rotated(Vector3.UP, r.randf_range(0, TAU)).scaled(Vector3(sgs, sgs, sgs)),
+				Vector3(wx + r.randf_range(-1.6, 1.6), sy, sgz)))
 
 		# ferns — dense ground cover everywhere (thicker near water/forest)
 		for _f in range(r.randi_range(2, 5)):
@@ -266,6 +276,7 @@ static func build_surface_props(parent: Node3D) -> void:
 	_spawn_mm(parent, "Rocks", _rock_mesh(), rock_tf)
 	_spawn_mm(parent, "Ferns", _fern_mesh(), fern_tf, [], 0.09)
 	_spawn_mm(parent, "GrassTufts", _grass_mesh(), grass_tf, [], 0.11)
+	_spawn_mm(parent, "SmallGrass", _smallgrass_mesh(), smallgrass_tf, [], 0.13)
 	_spawn_mm(parent, "Mushrooms", _mushroom_mesh(), mush_tf)
 	_spawn_mm(parent, "Flowers", _flower_mesh(), flower_tf, flower_cols, 0.10)
 
@@ -307,15 +318,21 @@ static func _spawn_mm(parent: Node3D, nm: String, mesh: Mesh, tfs: Array[Transfo
 static func _tree_mesh() -> ArrayMesh:
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
-	var trunk := Color(0.40, 0.29, 0.18)
-	var lo := Color(0.24, 0.40, 0.21)
-	var hi := Color(0.36, 0.55, 0.29)
-	_cyl(st, Vector3(0, 0, 0), 0.26, 0.20, 1.8, trunk, trunk.darkened(0.15))
-	# smoother, higher-poly canopy blobs
-	_sphere(st, Vector3(0, 2.3, 0), Vector3(1.2, 1.1, 1.2), 8, 14, hi, lo)
-	_sphere(st, Vector3(0.58, 2.9, 0.1), Vector3(0.82, 0.8, 0.82), 7, 12, hi, lo)
-	_sphere(st, Vector3(-0.48, 2.7, -0.18), Vector3(0.8, 0.76, 0.8), 7, 12, hi, lo)
-	_sphere(st, Vector3(0.1, 3.4, 0.05), Vector3(0.74, 0.72, 0.74), 6, 11, hi, lo)
+	var trunk := Color(0.42, 0.31, 0.19)
+	var trunkd := Color(0.28, 0.20, 0.12)
+	var lo := Color(0.18, 0.32, 0.16)     # shadowed underside
+	var mid := Color(0.29, 0.45, 0.23)
+	var hi := Color(0.45, 0.61, 0.32)     # sun-kissed top
+	# flared root base → tapered trunk
+	_cyl(st, Vector3(0, 0, 0), 0.23, 0.5, 0.55, trunk, trunkd)
+	_cyl(st, Vector3(0, 0.55, 0), 0.16, 0.23, 1.55, trunk, trunkd)
+	# fuller organic crown: lower blobs shadowed (mid→lo), upper blobs sun-kissed (hi→mid)
+	_sphere(st, Vector3(0, 2.35, 0), Vector3(1.32, 1.18, 1.32), 8, 14, mid, lo)
+	_sphere(st, Vector3(0.64, 2.55, 0.18), Vector3(0.92, 0.86, 0.92), 7, 12, mid, lo)
+	_sphere(st, Vector3(-0.56, 2.45, -0.2), Vector3(0.86, 0.82, 0.86), 7, 12, mid, lo)
+	_sphere(st, Vector3(0.12, 3.15, 0.06), Vector3(1.0, 0.92, 1.0), 8, 13, hi, mid)
+	_sphere(st, Vector3(-0.36, 2.98, 0.36), Vector3(0.66, 0.62, 0.66), 6, 11, hi, mid)
+	_sphere(st, Vector3(0.42, 3.02, -0.3), Vector3(0.62, 0.58, 0.62), 6, 11, hi, mid)
 	return st.commit()
 
 static func _rock_mesh() -> ArrayMesh:
@@ -371,6 +388,18 @@ static func _tri(st: SurfaceTool, a: Vector3, b: Vector3, c: Vector3, ca: Color,
 	st.set_color(cb); st.set_normal(n); st.add_vertex(b)
 	st.set_color(cc); st.set_normal(n); st.add_vertex(c)
 
+# short low-poly filler grass to pack the gaps between the big tufts
+static func _smallgrass_mesh() -> ArrayMesh:
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var bc := Color(0.22, 0.30, 0.14)
+	var tc := Color(0.41, 0.50, 0.25)
+	for i in range(5):
+		var ang := TAU * float(i) / 5.0 + float(i) * 0.6
+		var rad := 0.04 + float(i % 2) * 0.04
+		_blade(st, Vector3(cos(ang) * rad, 0, sin(ang) * rad), 0.28 + float(i % 3) * 0.07, Vector3(cos(ang) * 0.12, 0, sin(ang) * 0.12), bc, tc)
+	return st.commit()
+
 static func _flower_mesh() -> ArrayMesh:
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
@@ -383,12 +412,15 @@ static func _pine_mesh() -> ArrayMesh:
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
 	var trunk := Color(0.38, 0.27, 0.16)
-	var lo := Color(0.20, 0.36, 0.21)
-	var hi := Color(0.30, 0.48, 0.27)
-	_cyl(st, Vector3(0, 0, 0), 0.2, 0.16, 1.1, trunk, trunk.darkened(0.15))
-	_cone(st, Vector3(0, 1.0, 0), 1.25, 1.5, 16, hi, lo)
-	_cone(st, Vector3(0, 1.95, 0), 1.0, 1.35, 16, hi, lo)
-	_cone(st, Vector3(0, 2.85, 0), 0.72, 1.2, 16, hi, lo)
+	var trunkd := Color(0.26, 0.18, 0.10)
+	var lo := Color(0.16, 0.31, 0.18)
+	var hi := Color(0.31, 0.49, 0.28)
+	_cyl(st, Vector3(0, 0, 0), 0.2, 0.42, 0.55, trunk, trunkd)   # flared base
+	_cyl(st, Vector3(0, 0.55, 0), 0.15, 0.2, 0.55, trunk, trunkd)
+	_cone(st, Vector3(0, 0.9, 0), 1.3, 1.4, 16, hi, lo)
+	_cone(st, Vector3(0, 1.7, 0), 1.05, 1.3, 16, hi, lo)
+	_cone(st, Vector3(0, 2.5, 0), 0.8, 1.2, 16, hi, lo)
+	_cone(st, Vector3(0, 3.3, 0), 0.5, 1.05, 16, hi, lo)
 	return st.commit()
 
 static func _bush_mesh() -> ArrayMesh:
@@ -614,6 +646,67 @@ static func build_tree_walls(parent: Node3D) -> void:
 				tree_cols.append(tint)
 	_spawn_mm(parent, "WallTrees", _tree_mesh(), tree_tf, tree_cols, 0.02)
 	_spawn_mm(parent, "WallPines", _pine_mesh(), pine_tf, pine_cols, 0.015)
+
+# ── Road detail: embedded stones, wet puddles, stepping stones along the path ──────
+static func build_path_detail(parent: Node3D) -> void:
+	var x_start: float = WorldData.points()[0].x
+	var x_end: float = WorldData.points()[WorldData.points().size() - 1].x
+	var stone_tf: Array[Transform3D] = []
+	var big_tf: Array[Transform3D] = []
+	var puddle_tf: Array[Transform3D] = []
+	var r := _rng(70)
+	var x := x_start
+	while x < x_end:
+		x += r.randf_range(1.4, 3.2)
+		if WorldData.in_pool(x):
+			continue
+		var wx: float = x * WorldData.SCALE
+		var sy: float = TerrainBuilder.surface_height(x)
+		var pz: float = WorldData.path_z(wx)
+		for _p in range(r.randi_range(1, 3)):
+			var ss := r.randf_range(0.28, 0.72)
+			stone_tf.append(Transform3D(Basis().rotated(Vector3.UP, r.randf_range(0, TAU)).scaled(Vector3(ss, ss * 0.6, ss)),
+				Vector3(wx + r.randf_range(-0.4, 0.4), sy + 0.03, pz + r.randf_range(-1.7, 1.7))))
+		if r.randf() < 0.13:
+			var ps := r.randf_range(0.8, 1.6)
+			puddle_tf.append(Transform3D(Basis().rotated(Vector3.UP, r.randf_range(0, TAU)).scaled(Vector3(ps, 1.0, ps * 0.7)),
+				Vector3(wx, sy + 0.05, pz + r.randf_range(-0.8, 0.8))))
+		if r.randf() < 0.05:
+			var bs := r.randf_range(0.9, 1.4)
+			big_tf.append(Transform3D(Basis().rotated(Vector3.UP, r.randf_range(0, TAU)).scaled(Vector3(bs, bs * 0.4, bs)),
+				Vector3(wx, sy + 0.05, pz + r.randf_range(-1.0, 1.0))))
+	_spawn_mm(parent, "PathPebbles", _pathstone_mesh(), stone_tf)
+	_spawn_mm(parent, "SteppingStones", _pathstone_mesh(), big_tf)
+	# wet puddles get a glossy dark material (catches the sky → wet sheen)
+	if not puddle_tf.is_empty():
+		var mm := MultiMesh.new()
+		mm.transform_format = MultiMesh.TRANSFORM_3D
+		mm.mesh = _puddle_mesh()
+		mm.instance_count = puddle_tf.size()
+		for i in range(puddle_tf.size()):
+			mm.set_instance_transform(i, puddle_tf[i])
+		var mmi := MultiMeshInstance3D.new()
+		mmi.name = "Puddles"
+		mmi.multimesh = mm
+		var mat := StandardMaterial3D.new()
+		mat.vertex_color_use_as_albedo = true
+		mat.roughness = 0.12
+		mat.metallic = 0.35
+		mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+		mmi.material_override = mat
+		parent.add_child(mmi)
+
+static func _pathstone_mesh() -> ArrayMesh:
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	_sphere(st, Vector3(0, 0.08, 0), Vector3(0.3, 0.18, 0.26), 4, 8, Color(0.46, 0.44, 0.43), Color(0.33, 0.32, 0.33))
+	return st.commit()
+
+static func _puddle_mesh() -> ArrayMesh:
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	_disc(st, Vector3.ZERO, 0.5, 12, Color(0.09, 0.11, 0.10))
+	return st.commit()
 
 # ── Water-edge props (reeds, lily pads) ──────────────────────────────────────────
 static func build_water_props(parent: Node3D) -> void:

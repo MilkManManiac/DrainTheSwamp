@@ -22,6 +22,7 @@ func _ready() -> void:
 	TerrainBuilder.build(self)
 	SceneryBuilder.build_surface_props(self)
 	SceneryBuilder.build_tree_walls(self)
+	SceneryBuilder.build_path_detail(self)
 	SceneryBuilder.build_digface_detail(self)
 	water = WaterBuilder.new()
 	water.build(self)
