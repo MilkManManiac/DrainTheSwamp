@@ -13,15 +13,20 @@ const SMOOTH_PASSES: int = 5         # round off sharp corners → gentle walkab
 const WALL_DEPTH: float = 30.0       # dig-face depth (fills bottom of frame)
 const COLLISION_DEPTH: float = 44.0
 const BEVEL: float = 0.6             # rounded grass lip at the top-front edge
-const BACK_RISE: float = 16.0        # land rises this much into hills behind the play band
+const PLAY_HALF: float = 5.0         # flat valley floor: z in [-PLAY_HALF, +PLAY_HALF]
+const FRONT_RISE: float = 9.0        # bank rising toward the camera (fills frame bottom)
+const BACK_RISE: float = 16.0        # big hills rising away from camera (fills frame top)
 
-# how much the surface lifts at a given z (0 in the play band z>=0, rising toward the back)
+# the surface lifts into a valley: flat play band in the middle, rising banks front+back
 static func back_rise(z: float) -> float:
-	if z >= 0.0:
-		return 0.0
-	var back: float = WorldData.FRONT_Z - WorldData.DEPTH
-	var t: float = clampf(z / back, 0.0, 1.0)
-	return BACK_RISE * t * t
+	if z > PLAY_HALF:
+		var t: float = clampf((z - PLAY_HALF) / (WorldData.FRONT_Z - PLAY_HALF), 0.0, 1.0)
+		return FRONT_RISE * t   # linear bank rising toward the camera, fills the frame bottom
+	if z < -PLAY_HALF:
+		var back: float = WorldData.FRONT_Z - WorldData.DEPTH
+		var t2: float = clampf((z + PLAY_HALF) / (back + PLAY_HALF), 0.0, 1.0)
+		return BACK_RISE * t2 * t2
+	return 0.0
 
 # Swampy, grimy palette — dark mossy green-brown turf over wet muddy soil
 const GRASS_A := Color(0.26, 0.32, 0.17)
@@ -34,6 +39,24 @@ const STRATA: Array[Color] = [
 	Color(0.24, 0.19, 0.13), Color(0.19, 0.15, 0.11), Color(0.15, 0.12, 0.09),
 	Color(0.11, 0.09, 0.07),
 ]
+# patchy ground colour — breaks up the monotone turf with mud / moss / dry-grass patches
+const MOSS := Color(0.16, 0.25, 0.12)
+const MUD := Color(0.30, 0.24, 0.14)
+const DRY := Color(0.34, 0.35, 0.18)
+
+static func _ground_color(i: int, ao: float) -> Color:
+	var base: Color = GRASS_A if (i % 2 == 0) else GRASS_B
+	var p := int(floor(float(i) / 6.0))
+	var hv: float = sin(float(p) * 12.9898) * 43758.5453
+	var h: float = hv - floor(hv)
+	var c := base
+	if h < 0.22:
+		c = base.lerp(MUD, 0.55)
+	elif h < 0.42:
+		c = base.lerp(MOSS, 0.6)
+	elif h < 0.58:
+		c = base.lerp(DRY, 0.45)
+	return _tint(c, ao)
 
 static func build(parent: Node3D) -> void:
 	var pts := WorldData.TERRAIN_POINTS
@@ -68,12 +91,12 @@ static func build(parent: Node3D) -> void:
 		var n1 := _slope_normal(hs, xs, i + 1)
 		var ao0 := _ao(hs, i)
 		var ao1 := _ao(hs, i + 1)
-		var g0 := _tint(GRASS_A if (i % 2 == 0) else GRASS_B, ao0)
-		var g1 := _tint(GRASS_A if ((i + 1) % 2 == 0) else GRASS_B, ao1)
+		var g0 := _ground_color(i, ao0)
+		var g1 := _ground_color(i + 1, ao1)
 
-		# top grass surface — flat through the play band (front..z0), then RISES into
-		# forested hills toward the back so there's never a sky-gap edge (anti-floating)
-		var zbands := [front_top_z, 0.0, back_z * 0.34, back_z * 0.67, back_z]
+		# top grass surface — a VALLEY: gentle bank rising to the camera (fills frame
+		# bottom), flat play floor in the middle, big hills rising to the back (fills top)
+		var zbands := [front_top_z, 13.0, PLAY_HALF, -PLAY_HALF, -12.0, back_z]
 		for zi in range(zbands.size() - 1):
 			var za: float = zbands[zi]        # nearer (front)
 			var zc: float = zbands[zi + 1]    # farther (back)
@@ -90,17 +113,19 @@ static func build(parent: Node3D) -> void:
 				Vector3(x1, h1 + ra, za), Vector3(x0, h0 + ra, za),
 				c0, c1, c1, c0, na0, na1, na1, na0)
 
-		# soft grass bevel rolling over the front edge
+		# soft grass bevel rolling over the front edge (lifted by the front bank rise)
+		var rft := back_rise(front_top_z)
+		var rfr := back_rise(front_z)
 		var nb0 := (n0 + Vector3(0, 0, 1)).normalized()
 		var nb1 := (n1 + Vector3(0, 0, 1)).normalized()
 		_quad_n(st,
-			Vector3(x0, h0, front_top_z), Vector3(x1, h1, front_top_z),
-			Vector3(x1, h1 - BEVEL, front_z), Vector3(x0, h0 - BEVEL, front_z),
+			Vector3(x0, h0 + rft, front_top_z), Vector3(x1, h1 + rft, front_top_z),
+			Vector3(x1, h1 + rfr - BEVEL, front_z), Vector3(x0, h0 + rfr - BEVEL, front_z),
 			g0, g1, _tint(g1, 0.9), _tint(g0, 0.9), n0, n1, nb1, nb0)
 
 		# deep dig-face cross-section (flat-shaded) with layered soil strata
-		var ftop0 := h0 - BEVEL
-		var ftop1 := h1 - BEVEL
+		var ftop0 := h0 + rfr - BEVEL
+		var ftop1 := h1 + rfr - BEVEL
 		var fb := front_z
 		var nb := STRATA.size()
 		# gently wavy strata boundaries (subtle, geological)
@@ -135,8 +160,8 @@ static func build(parent: Node3D) -> void:
 	var body := StaticBody3D.new()
 	body.name = "TerrainBody"
 	parent.add_child(body)
-	var z_lo := -8.0
-	var z_hi := WorldData.FRONT_Z
+	var z_lo := -PLAY_HALF - 1.0
+	var z_hi := PLAY_HALF + 1.0
 	var faces := PackedVector3Array()
 	for i in range(n - 1):
 		var x0 := xs[i] * WorldData.SCALE

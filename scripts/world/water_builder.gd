@@ -26,8 +26,10 @@ func build(parent: Node3D) -> void:
 		var full_top_y: float = WorldData.elev(full_orig_y) - RIM_DROP
 		var full_h: float = maxf(full_top_y - floor_y, 0.05)
 
-		var zf := WorldData.FRONT_Z - 1.5
-		var zb := WorldData.FRONT_Z - WorldData.DEPTH + 1.5
+		# keep the pond in the flat play floor only (z in [-5,5]) so it doesn't climb the
+		# rising banks front/back
+		var zf := 5.0
+		var zb := -5.0
 		var width := x1 - x0
 		var depth := zf - zb
 
@@ -47,6 +49,7 @@ func build(parent: Node3D) -> void:
 		mat.set_shader_parameter("wave_amp", 0.04 + size_f * 0.035)
 		mat.set_shader_parameter("wave_scale", 0.85 - size_f * 0.18)
 		mat.set_shader_parameter("wave_speed", 1.2 - size_f * 0.25)
+		mat.set_shader_parameter("water_alpha", 0.98)   # opaque swamp water, not see-through
 
 		var mi := MeshInstance3D.new()
 		mi.name = "Water%d" % i
