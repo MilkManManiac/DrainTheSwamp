@@ -9,3 +9,9 @@ export/
 # OS files
 .DS_Store
 Thumbs.db
+
+# Dev capture artifacts
+_lookdev.png
+_spike_capture.png
+build/
+_lookdev.png.import
