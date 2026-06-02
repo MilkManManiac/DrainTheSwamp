@@ -148,6 +148,7 @@ static func build_surface_props(parent: Node3D) -> void:
 	var grass_tf: Array[Transform3D] = []
 	var grass2_tf: Array[Transform3D] = []
 	var grass3_tf: Array[Transform3D] = []
+	var grass4_tf: Array[Transform3D] = []
 	var smallgrass_tf: Array[Transform3D] = []
 	var fern_tf: Array[Transform3D] = []
 	var mush_tf: Array[Transform3D] = []
@@ -158,6 +159,7 @@ static func build_surface_props(parent: Node3D) -> void:
 	var flower_cols: Array[Color] = []
 	var cypress_tf: Array[Transform3D] = []
 	var cypress_cols: Array[Color] = []
+	var cypress_var: Array[int] = []
 	var snag_tf: Array[Transform3D] = []
 	var palm_tf: Array[Transform3D] = []
 
@@ -210,14 +212,16 @@ static func build_surface_props(parent: Node3D) -> void:
 				gs = r.randf_range(1.3, 2.3)          # occasional tall clump
 			var gtf := Transform3D(Basis().rotated(Vector3.UP, r.randf_range(0, TAU)).scaled(Vector3(gs * r.randf_range(0.85, 1.2), gs, gs * r.randf_range(0.85, 1.2))),
 				Vector3(wx + r.randf_range(-1.5, 1.5), sy, gz))
-			# spread across 3 grass styles (fine tuft / broad-leaf / tall wispy) for variety
+			# spread across 4 grass styles (fine tuft / broad-leaf / tall wispy / dry brown)
 			var gpick := r.randf()
-			if gpick < 0.58:
+			if gpick < 0.48:
 				grass_tf.append(gtf)
-			elif gpick < 0.82:
+			elif gpick < 0.68:
 				grass2_tf.append(gtf)
-			else:
+			elif gpick < 0.82:
 				grass3_tf.append(gtf)
+			else:
+				grass4_tf.append(gtf)   # dry brown clumps
 
 		# SMALL filler grass — packs the bare gaps with short medium/small tufts
 		for _sg in range(r.randi_range(40, 70)):
@@ -250,6 +254,7 @@ static func build_surface_props(parent: Node3D) -> void:
 				cypress_tf.append(Transform3D(Basis().rotated(Vector3.UP, r.randf_range(0, TAU)).scaled(Vector3(cs, cs, cs)), Vector3(wx, sy, cz)))
 				var cv := r.randf_range(0.85, 1.1)
 				cypress_cols.append(Color(cv, cv * r.randf_range(0.97, 1.04), cv * 0.92))
+				cypress_var.append(r.randi() % CYPRESS_VARIANTS)
 
 		# dead snag — occasional grey skeleton
 		if r.randf() < 0.035:
@@ -304,7 +309,15 @@ static func build_surface_props(parent: Node3D) -> void:
 				vcl.append(tree_cols[j])
 		_spawn_mm(parent, "Trees%d" % vi, tvariants[vi], vtf, vcl, 0.035)
 	_spawn_mm(parent, "Pines", _pine_mesh(), pine_tf, pine_cols, 0.02)
-	_spawn_mm(parent, "Cypress", _cypress_mesh(), cypress_tf, cypress_cols, 0.03)
+	var cvariants := _cypress_variants()
+	for ci in range(cvariants.size()):
+		var ctf: Array[Transform3D] = []
+		var ccl: Array[Color] = []
+		for j in range(cypress_tf.size()):
+			if cypress_var[j] == ci:
+				ctf.append(cypress_tf[j])
+				ccl.append(cypress_cols[j])
+		_spawn_mm(parent, "Cypress%d" % ci, cvariants[ci], ctf, ccl, 0.03)
 	_spawn_mm(parent, "Snags", _snag_mesh(), snag_tf, [], 0.02)
 	_spawn_mm(parent, "Palmettos", _palmetto_mesh(), palm_tf, [], 0.07)
 	_spawn_mm(parent, "Bushes", _bush_mesh(), bush_tf, [], 0.05)
@@ -316,6 +329,7 @@ static func build_surface_props(parent: Node3D) -> void:
 	_spawn_mm(parent, "GrassTufts", _grass_mesh(), grass_tf, [], 0.11, false)
 	_spawn_mm(parent, "GrassBroad", _grass_broad_mesh(), grass2_tf, [], 0.10, false)
 	_spawn_mm(parent, "GrassWispy", _grass_wispy_mesh(), grass3_tf, [], 0.14, false)
+	_spawn_mm(parent, "GrassDry", _grass_dry_mesh(), grass4_tf, [], 0.12, false)
 	_spawn_mm(parent, "SmallGrass", _smallgrass_mesh(), smallgrass_tf, [], 0.13, false)
 	_spawn_mm(parent, "Mushrooms", _mushroom_mesh(), mush_tf)
 	_spawn_mm(parent, "Flowers", _flower_mesh(), flower_tf, flower_cols, 0.10, false)
@@ -523,6 +537,20 @@ static func _grass_broad_mesh() -> ArrayMesh:
 			Vector3(cos(ang) * lean, 0.95, sin(ang) * lean), bc, tc)
 	return st.commit()
 
+# dry brown grass — sun-bleached straw clump (mixes parched patches into the green)
+static func _grass_dry_mesh() -> ArrayMesh:
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var bc := Color(0.31, 0.26, 0.13)
+	var tc := Color(0.56, 0.47, 0.25)
+	for i in range(9):
+		var ang := TAU * float(i) / 9.0 + float(i) * 0.7
+		var rad := 0.06 + float(i % 3) * 0.04
+		var h := 0.5 + float(i % 4) * 0.13
+		var lean := 0.28 + float(i % 2) * 0.16   # droops more than green grass
+		_blade(st, Vector3(cos(ang) * rad, 0, sin(ang) * rad), h, Vector3(cos(ang) * lean, 0, sin(ang) * lean), bc, tc)
+	return st.commit()
+
 # tall wispy seed-grass — many thin blades with pale, almost-blond tips
 static func _grass_wispy_mesh() -> ArrayMesh:
 	var st := SurfaceTool.new()
@@ -659,34 +687,70 @@ static func _cyl(st: SurfaceTool, base: Vector3, r_top: float, r_bot: float, hei
 		st.set_color(ctop); st.set_normal(n0); st.add_vertex(tp0)
 
 # ── Bayou foliage: cypress (flared trunk + knees + Spanish moss), dead snag, palmetto ──
+const CYPRESS_VARIANTS := 3
+
 static func _cypress_mesh() -> ArrayMesh:
+	return _cypress_mesh_v(0)
+
+# distinct bayou cypress silhouettes so the vine-draped trees aren't copy-pasted
+static func _cypress_variants() -> Array:
+	var out: Array = []
+	for v in range(CYPRESS_VARIANTS):
+		out.append(_cypress_mesh_v(v))
+	return out
+
+# tall buttressed cypress: faceted (de-bubbled) wispy crown + lots of hanging Spanish
+# moss / vines. Trunk height, knees, branches, canopy + moss all varied per variant.
+static func _cypress_mesh_v(variant: int) -> ArrayMesh:
+	var r := _rng(800 + variant * 31)
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
 	var bark := Color(0.34, 0.27, 0.19)
 	var barkd := Color(0.22, 0.17, 0.12)
-	var lo := Color(0.24, 0.33, 0.21)
-	var hi := Color(0.33, 0.44, 0.27)
-	var moss := Color(0.56, 0.59, 0.47)   # ghostly grey-green Spanish moss
-	# flared buttress base → tall slender trunk
-	_cyl(st, Vector3(0, 0, 0), 0.32, 0.75, 1.3, bark, barkd)
-	_cyl(st, Vector3(0, 1.3, 0), 0.2, 0.32, 4.2, bark, barkd)
-	# cypress "knees" poking up around the base
-	for k in range(5):
-		var ka := float(k) * TAU / 5.0 + 0.4
-		var kr := 0.75 + (k % 2) * 0.25
-		_cone(st, Vector3(cos(ka) * kr, 0, sin(ka) * kr), 0.13, 0.3 + (k % 3) * 0.12, 5, bark, barkd)
-	# sparse, wispy canopy high up (smoother)
-	_sphere(st, Vector3(0, 5.7, 0), Vector3(1.5, 0.9, 1.5), 7, 13, hi, lo)
-	_sphere(st, Vector3(0.6, 6.2, 0.2), Vector3(0.88, 0.72, 0.88), 6, 11, hi, lo)
-	_sphere(st, Vector3(-0.55, 6.0, -0.25), Vector3(0.82, 0.67, 0.82), 6, 11, hi, lo)
-	# hanging Spanish moss strands draping from the canopy
-	for m in range(10):
-		var ma := float(m) * TAU / 10.0
-		var mr := 1.0 + (m % 3) * 0.25
+	var lo := Color(0.21, 0.32, 0.20)
+	var mid := Color(0.27, 0.40, 0.24)
+	var hi := Color(0.35, 0.48, 0.29)
+	var moss := Color(0.58, 0.61, 0.49)   # ghostly grey-green Spanish moss
+	var mossd := Color(0.47, 0.51, 0.40)
+	# flared buttress base → tall slender trunk (height varies)
+	var trunk_h := r.randf_range(3.7, 5.1)
+	_cyl(st, Vector3(0, 0, 0), 0.3, 0.7 + r.randf_range(0.0, 0.14), 1.3, bark, barkd)
+	_cyl(st, Vector3(0, 1.3, 0), 0.18, 0.3, trunk_h, bark, barkd)
+	var top_y := 1.3 + trunk_h
+	# cypress "knees" poking up around the base (count + spread vary)
+	var nk := r.randi_range(4, 6)
+	for k in range(nk):
+		var ka := float(k) * TAU / nk + r.randf_range(-0.3, 0.3)
+		var kr := r.randf_range(0.6, 1.05)
+		_cone(st, Vector3(cos(ka) * kr, 0, sin(ka) * kr), 0.13, r.randf_range(0.24, 0.56), 5, bark, barkd)
+	# a few branches splaying out near the top
+	var nb := r.randi_range(3, 4)
+	var ends: Array = []
+	var a0 := r.randf_range(0.0, TAU)
+	for b in range(nb):
+		var ang := a0 + float(b) * TAU / nb + r.randf_range(-0.3, 0.3)
+		var reach := r.randf_range(0.75, 1.45)
+		var end := Vector3(cos(ang) * reach, top_y + r.randf_range(0.15, 0.7), sin(ang) * reach)
+		_tube(st, Vector3(0, top_y - 0.35, 0), end, 0.07, 5, bark, barkd)
+		ends.append(end)
+	# FACETED wispy canopy clumps (de-bubbled) on branch ends + a central mass
+	for e in ends:
+		var rad := r.randf_range(0.68, 1.02)
+		_facet_blob(st, e, Vector3(rad, rad * 0.72, rad), 3, r.randi_range(6, 7), hi, mid)
+	_facet_blob(st, Vector3(0, top_y + 0.3, 0),
+		Vector3(r.randf_range(1.1, 1.45), r.randf_range(0.7, 0.92), r.randf_range(1.1, 1.45)),
+		3, 8, mid, lo)
+	# LOTS of hanging Spanish moss / vines draping from canopy + branch ends (varied)
+	var nm := r.randi_range(12, 18)
+	for m in range(nm):
+		var ma := r.randf_range(0.0, TAU)
+		var mr := r.randf_range(0.8, 1.55)
 		var mx := cos(ma) * mr
 		var mz := sin(ma) * mr
-		var ml := 0.9 + (m % 4) * 0.45
-		_tube(st, Vector3(mx, 5.3, mz), Vector3(mx * 1.06, 5.3 - ml, mz * 1.06), 0.05, 4, moss, moss.darkened(0.12))
+		var my := top_y - r.randf_range(0.0, 0.7)
+		var ml := r.randf_range(0.9, 2.2)
+		# slight outward drift as the strand falls → natural drape
+		_tube(st, Vector3(mx, my, mz), Vector3(mx * 1.08, my - ml, mz * 1.08), r.randf_range(0.035, 0.06), 4, moss, mossd)
 	return st.commit()
 
 static func _snag_mesh() -> ArrayMesh:

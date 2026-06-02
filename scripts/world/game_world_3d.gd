@@ -12,7 +12,9 @@ var player: CharacterBody3D
 var follow_cam: Camera3D
 # camera Z (12) sits IN FRONT of the terrain front edge (FRONT_Z=14) so the dig-face
 # cross-section is behind the camera and never rendered — foreground is pure top-surface ground
-var cam_offset := Vector3(1.5, 13.0, 10.5)
+# lower + further back = more side-on: shows the character's side + more of the back
+# hills rising, instead of a near top-down map view (borders TBD per user)
+var cam_offset := Vector3(1.5, 9.5, 14.5)
 var cam_look := Vector3.ZERO
 
 func _ready() -> void:
@@ -186,7 +188,7 @@ func _build_camera() -> void:
 	var tx := 40.0 if wide else 18.0
 	var ty: float = WorldData.surface_y_at(tx / WorldData.SCALE) - (3.0 if wide else 1.5)
 	var target := Vector3(tx, ty, 0.0)
-	cam.position = target + Vector3(3.0, 16.0, 26.0) if wide else target + Vector3(1.5, 13.0, 10.5)
+	cam.position = target + Vector3(3.0, 16.0, 26.0) if wide else target + cam_offset
 	cam.look_at(target, Vector3.UP)
 	cam.make_current()
 
