@@ -150,6 +150,10 @@ static func build_surface_props(parent: Node3D) -> void:
 	var log_tf: Array[Transform3D] = []
 	var flower_tf: Array[Transform3D] = []
 	var flower_cols: Array[Color] = []
+	var cypress_tf: Array[Transform3D] = []
+	var cypress_cols: Array[Color] = []
+	var snag_tf: Array[Transform3D] = []
+	var palm_tf: Array[Transform3D] = []
 
 	# props spread across the whole landmass depth (front toward camera → forested back)
 	var pzb := WorldData.FRONT_Z - WorldData.DEPTH + 1.0
@@ -211,6 +215,29 @@ static func build_surface_props(parent: Node3D) -> void:
 				flower_tf.append(Transform3D(Basis(), Vector3(wx, sy, flz)))
 				flower_cols.append(_FLOWER_COLS[r.randi() % _FLOWER_COLS.size()])
 
+		# CYPRESS — bayou signature; loves the waterside, scattered elsewhere, off path
+		if r.randf() < (0.18 if near_water else 0.05):
+			var cz := r.randf_range(pzb, pzf - 2.0)
+			if absf(cz - pz) >= PATH_CLEAR:
+				var cs := r.randf_range(0.85, 1.5)
+				cypress_tf.append(Transform3D(Basis().rotated(Vector3.UP, r.randf_range(0, TAU)).scaled(Vector3(cs, cs, cs)), Vector3(wx, sy, cz)))
+				var cv := r.randf_range(0.85, 1.1)
+				cypress_cols.append(Color(cv, cv * r.randf_range(0.97, 1.04), cv * 0.92))
+
+		# dead snag — occasional grey skeleton
+		if r.randf() < 0.035:
+			var nz := r.randf_range(pzb, pzf - 2.0)
+			if absf(nz - pz) >= PATH_CLEAR:
+				var ns := r.randf_range(0.8, 1.3)
+				snag_tf.append(Transform3D(Basis().rotated(Vector3.UP, r.randf_range(0, TAU)).scaled(Vector3(ns, ns, ns)), Vector3(wx, sy, nz)))
+
+		# palmetto fan — low, clumps near water/forest, can sit closer to the path
+		if r.randf() < (0.20 if (near_water or forest) else 0.08):
+			var palz := r.randf_range(pzb, pzf)
+			if absf(palz - pz) >= 2.4:
+				var ps := r.randf_range(0.8, 1.35)
+				palm_tf.append(Transform3D(Basis().rotated(Vector3.UP, r.randf_range(0, TAU)).scaled(Vector3(ps, ps, ps)), Vector3(wx, sy, palz)))
+
 		if r.randf() < 0.10:
 			var mz := r.randf_range(pzb, pzf)
 			if absf(mz - pz) >= 2.0:
@@ -228,6 +255,9 @@ static func build_surface_props(parent: Node3D) -> void:
 
 	_spawn_mm(parent, "Trees", _tree_mesh(), tree_tf, tree_cols, 0.035)
 	_spawn_mm(parent, "Pines", _pine_mesh(), pine_tf, pine_cols, 0.02)
+	_spawn_mm(parent, "Cypress", _cypress_mesh(), cypress_tf, cypress_cols, 0.03)
+	_spawn_mm(parent, "Snags", _snag_mesh(), snag_tf, [], 0.02)
+	_spawn_mm(parent, "Palmettos", _palmetto_mesh(), palm_tf, [], 0.07)
 	_spawn_mm(parent, "Bushes", _bush_mesh(), bush_tf, [], 0.05)
 	_spawn_mm(parent, "Logs", _log_mesh(), log_tf)
 	_spawn_mm(parent, "Rocks", _rock_mesh(), rock_tf)
@@ -401,6 +431,78 @@ static func _cyl(st: SurfaceTool, base: Vector3, r_top: float, r_bot: float, hei
 		st.set_color(cbot); st.set_normal(n0); st.add_vertex(bt0)
 		st.set_color(ctop); st.set_normal(n1); st.add_vertex(tp1)
 		st.set_color(ctop); st.set_normal(n0); st.add_vertex(tp0)
+
+# ── Bayou foliage: cypress (flared trunk + knees + Spanish moss), dead snag, palmetto ──
+static func _cypress_mesh() -> ArrayMesh:
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var bark := Color(0.34, 0.27, 0.19)
+	var barkd := Color(0.22, 0.17, 0.12)
+	var lo := Color(0.24, 0.33, 0.21)
+	var hi := Color(0.33, 0.44, 0.27)
+	var moss := Color(0.56, 0.59, 0.47)   # ghostly grey-green Spanish moss
+	# flared buttress base → tall slender trunk
+	_cyl(st, Vector3(0, 0, 0), 0.32, 0.75, 1.3, bark, barkd)
+	_cyl(st, Vector3(0, 1.3, 0), 0.2, 0.32, 4.2, bark, barkd)
+	# cypress "knees" poking up around the base
+	for k in range(5):
+		var ka := float(k) * TAU / 5.0 + 0.4
+		var kr := 0.75 + (k % 2) * 0.25
+		_cone(st, Vector3(cos(ka) * kr, 0, sin(ka) * kr), 0.13, 0.3 + (k % 3) * 0.12, 5, bark, barkd)
+	# sparse, wispy canopy high up
+	_sphere(st, Vector3(0, 5.7, 0), Vector3(1.45, 0.85, 1.45), 4, 8, hi, lo)
+	_sphere(st, Vector3(0.6, 6.2, 0.2), Vector3(0.85, 0.7, 0.85), 4, 7, hi, lo)
+	_sphere(st, Vector3(-0.55, 6.0, -0.25), Vector3(0.8, 0.65, 0.8), 4, 7, hi, lo)
+	# hanging Spanish moss strands draping from the canopy
+	for m in range(10):
+		var ma := float(m) * TAU / 10.0
+		var mr := 1.0 + (m % 3) * 0.25
+		var mx := cos(ma) * mr
+		var mz := sin(ma) * mr
+		var ml := 0.9 + (m % 4) * 0.45
+		_box(st, Vector3(mx, 5.3 - ml * 0.5, mz), Vector3(0.09, ml, 0.09), moss)
+	return st.commit()
+
+static func _snag_mesh() -> ArrayMesh:
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var dead := Color(0.44, 0.40, 0.33)
+	var deadd := Color(0.30, 0.27, 0.22)
+	_cyl(st, Vector3(0, 0, 0), 0.16, 0.42, 4.3, dead, deadd)
+	# a few broken bare branch stubs near the top
+	_box(st, Vector3(0.7, 3.4, 0), Vector3(1.3, 0.14, 0.14), deadd)
+	_box(st, Vector3(-0.5, 3.9, 0.1), Vector3(0.9, 0.12, 0.12), deadd)
+	_box(st, Vector3(0.15, 4.2, -0.5), Vector3(0.12, 0.12, 0.9), deadd)
+	# a wisp of moss on the dead branch
+	_box(st, Vector3(1.1, 2.9, 0), Vector3(0.08, 0.8, 0.08), Color(0.54, 0.56, 0.46))
+	return st.commit()
+
+static func _palmetto_mesh() -> ArrayMesh:
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var lo := Color(0.22, 0.36, 0.18)
+	var hi := Color(0.34, 0.5, 0.26)
+	# low fan of broad fronds splaying out + up
+	for i in range(9):
+		var ang := float(i) * TAU / 9.0 + float(i) * 0.3
+		var lean := 1.0 + (i % 3) * 0.2
+		_frond(st, Vector3(0, 0.15, 0), 1.3 + (i % 2) * 0.3, Vector3(cos(ang) * lean, 0.7, sin(ang) * lean), lo, hi)
+	return st.commit()
+
+# a broad tapered frond/leaf (wider than a grass blade)
+static func _frond(st: SurfaceTool, base: Vector3, length: float, dir: Vector3, cbase: Color, ctip: Color) -> void:
+	var d := dir.normalized()
+	var perp := Vector3(-d.z, 0, d.x).normalized() * 0.16
+	var tip := base + d * length
+	var mid := base + d * (length * 0.5) + Vector3(0, 0.12, 0)
+	var nrm := Vector3(d.x, 0.7, d.z).normalized()
+	# two triangles base→mid, then mid→tip
+	for tri in [[base - perp, cbase, base + perp, cbase, mid + perp * 0.6, ctip],
+			[base - perp, cbase, mid + perp * 0.6, ctip, mid - perp * 0.6, ctip],
+			[mid - perp * 0.6, ctip, mid + perp * 0.6, ctip, tip, ctip]]:
+		st.set_color(tri[1]); st.set_normal(nrm); st.add_vertex(tri[0])
+		st.set_color(tri[3]); st.set_normal(nrm); st.add_vertex(tri[2])
+		st.set_color(tri[5]); st.set_normal(nrm); st.add_vertex(tri[4])
 
 static func _fern_mesh() -> ArrayMesh:
 	var st := SurfaceTool.new()
