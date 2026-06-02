@@ -37,7 +37,7 @@ func build(parent: Node3D) -> void:
 		plane.subdivide_depth = clampi(int(depth * 0.5), 2, 48)
 
 		var col: Color = WorldData.SWAMP_WATER_COLORS[i]
-		var shallow: Color = col.lerp(Color(0.55, 0.78, 0.78), 0.42)
+		var shallow: Color = col.lerp(Color(0.34, 0.46, 0.36), 0.4)   # murky, not bright
 		var mat := ShaderMaterial.new()
 		mat.shader = WATER_SHADER
 		mat.set_shader_parameter("deep_color", col)

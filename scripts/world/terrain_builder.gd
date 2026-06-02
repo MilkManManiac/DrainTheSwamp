@@ -14,15 +14,16 @@ const WALL_DEPTH: float = 30.0       # dig-face depth (fills bottom of frame)
 const COLLISION_DEPTH: float = 44.0
 const BEVEL: float = 0.6             # rounded grass lip at the top-front edge
 
-const GRASS_A := Color(0.32, 0.46, 0.21)
-const GRASS_B := Color(0.28, 0.42, 0.19)
-const DIRT_TOP := Color(0.49, 0.37, 0.24)
-const DIRT_BOT := Color(0.18, 0.13, 0.10)
-# layered soil strata top→bottom (topsoil, sandy, loam, clay, deep clay, bedrock-ish)
+# Swampy, grimy palette — dark mossy green-brown turf over wet muddy soil
+const GRASS_A := Color(0.26, 0.32, 0.17)
+const GRASS_B := Color(0.21, 0.27, 0.14)
+const DIRT_TOP := Color(0.34, 0.28, 0.18)
+const DIRT_BOT := Color(0.13, 0.10, 0.08)
+# layered wet soil strata top→bottom (mossy mud, peat, clay, deep muck)
 const STRATA: Array[Color] = [
-	Color(0.50, 0.38, 0.25), Color(0.57, 0.46, 0.31), Color(0.45, 0.33, 0.21),
-	Color(0.38, 0.28, 0.18), Color(0.30, 0.22, 0.15), Color(0.23, 0.17, 0.12),
-	Color(0.17, 0.13, 0.10),
+	Color(0.33, 0.29, 0.18), Color(0.38, 0.32, 0.20), Color(0.29, 0.23, 0.15),
+	Color(0.24, 0.19, 0.13), Color(0.19, 0.15, 0.11), Color(0.15, 0.12, 0.09),
+	Color(0.11, 0.09, 0.07),
 ]
 
 static func build(parent: Node3D) -> void:
@@ -128,6 +129,49 @@ static func build(parent: Node3D) -> void:
 	var cs := CollisionShape3D.new()
 	cs.shape = shape
 	body.add_child(cs)
+
+	_build_path(parent, xs, hs)
+
+# Worn muddy walking path along the player's rail (z=0), draped over the surface
+const PATH_HALF := 1.9
+const PATH_MUD := Color(0.17, 0.13, 0.09)    # dark wet trodden mud
+const PATH_EDGE := Color(0.27, 0.22, 0.14)   # lighter churned earth at the edges
+
+static func _build_path(parent: Node3D, xs: PackedFloat32Array, hs: PackedFloat32Array) -> void:
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var n := xs.size()
+	for i in range(n - 1):
+		var x0 := xs[i] * WorldData.SCALE
+		var x1 := xs[i + 1] * WorldData.SCALE
+		# slight worn wobble on the path edges
+		var w0 := PATH_HALF * (0.85 + 0.15 * sin(xs[i] * 0.5))
+		var w1 := PATH_HALF * (0.85 + 0.15 * sin(xs[i + 1] * 0.5))
+		var y0 := hs[i] + 0.04
+		var y1 := hs[i + 1] + 0.04
+		# centre strip (dark wet mud) + two lighter edge strips that blend to turf
+		_strip(st, x0, x1, y0, y1, -w0 * 0.5, w0 * 0.5, -w1 * 0.5, w1 * 0.5, PATH_MUD, PATH_MUD)
+		_strip(st, x0, x1, y0, y1, w0 * 0.5, w0, w1 * 0.5, w1, PATH_MUD, PATH_EDGE)
+		_strip(st, x0, x1, y0, y1, -w0, -w0 * 0.5, -w1, -w1 * 0.5, PATH_EDGE, PATH_MUD)
+	var mi := MeshInstance3D.new()
+	mi.name = "Path"
+	mi.mesh = st.commit()
+	var mat := StandardMaterial3D.new()
+	mat.vertex_color_use_as_albedo = true
+	mat.roughness = 0.6      # wet-mud sheen
+	mat.metallic = 0.0
+	mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+	mi.material_override = mat
+	parent.add_child(mi)
+
+static func _strip(st: SurfaceTool, x0: float, x1: float, y0: float, y1: float,
+		za0: float, zb0: float, za1: float, zb1: float, ca: Color, cb: Color) -> void:
+	var p00 := Vector3(x0, y0, za0)
+	var p01 := Vector3(x0, y0, zb0)
+	var p11 := Vector3(x1, y1, zb1)
+	var p10 := Vector3(x1, y1, za1)
+	for item in [[p00, ca], [p01, cb], [p11, cb], [p00, ca], [p11, cb], [p10, ca]]:
+		st.set_color(item[1]); st.set_normal(Vector3.UP); st.add_vertex(item[0])
 
 # smoothed surface height in 3D units at an original-x (used for collision + prop placement)
 static func surface_height(orig_x: float) -> float:

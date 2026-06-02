@@ -12,7 +12,7 @@ var player: CharacterBody3D
 var follow_cam: Camera3D
 # camera Z (12) sits IN FRONT of the terrain front edge (FRONT_Z=14) so the dig-face
 # cross-section is behind the camera and never rendered — foreground is pure top-surface ground
-var cam_offset := Vector3(2.0, 8.0, 12.0)
+var cam_offset := Vector3(2.0, 6.5, 14.0)
 
 func _ready() -> void:
 	_build_environment()
@@ -66,9 +66,9 @@ func _build_environment() -> void:
 	# Warm key sun with SOFT shadows (angular size gives a real penumbra)
 	var sun := DirectionalLight3D.new()
 	sun.name = "Sun"
-	sun.rotation_degrees = Vector3(-50, 36, 0)
-	sun.light_color = Color(1.0, 0.95, 0.83)
-	sun.light_energy = 1.4
+	sun.rotation_degrees = Vector3(-42, 44, 0)
+	sun.light_color = Color(1.0, 0.91, 0.73)   # warm, hazy swamp sun
+	sun.light_energy = 1.2
 	sun.shadow_enabled = true
 	sun.light_angular_distance = 1.4          # soft-edged shadows
 	sun.directional_shadow_mode = DirectionalLight3D.SHADOW_PARALLEL_4_SPLITS
@@ -79,14 +79,15 @@ func _build_environment() -> void:
 
 	# Procedural gradient sky → ambient source (cool sky fill in shadows)
 	var sky_mat := ProceduralSkyMaterial.new()
-	sky_mat.sky_top_color = Color(0.30, 0.52, 0.84)
-	sky_mat.sky_horizon_color = Color(0.80, 0.88, 0.92)
-	sky_mat.sky_curve = 0.14
-	sky_mat.ground_bottom_color = Color(0.72, 0.82, 0.88)
-	sky_mat.ground_horizon_color = Color(0.80, 0.88, 0.92)
-	sky_mat.sun_angle_max = 16.0
-	sky_mat.sun_curve = 0.06
-	sky_mat.energy_multiplier = 0.55   # dim the sky so it doesn't wash the up-facing ground
+	# hazy, overcast-ish swamp sky (muted grey-green, not bright blue)
+	sky_mat.sky_top_color = Color(0.40, 0.50, 0.55)
+	sky_mat.sky_horizon_color = Color(0.62, 0.66, 0.58)
+	sky_mat.sky_curve = 0.18
+	sky_mat.ground_bottom_color = Color(0.50, 0.54, 0.48)
+	sky_mat.ground_horizon_color = Color(0.62, 0.66, 0.58)
+	sky_mat.sun_angle_max = 22.0
+	sky_mat.sun_curve = 0.08
+	sky_mat.energy_multiplier = 0.5
 	var sky := Sky.new()
 	sky.sky_material = sky_mat
 
@@ -94,7 +95,7 @@ func _build_environment() -> void:
 	env.background_mode = Environment.BG_SKY
 	env.sky = sky
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_SKY
-	env.ambient_light_energy = 0.40
+	env.ambient_light_energy = 0.30
 	env.ambient_light_sky_contribution = 0.7
 
 	# LINEAR keeps the stylized colours rich (FILMIC/ACES desaturate these LDR colours)
@@ -122,21 +123,21 @@ func _build_environment() -> void:
 	# Volumetric fog off — it milks out this bright daytime scene
 	env.volumetric_fog_enabled = false
 
-	# Depth fog still fades the far hills into the sky
+	# Murky swamp haze — grounds the scene (no floating slab) + fades distance into murk
 	env.fog_enabled = not ("--nofog" in OS.get_cmdline_user_args())
 	env.fog_mode = Environment.FOG_MODE_DEPTH
-	env.fog_light_color = Color(0.80, 0.88, 0.92)
-	env.fog_sky_affect = 0.0
+	env.fog_light_color = Color(0.52, 0.58, 0.50)   # grey-green swamp murk
+	env.fog_sky_affect = 0.4
 	env.fog_density = 1.0
-	env.fog_depth_begin = 50.0
-	env.fog_depth_end = 185.0
+	env.fog_depth_begin = 26.0
+	env.fog_depth_end = 115.0
 	env.fog_depth_curve = 0.5
 
 	# Subtle grade — a touch more contrast + saturation (AgX desaturates highlights)
 	env.adjustment_enabled = true
-	env.adjustment_brightness = 1.0
-	env.adjustment_contrast = 1.06
-	env.adjustment_saturation = 1.1
+	env.adjustment_brightness = 0.97
+	env.adjustment_contrast = 1.08
+	env.adjustment_saturation = 0.98   # grimy, slightly desaturated
 
 	var we := WorldEnvironment.new()
 	we.environment = env
@@ -152,7 +153,7 @@ func _build_camera() -> void:
 	var tx := 40.0 if wide else 18.0
 	var ty: float = WorldData.surface_y_at(tx / WorldData.SCALE) - (3.0 if wide else 1.5)
 	var target := Vector3(tx, ty, 0.0)
-	cam.position = target + Vector3(3.0, 16.0, 26.0) if wide else target + Vector3(2.0, 8.0, 12.0)
+	cam.position = target + Vector3(3.0, 16.0, 26.0) if wide else target + Vector3(2.0, 6.5, 14.0)
 	cam.look_at(target, Vector3.UP)
 	cam.make_current()
 

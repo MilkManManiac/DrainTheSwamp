@@ -184,11 +184,14 @@ static func build_surface_props(parent: Node3D) -> void:
 			var bs := r.randf_range(0.7, 1.3)
 			bush_tf.append(Transform3D(Basis().rotated(Vector3.UP, r.randf_range(0, TAU)).scaled(Vector3(bs, bs, bs)), Vector3(wx, sy, r.randf_range(pzb, pzf))))
 
-		# dense grass — 2-5 tufts per step
+		# dense grass — 2-5 tufts per step (kept off the walking path at z≈0)
 		for _g in range(r.randi_range(2, 5)):
+			var gz := r.randf_range(pzb, pzf)
+			if absf(gz) < 2.3:
+				continue
 			var gs := r.randf_range(0.65, 1.35)
 			grass_tf.append(Transform3D(Basis().rotated(Vector3.UP, r.randf_range(0, TAU)).scaled(Vector3(gs, gs, gs)),
-				Vector3(wx + r.randf_range(-1.0, 1.0), sy, r.randf_range(pzb, pzf))))
+				Vector3(wx + r.randf_range(-1.0, 1.0), sy, gz)))
 
 		# ferns cluster near water + forest
 		if (near_water or forest) and r.randf() < 0.25:
