@@ -193,23 +193,24 @@ static func build_surface_props(parent: Node3D) -> void:
 				var bs := r.randf_range(0.7, 1.3)
 				bush_tf.append(Transform3D(Basis().rotated(Vector3.UP, r.randf_range(0, TAU)).scaled(Vector3(bs, bs, bs)), Vector3(wx, sy, bz)))
 
-		# LUSH grass — many tufts per step (kept off the walking path)
-		for _g in range(r.randi_range(5, 11)):
+		# THICK grass — a carpet of tufts per step (kept off the walking path)
+		for _g in range(r.randi_range(16, 30)):
 			var gz := r.randf_range(pzb, pzf)
-			if absf(gz - pz) < 2.2:
+			if absf(gz - pz) < 2.1:
 				continue
-			var gs := r.randf_range(0.6, 1.4)
+			var gs := r.randf_range(0.55, 1.45)
 			grass_tf.append(Transform3D(Basis().rotated(Vector3.UP, r.randf_range(0, TAU)).scaled(Vector3(gs, gs, gs)),
-				Vector3(wx + r.randf_range(-1.2, 1.2), sy, gz)))
+				Vector3(wx + r.randf_range(-1.5, 1.5), sy, gz)))
 
-		# ferns — common ground cover everywhere (denser near water/forest)
-		if r.randf() < (0.45 if (near_water or forest) else 0.22):
-			var fz := r.randf_range(pzb, pzf)
-			if absf(fz - pz) >= 2.2:
-				var fs := r.randf_range(0.75, 1.35)
-				fern_tf.append(Transform3D(Basis().rotated(Vector3.UP, r.randf_range(0, TAU)).scaled(Vector3(fs, fs, fs)), Vector3(wx, sy, fz)))
+		# ferns — dense ground cover everywhere (thicker near water/forest)
+		for _f in range(r.randi_range(2, 5)):
+			if r.randf() < (0.75 if (near_water or forest) else 0.5):
+				var fz := r.randf_range(pzb, pzf)
+				if absf(fz - pz) >= 2.1:
+					var fs := r.randf_range(0.7, 1.4)
+					fern_tf.append(Transform3D(Basis().rotated(Vector3.UP, r.randf_range(0, TAU)).scaled(Vector3(fs, fs, fs)), Vector3(wx + r.randf_range(-1.0, 1.0), sy, fz)))
 
-		if r.randf() < 0.32:
+		if r.randf() < 0.45:
 			var flz := r.randf_range(pzb, pzf)
 			if absf(flz - pz) >= 2.0:
 				flower_tf.append(Transform3D(Basis(), Vector3(wx, sy, flz)))
