@@ -143,17 +143,38 @@ static func in_pool(orig_x: float) -> bool:
 			return true
 	return false
 
+# 1.0 on land away from pools → 0.0 inside pools (smooth ramp), so the rolling-hill
+# undulation fades out at the water and the basins stay clean
+static func _land_mask(orig_x: float) -> float:
+	var min_d := 1e9
+	for r in SWAMP_RANGES:
+		var a: float = TERRAIN_POINTS[r[0]].x
+		var b: float = TERRAIN_POINTS[r[1]].x
+		if orig_x >= a and orig_x <= b:
+			return 0.0
+		min_d = minf(min_d, minf(absf(orig_x - a), absf(orig_x - b)))
+	return clampf(min_d / 45.0, 0.0, 1.0)
+
+# gentle rolling-hill undulation on the land sections (3D units), faded at pools
+static func land_roll(orig_x: float) -> float:
+	var roll: float = sin(orig_x * 0.0075) * 1.6 + sin(orig_x * 0.017 + 1.3) * 0.9 + sin(orig_x * 0.034) * 0.5
+	return roll * _land_mask(orig_x)
+
 static func surface_y_at(orig_x: float) -> float:
-	# linear interp of 3D elevation at an original-x
+	# linear interp of 3D elevation at an original-x, plus rolling-hill undulation on land
 	var pts := TERRAIN_POINTS
+	var base: float
 	if orig_x <= pts[0].x:
-		return elev(pts[0].y)
-	if orig_x >= pts[pts.size() - 1].x:
-		return elev(pts[pts.size() - 1].y)
-	for i in range(pts.size() - 1):
-		var a := pts[i]
-		var b := pts[i + 1]
-		if orig_x >= a.x and orig_x <= b.x:
-			var t := (orig_x - a.x) / (b.x - a.x) if b.x != a.x else 0.0
-			return elev(lerpf(a.y, b.y, t))
-	return elev(pts[pts.size() - 1].y)
+		base = elev(pts[0].y)
+	elif orig_x >= pts[pts.size() - 1].x:
+		base = elev(pts[pts.size() - 1].y)
+	else:
+		base = elev(pts[pts.size() - 1].y)
+		for i in range(pts.size() - 1):
+			var a := pts[i]
+			var b := pts[i + 1]
+			if orig_x >= a.x and orig_x <= b.x:
+				var t := (orig_x - a.x) / (b.x - a.x) if b.x != a.x else 0.0
+				base = elev(lerpf(a.y, b.y, t))
+				break
+	return base + land_roll(orig_x)
