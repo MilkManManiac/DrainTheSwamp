@@ -15,6 +15,8 @@ var follow_cam: Camera3D
 # lower + further back = more side-on: shows the character's side + more of the back
 # hills rising, instead of a near top-down map view (borders TBD per user)
 var cam_offset := Vector3(1.5, 9.5, 14.5)
+# orthographic zoom — smaller = tighter (crops the bottom/border out of frame)
+const CAM_SIZE := 19.5
 var cam_look := Vector3.ZERO
 
 func _ready() -> void:
@@ -42,7 +44,7 @@ func _ready() -> void:
 			pcam.projection = Camera3D.PROJECTION_ORTHOGONAL
 			add_child(pcam)
 			if hill:
-				pcam.size = 24.0
+				pcam.size = CAM_SIZE
 				var look := player.position + Vector3(0, 1.0, 0)
 				pcam.position = look + cam_offset
 				pcam.look_at(look, Vector3.UP)
@@ -71,7 +73,7 @@ func _spawn_player() -> void:
 func _build_follow_camera() -> void:
 	follow_cam = Camera3D.new()
 	follow_cam.projection = Camera3D.PROJECTION_ORTHOGONAL
-	follow_cam.size = 24.0
+	follow_cam.size = CAM_SIZE
 	add_child(follow_cam)
 	cam_look = player.position + Vector3(0, 1.0, 0)
 	follow_cam.position = cam_look + cam_offset

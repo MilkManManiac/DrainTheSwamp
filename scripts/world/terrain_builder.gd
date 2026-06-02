@@ -208,6 +208,10 @@ static func _build_path(parent: Node3D, xs: PackedFloat32Array, hs: PackedFloat3
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
 	var n := xs.size()
 	for i in range(n - 1):
+		# fade the path out as it reaches a pool so it isn't drawn across the water
+		var lf := _path_land_factor(xs[i])
+		if lf <= 0.0:
+			continue
 		var x0 := xs[i] * WorldData.SCALE
 		var x1 := xs[i + 1] * WorldData.SCALE
 		# slight worn wobble on the path edges
@@ -219,14 +223,17 @@ static func _build_path(parent: Node3D, xs: PackedFloat32Array, hs: PackedFloat3
 		var p0 := WorldData.path_z(x0)
 		var p1 := WorldData.path_z(x1)
 		# centre brown dirt → lighter churned edge → outer band that FADES to alpha 0,
-		# dissolving softly into the grass (no hard cut)
+		# dissolving softly into the grass (no hard cut). alpha also scaled by land factor.
+		var c_mud := Color(PATH_MUD.r, PATH_MUD.g, PATH_MUD.b, PATH_MUD.a * lf)
+		var c_edge := Color(PATH_EDGE.r, PATH_EDGE.g, PATH_EDGE.b, PATH_EDGE.a * lf)
+		var c_fade := PATH_FADE
 		var ow0 := w0 * 1.75
 		var ow1 := w1 * 1.75
-		_strip(st, x0, x1, y0, y1, p0 - w0 * 0.5, p0 + w0 * 0.5, p1 - w1 * 0.5, p1 + w1 * 0.5, PATH_MUD, PATH_MUD)
-		_strip(st, x0, x1, y0, y1, p0 + w0 * 0.5, p0 + w0, p1 + w1 * 0.5, p1 + w1, PATH_MUD, PATH_EDGE)
-		_strip(st, x0, x1, y0, y1, p0 - w0, p0 - w0 * 0.5, p1 - w1, p1 - w1 * 0.5, PATH_EDGE, PATH_MUD)
-		_strip(st, x0, x1, y0, y1, p0 + w0, p0 + ow0, p1 + w1, p1 + ow1, PATH_EDGE, PATH_FADE)
-		_strip(st, x0, x1, y0, y1, p0 - ow0, p0 - w0, p1 - ow1, p1 - w1, PATH_FADE, PATH_EDGE)
+		_strip(st, x0, x1, y0, y1, p0 - w0 * 0.5, p0 + w0 * 0.5, p1 - w1 * 0.5, p1 + w1 * 0.5, c_mud, c_mud)
+		_strip(st, x0, x1, y0, y1, p0 + w0 * 0.5, p0 + w0, p1 + w1 * 0.5, p1 + w1, c_mud, c_edge)
+		_strip(st, x0, x1, y0, y1, p0 - w0, p0 - w0 * 0.5, p1 - w1, p1 - w1 * 0.5, c_edge, c_mud)
+		_strip(st, x0, x1, y0, y1, p0 + w0, p0 + ow0, p1 + w1, p1 + ow1, c_edge, c_fade)
+		_strip(st, x0, x1, y0, y1, p0 - ow0, p0 - w0, p1 - ow1, p1 - w1, c_fade, c_edge)
 	var mi := MeshInstance3D.new()
 	mi.name = "Path"
 	mi.mesh = st.commit()
@@ -238,6 +245,22 @@ static func _build_path(parent: Node3D, xs: PackedFloat32Array, hs: PackedFloat3
 	mat.cull_mode = BaseMaterial3D.CULL_DISABLED
 	mi.material_override = mat
 	parent.add_child(mi)
+
+# 1.0 on open land, ramping to 0.0 as the path approaches/enters a pool — so the path
+# fades out at the water's edge instead of being drawn across the water.
+static func _path_land_factor(orig_x: float) -> float:
+	if WorldData.in_pool(orig_x):
+		return 0.0
+	var feather := 48.0
+	var samples := 5
+	var land := 0
+	for s in range(1, samples + 1):
+		var d := feather * float(s) / samples
+		if not WorldData.in_pool(orig_x - d):
+			land += 1
+		if not WorldData.in_pool(orig_x + d):
+			land += 1
+	return float(land) / float(samples * 2)
 
 static func _strip(st: SurfaceTool, x0: float, x1: float, y0: float, y1: float,
 		za0: float, zb0: float, za1: float, zb1: float, ca: Color, cb: Color) -> void:
