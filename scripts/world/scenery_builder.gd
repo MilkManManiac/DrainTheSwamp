@@ -139,7 +139,9 @@ static func build_surface_props(parent: Node3D) -> void:
 	var x_end: float = WorldData.TERRAIN_POINTS[WorldData.TERRAIN_POINTS.size() - 1].x
 
 	var tree_tf: Array[Transform3D] = []
+	var tree_cols: Array[Color] = []
 	var pine_tf: Array[Transform3D] = []
+	var pine_cols: Array[Color] = []
 	var bush_tf: Array[Transform3D] = []
 	var rock_tf: Array[Transform3D] = []
 	var grass_tf: Array[Transform3D] = []
@@ -168,10 +170,15 @@ static func build_surface_props(parent: Node3D) -> void:
 			var z := r.randf_range(pzb, pzf - 2.0)
 			var s := r.randf_range(0.7, 1.4)
 			var tf := Transform3D(Basis().rotated(Vector3.UP, r.randf_range(0, TAU)).scaled(Vector3(s, s, s)), Vector3(wx, sy, z))
+			# per-tree tint: vary brightness + a touch of hue (autumnal/lush mix)
+			var v := r.randf_range(0.80, 1.12)
+			var tint := Color(v * r.randf_range(0.9, 1.05), v, v * r.randf_range(0.78, 0.97))
 			if r.randf() < 0.4:
 				pine_tf.append(tf)
+				pine_cols.append(tint)
 			else:
 				tree_tf.append(tf)
+				tree_cols.append(tint)
 
 		if r.randf() < 0.14:
 			var bs := r.randf_range(0.7, 1.3)
@@ -201,22 +208,24 @@ static func build_surface_props(parent: Node3D) -> void:
 		if forest and r.randf() < 0.02:
 			log_tf.append(Transform3D(Basis().rotated(Vector3.UP, r.randf_range(-0.3, 0.3)), Vector3(wx, sy + 0.15, r.randf_range(pzb, pzf - 2.0))))
 
-	_spawn_mm(parent, "Trees", _tree_mesh(), tree_tf)
-	_spawn_mm(parent, "Pines", _pine_mesh(), pine_tf)
-	_spawn_mm(parent, "Bushes", _bush_mesh(), bush_tf)
+	_spawn_mm(parent, "Trees", _tree_mesh(), tree_tf, tree_cols, 0.035)
+	_spawn_mm(parent, "Pines", _pine_mesh(), pine_tf, pine_cols, 0.02)
+	_spawn_mm(parent, "Bushes", _bush_mesh(), bush_tf, [], 0.05)
 	_spawn_mm(parent, "Logs", _log_mesh(), log_tf)
 	_spawn_mm(parent, "Rocks", _rock_mesh(), rock_tf)
-	_spawn_mm(parent, "Ferns", _fern_mesh(), fern_tf)
-	_spawn_mm(parent, "GrassTufts", _grass_mesh(), grass_tf)
+	_spawn_mm(parent, "Ferns", _fern_mesh(), fern_tf, [], 0.09)
+	_spawn_mm(parent, "GrassTufts", _grass_mesh(), grass_tf, [], 0.11)
 	_spawn_mm(parent, "Mushrooms", _mushroom_mesh(), mush_tf)
-	_spawn_mm(parent, "Flowers", _flower_mesh(), flower_tf, flower_cols)
+	_spawn_mm(parent, "Flowers", _flower_mesh(), flower_tf, flower_cols, 0.10)
 
 const _FLOWER_COLS: Array[Color] = [
 	Color(0.95, 0.95, 0.92), Color(0.97, 0.82, 0.30),
 	Color(0.90, 0.45, 0.55), Color(0.70, 0.55, 0.85), Color(0.95, 0.60, 0.35),
 ]
 
-static func _spawn_mm(parent: Node3D, nm: String, mesh: Mesh, tfs: Array[Transform3D], cols: Array[Color] = []) -> void:
+const FOLIAGE_SHADER = preload("res://shaders/foliage.gdshader")
+
+static func _spawn_mm(parent: Node3D, nm: String, mesh: Mesh, tfs: Array[Transform3D], cols: Array[Color] = [], sway: float = 0.0) -> void:
 	if tfs.is_empty():
 		return
 	var mm := MultiMesh.new()
@@ -231,11 +240,17 @@ static func _spawn_mm(parent: Node3D, nm: String, mesh: Mesh, tfs: Array[Transfo
 	var mmi := MultiMeshInstance3D.new()
 	mmi.name = nm
 	mmi.multimesh = mm
-	var mat := StandardMaterial3D.new()
-	mat.vertex_color_use_as_albedo = true
-	mat.roughness = 0.92
-	mat.cull_mode = BaseMaterial3D.CULL_DISABLED
-	mmi.material_override = mat
+	if sway > 0.0:
+		var smat := ShaderMaterial.new()
+		smat.shader = FOLIAGE_SHADER
+		smat.set_shader_parameter("sway_strength", sway)
+		mmi.material_override = smat
+	else:
+		var mat := StandardMaterial3D.new()
+		mat.vertex_color_use_as_albedo = true
+		mat.roughness = 0.92
+		mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+		mmi.material_override = mat
 	parent.add_child(mmi)
 
 static func _tree_mesh() -> ArrayMesh:
@@ -408,7 +423,7 @@ static func build_water_props(parent: Node3D) -> void:
 					Vector3(ex * WorldData.SCALE, sy, r.randf_range(WorldData.FRONT_Z - WorldData.DEPTH + 2.0, WorldData.FRONT_Z - 2.0))))
 
 	_spawn_mm(parent, "LilyPads", _lilypad_mesh(), pad_tf)
-	_spawn_mm(parent, "Reeds", _reed_mesh(), reed_tf)
+	_spawn_mm(parent, "Reeds", _reed_mesh(), reed_tf, [], 0.08)
 
 # ── Dig-face detail (pebbles, roots, strata) ─────────────────────────────────────
 static func build_digface_detail(parent: Node3D) -> void:
