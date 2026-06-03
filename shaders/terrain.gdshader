@@ -4,6 +4,12 @@ uniform float noise_scale : hint_range(0.5, 4.0) = 1.5;
 uniform float noise_strength : hint_range(0.0, 0.15) = 0.06;
 uniform float striation_strength : hint_range(0.0, 0.1) = 0.03;
 
+// --- Ground detail (R3) ---
+uniform float fbm_strength : hint_range(0.0, 0.2) = 0.08; // multi-octave mottling
+uniform float depth_darken : hint_range(0.0, 1.0) = 0.45; // darken deeper soil
+uniform float depth_range : hint_range(20.0, 400.0) = 160.0; // world-Y over which it darkens
+uniform float surface_y = -100000.0; // world-Y of nearest surface band (set per-frame, optional)
+
 // --- Receding waterline (R2) ---
 // World-Y of the highest/most-recent water line (min screen-Y the water reached)
 uniform float high_water_y = -100000.0;
@@ -32,6 +38,31 @@ float noise(vec2 p) {
 	return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
 }
 
+// Multi-octave fractal Brownian motion for soil mottling.
+float fbm(vec2 p) {
+	float v = 0.0;
+	float amp = 0.5;
+	for (int i = 0; i < 4; i++) {
+		v += amp * noise(p);
+		p *= 2.0;
+		amp *= 0.5;
+	}
+	return v;
+}
+
+// 4x4 ordered (Bayer) dither threshold in [0,1).
+float bayer4(vec2 fc) {
+	int x = int(mod(fc.x, 4.0));
+	int y = int(mod(fc.y, 4.0));
+	int idx = x + y * 4;
+	float m[16] = float[16](
+		0.0, 8.0, 2.0, 10.0,
+		12.0, 4.0, 14.0, 6.0,
+		3.0, 11.0, 1.0, 9.0,
+		15.0, 7.0, 13.0, 5.0);
+	return m[idx] / 16.0;
+}
+
 void vertex() {
 	world_pos = (MODEL_MATRIX * vec4(VERTEX, 0.0, 1.0)).xy;
 }
@@ -48,6 +79,23 @@ void fragment() {
 	float stria = sin(FRAGCOORD.y * 0.8) * 0.5 + 0.5;
 	stria *= noise(vec2(FRAGCOORD.y * 0.3, 0.0));
 	col.rgb -= stria * striation_strength;
+
+	// Multi-octave FBM mottling (world-space so it doesn't crawl with the camera)
+	float m = fbm(world_pos * 0.04) - 0.5;
+	col.rgb += m * fbm_strength;
+	// Coarser clay/humus blotches
+	float blotch = fbm(world_pos * 0.012 + 17.0) - 0.5;
+	col.rgb += blotch * fbm_strength * 0.7;
+
+	// Vertical depth-darkening: deeper soil (larger world-Y below surface) is darker.
+	if (surface_y > -90000.0) {
+		float d = clamp((world_pos.y - surface_y) / depth_range, 0.0, 1.0);
+		col.rgb *= mix(1.0, 1.0 - depth_darken, d);
+	}
+
+	// Ordered dither on the soil tone so banded gradients stipple intentionally.
+	float dth = (bayer4(FRAGCOORD.xy) - 0.5) * (1.0 / 32.0);
+	col.rgb += dth;
 
 	// --- Receding waterline wet band ---
 	// Band lives between the current water surface (cur_water_y) and the

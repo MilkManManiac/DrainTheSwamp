@@ -246,6 +246,14 @@ const POST_PROCESS_SHADER = preload("res://shaders/post_process.gdshader")
 const TERRAIN_SHADER = preload("res://shaders/terrain.gdshader")
 const GOD_RAYS_SHADER = preload("res://shaders/god_rays.gdshader")
 const FOG2D_SHADER = preload("res://shaders/fog2d.gdshader")
+const FOLIAGE_SWAY_SHADER = preload("res://shaders/foliage_sway.gdshader")
+
+# --- Shared sway materials (R3) — ONE material per plant class, not per instance ---
+# Phase variation comes from the world-X gust term inside the shader.
+var _sway_mat_grass: ShaderMaterial = null   # snappy, whippy blades
+var _sway_mat_frond: ShaderMaterial = null   # medium ferns/cattails
+var _sway_mat_canopy: ShaderMaterial = null  # gentle tree canopy
+var _sway_mat_moss: ShaderMaterial = null    # high strength / low stiffness drape
 
 # Visual nodes created procedurally
 var water_polygons: Array[Polygon2D] = []
@@ -357,6 +365,7 @@ var lightning_rect: ColorRect = null
 
 # Enhanced vegetation
 var grass_blades: Array[Line2D] = []
+var grass_tufts: Array[Node2D] = []
 var ferns_list: Array[Node2D] = []
 var wind_direction: float = 1.0
 var wind_timer: float = 0.0
@@ -539,6 +548,7 @@ var wave_time: float = 0.0
 
 func _ready() -> void:
 	cycle_time = CYCLE_DURATION * GameManager.cycle_progress
+	_init_sway_materials()
 	_build_parallax()
 	_build_sky()
 	_build_sun()
@@ -579,6 +589,7 @@ func _ready() -> void:
 	_build_pool_glow_lights()
 	_build_left_boundary()
 	_build_left_trees()
+	_build_cypresses()
 	_build_right_boundary()
 	_build_island_house()
 	_build_island_politicians()
@@ -611,6 +622,44 @@ func _ready() -> void:
 func _show_tutorial() -> void:
 	var text := "ARROW KEYS — Move\nSPACE near water — Scoop\nSPACE at shop — Open shop\nSPACE near cave — Enter cave\nESC — Menu\n\nScoop water, sell it at the shop, buy upgrades, and drain the swamp!"
 	SceneManager.show_document_popup(text, "HOW TO PLAY")
+
+# --- Shared foliage sway materials (R3) ---
+func _init_sway_materials() -> void:
+	_sway_mat_grass = ShaderMaterial.new()
+	_sway_mat_grass.shader = FOLIAGE_SWAY_SHADER
+	_sway_mat_grass.set_shader_parameter("sway_strength", 2.4)
+	_sway_mat_grass.set_shader_parameter("sway_speed", 1.5)
+	_sway_mat_grass.set_shader_parameter("gust_wavelength", 200.0)
+	_sway_mat_grass.set_shader_parameter("gust_speed", 70.0)
+	_sway_mat_grass.set_shader_parameter("stiffness", 1.4)
+
+	_sway_mat_frond = ShaderMaterial.new()
+	_sway_mat_frond.shader = FOLIAGE_SWAY_SHADER
+	_sway_mat_frond.set_shader_parameter("sway_strength", 3.2)
+	_sway_mat_frond.set_shader_parameter("sway_speed", 1.0)
+	_sway_mat_frond.set_shader_parameter("gust_wavelength", 240.0)
+	_sway_mat_frond.set_shader_parameter("gust_speed", 60.0)
+	_sway_mat_frond.set_shader_parameter("stiffness", 1.8)
+
+	_sway_mat_canopy = ShaderMaterial.new()
+	_sway_mat_canopy.shader = FOLIAGE_SWAY_SHADER
+	_sway_mat_canopy.set_shader_parameter("sway_strength", 1.6)
+	_sway_mat_canopy.set_shader_parameter("sway_speed", 0.7)
+	_sway_mat_canopy.set_shader_parameter("gust_wavelength", 320.0)
+	_sway_mat_canopy.set_shader_parameter("gust_speed", 50.0)
+	_sway_mat_canopy.set_shader_parameter("stiffness", 2.4)
+
+	_sway_mat_moss = ShaderMaterial.new()
+	_sway_mat_moss.shader = FOLIAGE_SWAY_SHADER
+	_sway_mat_moss.set_shader_parameter("sway_strength", 4.5)
+	_sway_mat_moss.set_shader_parameter("sway_speed", 0.6)
+	_sway_mat_moss.set_shader_parameter("gust_wavelength", 280.0)
+	_sway_mat_moss.set_shader_parameter("gust_speed", 45.0)
+	_sway_mat_moss.set_shader_parameter("stiffness", 0.6)
+
+# Deterministic cluster noise in [0,1] for foliage density gating.
+func _cluster_noise(x: float) -> float:
+	return (sin(x * 0.013) * 0.5 + sin(x * 0.041 + 1.7) * 0.3 + sin(x * 0.091 + 4.2) * 0.2) * 0.5 + 0.5
 
 # --- Atmospheric perspective helper ---
 # Pushes a distant layer's color toward the sky: desaturate + lighten + blue-shift.
@@ -886,7 +935,18 @@ func _build_treeline() -> void:
 	var atmo: Color = SKY_DAY[2]
 	var treeline := Polygon2D.new()
 	treeline.polygon = tree_points
-	treeline.color = _atmospheric_tint(Color(0.06, 0.18, 0.05), 0.3, atmo)
+	# 2-tone: dappled lighter top -> darker base band via per-vertex colors (R3).
+	var base_dark: Color = _atmospheric_tint(Color(0.05, 0.14, 0.04), 0.32, atmo)
+	var top_light: Color = _atmospheric_tint(Color(0.12, 0.26, 0.09), 0.26, atmo)
+	var tcols := PackedColorArray()
+	for tp in tree_points:
+		# Higher (smaller y) canopy tips get the lighter dappled color.
+		var f: float = clampf((136.0 - tp.y) / 30.0, 0.0, 1.0)
+		var c: Color = base_dark.lerp(top_light, f)
+		# Subtle dapple
+		c = c.lightened(0.06 * (sin(tp.x * 0.21) * 0.5 + 0.5))
+		tcols.append(c)
+	treeline.vertex_colors = tcols
 	treeline.z_index = -5
 	treeline_layer.add_child(treeline)
 
@@ -904,7 +964,13 @@ func _build_treeline() -> void:
 
 	var treeline2 := Polygon2D.new()
 	treeline2.polygon = tree_points2
-	treeline2.color = _atmospheric_tint(Color(0.1, 0.25, 0.08), 0.22, atmo)
+	var base_dark2: Color = _atmospheric_tint(Color(0.08, 0.20, 0.06), 0.24, atmo)
+	var top_light2: Color = _atmospheric_tint(Color(0.16, 0.32, 0.11), 0.18, atmo)
+	var tcols2 := PackedColorArray()
+	for tp in tree_points2:
+		var f: float = clampf((140.0 - tp.y) / 24.0, 0.0, 1.0)
+		tcols2.append(base_dark2.lerp(top_light2, f))
+	treeline2.vertex_colors = tcols2
 	treeline2.z_index = -4
 	treeline_layer.add_child(treeline2)
 
@@ -928,6 +994,13 @@ func _build_terrain() -> void:
 	terrain_polygon.z_index = 0
 	var terrain_mat := ShaderMaterial.new()
 	terrain_mat.shader = TERRAIN_SHADER
+	# Depth-darkening reference: topmost (smallest world-Y) terrain surface point.
+	var min_surface_y: float = terrain_points[0].y
+	for pt2 in terrain_points:
+		if pt2.y < min_surface_y:
+			min_surface_y = pt2.y
+	terrain_mat.set_shader_parameter("surface_y", min_surface_y)
+	terrain_mat.set_shader_parameter("depth_range", max_y - min_surface_y + 80.0)
 	terrain_polygon.material = terrain_mat
 	_terrain_mat = terrain_mat
 	add_child(terrain_polygon)
@@ -972,6 +1045,34 @@ func _build_terrain() -> void:
 		grass_light.add_point(Vector2(pt.x, pt.y - 1.0))
 	grass_light.z_index = 1
 	add_child(grass_light)
+
+	# Contact AO: a thin soft-dark band just under the surface grass line so the
+	# grass reads as casting onto the soil (R3).
+	var ao_line := Line2D.new()
+	ao_line.width = 4.0
+	ao_line.default_color = Color(0.05, 0.06, 0.02, 0.30)
+	for pt in terrain_points:
+		ao_line.add_point(Vector2(pt.x, pt.y + 3.5))
+	ao_line.z_index = 0
+	add_child(ao_line)
+
+	# Overhanging grass fringe: small downward dark-green tongues over the
+	# grass->dirt edge to break the hard surface Line2D (R3).
+	for pt_idx in range(0, terrain_points.size() - 1):
+		var fp: Vector2 = terrain_points[pt_idx]
+		if randf() < 0.45:
+			var fr := Polygon2D.new()
+			var fw: float = randf_range(3, 7)
+			var fh: float = randf_range(2.5, 5.0)
+			var fx0: float = fp.x + randf_range(-3, 3)
+			fr.polygon = PackedVector2Array([
+				Vector2(fx0, fp.y - 0.5),
+				Vector2(fx0 + fw, fp.y - 0.5),
+				Vector2(fx0 + fw * 0.5, fp.y + fh),
+			])
+			fr.color = Color(0.10, 0.26, 0.07, 0.85)
+			fr.z_index = 1
+			add_child(fr)
 
 	# Dithered transition at grass-to-dirt boundary (Phase 18a)
 	for pt_idx in range(0, terrain_points.size() - 1, 2):
@@ -1132,7 +1233,20 @@ func _build_terrain_details() -> void:
 			hole.z_index = 0
 			add_child(hole)
 
+# Soft dark contact-shadow ellipse under a prop/tree base (R3).
+func _place_contact_ao(cx: float, cy: float, rw: float, rh: float, alpha: float, zi: int = 0) -> void:
+	var ao := Polygon2D.new()
+	var pts := PackedVector2Array()
+	for a in range(10):
+		var ang: float = TAU * float(a) / 10.0
+		pts.append(Vector2(cx + cos(ang) * rw, cy + sin(ang) * rh))
+	ao.polygon = pts
+	ao.color = Color(0.03, 0.04, 0.02, alpha)
+	ao.z_index = zi
+	add_child(ao)
+
 func _place_rock(pos: Vector2, w: float, h: float) -> void:
+	_place_contact_ao(pos.x + w * 0.5, pos.y + h, w * 0.7, h * 0.35, 0.28, 0)
 	var rock := Polygon2D.new()
 	rock.polygon = PackedVector2Array([
 		Vector2(pos.x + 2, pos.y),
@@ -1410,8 +1524,9 @@ func _build_vegetation() -> void:
 		if i > 0 and i < terrain_points.size() - 1:
 			var dy: float = absf(terrain_points[i + 1].y - pt.y) / absf(terrain_points[i + 1].x - pt.x + 0.01)
 			if dy < 0.3:  # Mostly flat
-				for j in range(randi_range(2, 5)):
-					var gx: float = pt.x + randf_range(-15, 15)
+				# 3-5x density; cluster noise inside _place_grass_tuft carves bare gaps
+				for j in range(randi_range(8, 14)):
+					var gx: float = pt.x + randf_range(-18, 18)
 					_place_grass_tuft(Vector2(gx, _get_terrain_y_at(gx)))
 
 	# Flowers scattered on shore and ridges
@@ -1444,42 +1559,71 @@ func _place_cattail(pos: Vector2) -> void:
 	cattail.z_index = 3
 	add_child(cattail)
 
-	# Stem goes upward from base
-	var stem_h: float = randf_range(16, 28)
+	var stem_h: float = randf_range(18, 30)
 	var stem_offset_x: float = randf_range(-2, 2)
-	var stem := Line2D.new()
-	stem.width = 2.0
-	stem.default_color = Color(0.3, 0.45, 0.2)
-	stem.add_point(Vector2(0, 0))
-	stem.add_point(Vector2(stem_offset_x, -stem_h))
-	cattail.add_child(stem)
 
-	# Cattail head (brown oval) at top of stem
-	var head := ColorRect.new()
-	head.position = Vector2(stem_offset_x - 2, -stem_h - 6)
-	head.size = Vector2(4, 8)
-	head.color = Color(0.45, 0.3, 0.15)
+	# Stem as a tapered swaying polygon (slim).
+	_make_blade(cattail, Vector2.ZERO, stem_h, 2.6, stem_offset_x,
+		Color(0.20, 0.36, 0.14), Color(0.36, 0.52, 0.22), _sway_mat_frond, 3)
+
+	# Cattail head (brown) as a small swaying quad anchored near the tip so it
+	# drifts with the stem. UV.y small (near tip) = max sway.
+	var head := Polygon2D.new()
+	var hx: float = stem_offset_x
+	var hy: float = -stem_h - 2.0
+	head.polygon = PackedVector2Array([
+		Vector2(hx - 2, hy + 8), Vector2(hx + 2, hy + 8),
+		Vector2(hx + 2, hy), Vector2(hx - 2, hy),
+	])
+	head.uv = PackedVector2Array([
+		Vector2(0, 0.18), Vector2(1, 0.18), Vector2(1, 0.0), Vector2(0, 0.0),
+	])
+	var head_dark := Color(0.36, 0.22, 0.10)
+	var head_light := Color(0.52, 0.36, 0.18)
+	head.vertex_colors = PackedColorArray([head_dark, head_dark, head_light, head_light])
+	head.material = _sway_mat_frond
+	head.z_index = 3
 	cattail.add_child(head)
 
-	# Leaf curving out from mid-stem
-	var leaf := Line2D.new()
-	leaf.width = 2.0
-	leaf.default_color = Color(0.25, 0.4, 0.18, 0.8)
-	leaf.add_point(Vector2(0, -stem_h * 0.4))
-	leaf.add_point(Vector2(randf_range(6, 12), -stem_h * 0.6))
-	cattail.add_child(leaf)
-
-	# Second leaf on opposite side
-	var leaf2 := Line2D.new()
-	leaf2.width = 1.5
-	leaf2.default_color = Color(0.22, 0.38, 0.15, 0.7)
-	leaf2.add_point(Vector2(0, -stem_h * 0.6))
-	leaf2.add_point(Vector2(randf_range(-10, -5), -stem_h * 0.75))
-	cattail.add_child(leaf2)
+	# Two leaves arcing out, as swaying fronds.
+	_make_blade(cattail, Vector2.ZERO, stem_h * 0.7, 2.4, randf_range(8, 13),
+		Color(0.18, 0.34, 0.12), Color(0.30, 0.50, 0.18), _sway_mat_frond, 3)
+	_make_blade(cattail, Vector2.ZERO, stem_h * 0.6, 2.0, randf_range(-12, -7),
+		Color(0.16, 0.30, 0.10), Color(0.26, 0.46, 0.16), _sway_mat_frond, 3)
 
 	cattails.append(cattail)
 
+# Build one tapered, swaying Polygon2D blade/frond rooted at `base` (local-anchored
+# at the node origin). Wide base -> pointed tip; UV.y = 1 at base, 0 at tip so the
+# shared sway shader pivots correctly. Vertex colors: dark base -> light tip.
+func _make_blade(parent: Node2D, base_local: Vector2, height: float, width: float,
+		lean: float, dark: Color, light: Color, mat: ShaderMaterial, zi: int) -> void:
+	var blade := Polygon2D.new()
+	var hw: float = width * 0.5
+	var tip := Vector2(base_local.x + lean, base_local.y - height)
+	var mid := Vector2(base_local.x + lean * 0.4, base_local.y - height * 0.5)
+	# base-left, base-right, mid-right, tip, mid-left
+	blade.polygon = PackedVector2Array([
+		Vector2(base_local.x - hw, base_local.y),
+		Vector2(base_local.x + hw, base_local.y),
+		Vector2(mid.x + hw * 0.5, mid.y),
+		tip,
+		Vector2(mid.x - hw * 0.5, mid.y),
+	])
+	# UV.y: 1 at base rows, ~0.5 mid, 0 at tip
+	blade.uv = PackedVector2Array([
+		Vector2(0.0, 1.0), Vector2(1.0, 1.0),
+		Vector2(1.0, 0.5), Vector2(0.5, 0.0), Vector2(0.0, 0.5),
+	])
+	blade.vertex_colors = PackedColorArray([dark, dark, dark.lerp(light, 0.5), light, dark.lerp(light, 0.5)])
+	blade.material = mat
+	blade.z_index = zi
+	parent.add_child(blade)
+
 func _place_grass_tuft(pos: Vector2) -> void:
+	# Cluster gating: skip in "bare" gaps so grass forms dense patches.
+	if _cluster_noise(pos.x) < 0.32:
+		return
 	# Color zone: darker near water, lighter on dry ridges
 	var near_water: float = 0.0
 	for si in range(SWAMP_COUNT):
@@ -1489,19 +1633,38 @@ func _place_grass_tuft(pos: Vector2) -> void:
 		var pool_w: float = (geo["exit_top"].x - geo["entry_top"].x) * 0.6
 		if dist < pool_w:
 			near_water = maxf(near_water, 1.0 - dist / pool_w)
-	var base_color: Color = GRASS_LIGHT_COLOR.lerp(Color(0.18, 0.42, 0.12), near_water)
-	for k in range(randi_range(2, 4)):
-		var blade := Line2D.new()
-		blade.width = 1.6
-		blade.default_color = base_color.lerp(GRASS_LIGHT_COLOR, randf() * 0.3)
-		blade.default_color.a = randf_range(0.6, 1.0)
-		var blade_h: float = randf_range(6, 12)
-		var blade_lean: float = randf_range(-4, 4)
-		blade.add_point(pos)
-		blade.add_point(Vector2(pos.x + blade_lean, pos.y - blade_h))
-		blade.z_index = 1
-		add_child(blade)
-		grass_blades.append(blade)
+	# Depth band: back row darker/cooler/smaller, front brighter/warmer/larger.
+	var is_front: bool = randf() < 0.5
+	var depth_scale: float = 1.0 if is_front else 0.78
+	var zi: int = 2 if is_front else 1
+	var tuft := Node2D.new()
+	tuft.position = pos
+	tuft.z_index = zi
+	add_child(tuft)
+	grass_tufts.append(tuft)
+	var per_scale: float = randf_range(0.7, 1.4) * depth_scale
+	var n_blades: int = randi_range(3, 5)
+	for k in range(n_blades):
+		# Green stops + occasional dead yellow-green / brown blade.
+		var dark: Color
+		var light: Color
+		var roll: float = randf()
+		if roll < 0.12:  # dead/dry blade
+			dark = Color(0.32, 0.30, 0.10)
+			light = Color(0.55, 0.50, 0.22)
+		elif roll < 0.5:  # rich green
+			dark = Color(0.10, 0.30, 0.07)
+			light = Color(0.32, 0.58, 0.18)
+		else:  # zone-tinted green
+			dark = Color(0.14, 0.34, 0.08).lerp(Color(0.10, 0.26, 0.06), near_water)
+			light = GRASS_LIGHT_COLOR
+		if not is_front:  # cool + darken back row for atmospheric depth
+			dark = dark.darkened(0.22)
+			light = light.lerp(Color(0.18, 0.34, 0.30), 0.30).darkened(0.10)
+		var bh: float = randf_range(7, 14) * per_scale
+		var bw: float = randf_range(1.8, 3.0) * per_scale
+		var lean: float = randf_range(-5, 5) + (3.0 * (float(k) / float(n_blades) - 0.5) * 2.0)
+		_make_blade(tuft, Vector2(randf_range(-3, 3), 0), bh, bw, lean, dark, light, _sway_mat_grass, zi)
 
 # --- Stars ---
 func _build_stars() -> void:
@@ -1784,25 +1947,25 @@ func _build_ferns() -> void:
 func _place_fern(pos: Vector2) -> void:
 	var fern := Node2D.new()
 	fern.position = pos
-	fern.z_index = 1
+	var is_front: bool = randf() < 0.5
+	fern.z_index = 2 if is_front else 1
 	add_child(fern)
 	ferns_list.append(fern)
-	var frond_count: int = randi_range(3, 5)
+	var per_scale: float = randf_range(0.8, 1.4) * (1.0 if is_front else 0.8)
+	fern.rotation = deg_to_rad(randf_range(-12, 12))
+	var frond_count: int = randi_range(5, 8)
 	for i in range(frond_count):
-		var frond := Line2D.new()
-		frond.width = 1.5
-		var green_val: float = randf_range(0.3, 0.55)
-		frond.default_color = Color(0.15, green_val, 0.1, 0.8)
-		var angle: float = randf_range(-1.2, 1.2)
-		var length: float = randf_range(6, 14)
-		var mid_x: float = sin(angle) * length * 0.5
-		var mid_y: float = -length * 0.5
-		var tip_x: float = sin(angle) * length
-		var tip_y: float = -length * 0.3
-		frond.add_point(Vector2.ZERO)
-		frond.add_point(Vector2(mid_x, mid_y))
-		frond.add_point(Vector2(tip_x, tip_y))
-		fern.add_child(frond)
+		# Fan the fronds out from the base; tapered swaying polygons.
+		var spread: float = (float(i) / float(frond_count - 1) - 0.5) * 2.0  # -1..1
+		var lean: float = spread * randf_range(8, 14)
+		var length: float = randf_range(8, 16) * per_scale * (1.0 - absf(spread) * 0.25)
+		var width: float = randf_range(2.0, 3.2) * per_scale
+		var dark := Color(0.08, 0.26, 0.06)
+		var light := Color(0.22, 0.50, 0.14)
+		if not is_front:
+			dark = dark.darkened(0.20)
+			light = light.lerp(Color(0.16, 0.32, 0.28), 0.30).darkened(0.10)
+		_make_blade(fern, Vector2.ZERO, length, width, lean, dark, light, _sway_mat_frond, fern.z_index)
 
 # --- Leaf Particles ---
 func _spawn_leaf() -> void:
@@ -3516,6 +3679,199 @@ func _build_right_boundary() -> void:
 	add_child(wall_body)
 
 # --- Dense trees/brush at left boundary ---
+# Place hero cypress trees at the edges of each pool basin (R3).
+func _build_cypresses() -> void:
+	for i in range(SWAMP_COUNT):
+		var geo: Dictionary = _get_swamp_geometry(i)
+		var entry_top: Vector2 = geo["entry_top"]
+		var exit_top: Vector2 = geo["exit_top"]
+		var sc: float = randf_range(0.7, 1.0)
+		# One cypress at the entry shoulder, occasionally a second at the exit.
+		var ex: float = entry_top.x + randf_range(-22, -8)
+		_place_cypress(Vector2(ex, _get_terrain_y_at(ex)), sc, 4)
+		if randf() < 0.55:
+			var xx: float = exit_top.x + randf_range(8, 22)
+			_place_cypress(Vector2(xx, _get_terrain_y_at(xx)), randf_range(0.6, 0.9), 4)
+
+# --- Hero procedural trees (R3) ---
+# Tapered trunk + forking branches + clustered swaying canopy blobs + rim light.
+func _place_tree(pos: Vector2, scale: float = 1.0, zi: int = 4) -> void:
+	# Contact AO at the base.
+	_place_contact_ao(pos.x, pos.y, 14.0 * scale, 4.0 * scale, 0.30, zi - 1)
+
+	var trunk_h: float = randf_range(38, 58) * scale
+	var base_hw: float = randf_range(3.5, 5.0) * scale
+	var top_hw: float = base_hw * 0.4
+	var lean: float = randf_range(-4, 4) * scale
+	var top := Vector2(pos.x + lean, pos.y - trunk_h)
+
+	# Tapered trunk polygon, 2-tone vertical gradient, darker left edge for form.
+	var trunk := Polygon2D.new()
+	trunk.polygon = PackedVector2Array([
+		Vector2(pos.x - base_hw, pos.y),
+		Vector2(pos.x + base_hw, pos.y),
+		Vector2(top.x + top_hw, top.y),
+		Vector2(top.x - top_hw, top.y),
+	])
+	var bark_dark := Color(0.16, 0.10, 0.05)
+	var bark_light := Color(0.30, 0.20, 0.10)
+	# base-left (dark/shadow), base-right (lit), top-right (lit), top-left (dark)
+	trunk.vertex_colors = PackedColorArray([
+		bark_dark.darkened(0.2), bark_light, bark_light.lerp(bark_dark, 0.3), bark_dark])
+	trunk.z_index = zi
+	add_child(trunk)
+
+	# 2-3 forking branches.
+	var n_branch: int = randi_range(2, 3)
+	for b in range(n_branch):
+		var t: float = randf_range(0.55, 0.85)
+		var bx: float = lerpf(pos.x, top.x, t)
+		var by: float = lerpf(pos.y, top.y, t)
+		var dir: float = -1.0 if (b % 2 == 0) else 1.0
+		var blen: float = randf_range(10, 18) * scale
+		var bw: float = base_hw * randf_range(0.4, 0.6)
+		var ex: float = bx + dir * blen
+		var ey: float = by - blen * randf_range(0.4, 0.8)
+		var br := Polygon2D.new()
+		br.polygon = PackedVector2Array([
+			Vector2(bx, by + bw), Vector2(bx, by - bw),
+			Vector2(ex, ey),
+		])
+		br.color = bark_dark.lerp(bark_light, 0.3)
+		br.z_index = zi
+		add_child(br)
+
+	# 4-8 overlapping canopy blobs: back-dark/cool -> front-bright/warm.
+	var n_blob: int = randi_range(5, 8)
+	var canopy_cx: float = top.x
+	var canopy_cy: float = top.y - 4.0 * scale
+	for c in range(n_blob):
+		var depth: float = float(c) / float(n_blob - 1)  # 0 back -> 1 front
+		var bcx: float = canopy_cx + randf_range(-16, 16) * scale
+		var bcy: float = canopy_cy + randf_range(-12, 8) * scale - depth * 2.0
+		var brw: float = randf_range(10, 18) * scale
+		var brh: float = randf_range(9, 15) * scale
+		var blob := Polygon2D.new()
+		var bpts := PackedVector2Array()
+		var nv: int = randi_range(8, 12)
+		for a in range(nv):
+			var ang: float = TAU * float(a) / float(nv)
+			bpts.append(Vector2(
+				bcx + cos(ang) * brw * randf_range(0.82, 1.0),
+				bcy + sin(ang) * brh * randf_range(0.82, 1.0)))
+		blob.polygon = bpts
+		# UVs: top of blob = 0 (light + max sway), bottom = 1 (dark + anchored)
+		var uvs := PackedColorArray()
+		var bptuv := PackedVector2Array()
+		var cl_dark := Color(0.05, 0.16, 0.04).lerp(Color(0.10, 0.30, 0.08), depth)
+		var cl_light := Color(0.16, 0.34, 0.10).lerp(Color(0.34, 0.54, 0.18), depth)
+		# cool the back blobs
+		if depth < 0.4:
+			cl_dark = cl_dark.lerp(Color(0.10, 0.22, 0.22), 0.25)
+			cl_light = cl_light.lerp(Color(0.18, 0.34, 0.30), 0.25)
+		for p in bpts:
+			var vy: float = clampf((p.y - (bcy - brh)) / (brh * 2.0), 0.0, 1.0)  # 0 top, 1 bottom
+			bptuv.append(Vector2(0.5, vy))
+			uvs.append(cl_dark.lerp(cl_light, 1.0 - vy))
+		blob.uv = bptuv
+		blob.vertex_colors = uvs
+		blob.material = _sway_mat_canopy
+		blob.z_index = zi + 1 + int(depth * 2.0)
+		add_child(blob)
+
+	# Rim-light cluster (top-left), lighter, no/low sway.
+	var rim := Polygon2D.new()
+	var rpts := PackedVector2Array()
+	var rcx: float = canopy_cx - 8.0 * scale
+	var rcy: float = canopy_cy - 8.0 * scale
+	for a in range(7):
+		var ang2: float = TAU * float(a) / 7.0
+		rpts.append(Vector2(rcx + cos(ang2) * 8.0 * scale, rcy + sin(ang2) * 6.0 * scale))
+	rim.polygon = rpts
+	rim.color = Color(0.42, 0.62, 0.26, 0.55)
+	rim.z_index = zi + 4
+	add_child(rim)
+
+# Cypress: tall narrow trunk + knees at base + hanging Spanish moss strands.
+func _place_cypress(pos: Vector2, scale: float = 1.0, zi: int = 4) -> void:
+	_place_contact_ao(pos.x, pos.y, 12.0 * scale, 3.5 * scale, 0.30, zi - 1)
+
+	var trunk_h: float = randf_range(62, 86) * scale
+	var base_hw: float = randf_range(3.0, 4.2) * scale
+	var top := Vector2(pos.x + randf_range(-3, 3) * scale, pos.y - trunk_h)
+	var trunk := Polygon2D.new()
+	trunk.polygon = PackedVector2Array([
+		Vector2(pos.x - base_hw, pos.y),
+		Vector2(pos.x + base_hw, pos.y),
+		Vector2(top.x + base_hw * 0.3, top.y),
+		Vector2(top.x - base_hw * 0.3, top.y),
+	])
+	var bark_dark := Color(0.14, 0.10, 0.07)
+	var bark_light := Color(0.26, 0.19, 0.12)
+	trunk.vertex_colors = PackedColorArray([bark_dark.darkened(0.2), bark_light, bark_light, bark_dark])
+	trunk.z_index = zi
+	add_child(trunk)
+
+	# Knees: small cone polygons around the base (cypress "knees").
+	var n_knee: int = randi_range(3, 5)
+	for k in range(n_knee):
+		var kx: float = pos.x + randf_range(-14, 14) * scale
+		var kh: float = randf_range(4, 9) * scale
+		var kw: float = randf_range(2, 4) * scale
+		var knee := Polygon2D.new()
+		knee.polygon = PackedVector2Array([
+			Vector2(kx - kw, pos.y), Vector2(kx + kw, pos.y), Vector2(kx, pos.y - kh)])
+		knee.color = bark_dark.lerp(bark_light, randf_range(0.2, 0.5))
+		knee.z_index = zi
+		add_child(knee)
+
+	# Sparse high canopy blobs.
+	for c in range(randi_range(3, 5)):
+		var bcx: float = top.x + randf_range(-12, 12) * scale
+		var bcy: float = top.y + randf_range(-2, 14) * scale
+		var blob := Polygon2D.new()
+		var bpts := PackedVector2Array()
+		for a in range(9):
+			var ang: float = TAU * float(a) / 9.0
+			bpts.append(Vector2(bcx + cos(ang) * 11.0 * scale * randf_range(0.8, 1.0),
+				bcy + sin(ang) * 8.0 * scale * randf_range(0.8, 1.0)))
+		blob.polygon = bpts
+		var uvb := PackedVector2Array()
+		var cb := PackedColorArray()
+		var cl_dark := Color(0.08, 0.20, 0.08)
+		var cl_light := Color(0.22, 0.40, 0.16)
+		for p in bpts:
+			var vy: float = clampf((p.y - (bcy - 8.0 * scale)) / (16.0 * scale), 0.0, 1.0)
+			uvb.append(Vector2(0.5, vy))
+			cb.append(cl_dark.lerp(cl_light, 1.0 - vy))
+		blob.uv = uvb
+		blob.vertex_colors = cb
+		blob.material = _sway_mat_canopy
+		blob.z_index = zi + 1
+		add_child(blob)
+
+	# Spanish moss: thin vertical strands hanging from the canopy, gray-green,
+	# on the moss sway material (high strength / low stiffness = it drapes & drifts).
+	for m in range(randi_range(4, 8)):
+		var mx: float = top.x + randf_range(-14, 14) * scale
+		var my: float = top.y + randf_range(2, 16) * scale
+		var mlen: float = randf_range(12, 26) * scale
+		var strand := Polygon2D.new()
+		var w: float = randf_range(0.8, 1.6)
+		strand.polygon = PackedVector2Array([
+			Vector2(mx - w, my), Vector2(mx + w, my),
+			Vector2(mx + w * 0.4, my + mlen), Vector2(mx - w * 0.4, my + mlen),
+		])
+		# UV.y = 1 at the hanging tip (max sway), 0 at the attached top (anchored)
+		strand.uv = PackedVector2Array([
+			Vector2(0, 0), Vector2(1, 0), Vector2(1, 1), Vector2(0, 1)])
+		var moss_top := Color(0.42, 0.46, 0.34, 0.85)
+		var moss_tip := Color(0.55, 0.58, 0.46, 0.55)
+		strand.vertex_colors = PackedColorArray([moss_top, moss_top, moss_tip, moss_tip])
+		strand.material = _sway_mat_moss
+		strand.z_index = zi + 2
+		add_child(strand)
+
 func _build_left_trees() -> void:
 	var tree_x_start: float = terrain_points[0].x  # -240
 	var tree_x_end: float = terrain_points[0].x + 60.0  # -180
@@ -3564,6 +3920,10 @@ func _build_left_trees() -> void:
 		brush.color = Color(0.05, 0.14, 0.03, randf_range(0.7, 0.9))
 		brush.z_index = 5
 		add_child(brush)
+
+	# Two hero foreground cypress at the left edge framing the scene (R3).
+	_place_cypress(Vector2(tree_x_end + 4, ground_y), 1.0, 6)
+	_place_cypress(Vector2(tree_x_start + 8, ground_y), randf_range(0.8, 0.95), 6)
 
 # --- Island with house at the right end ---
 func _build_island_house() -> void:
@@ -5865,13 +6225,7 @@ func _process(delta: float) -> void:
 		wind_timer = 0.0
 		wind_direction = lerpf(wind_direction, randf_range(-1.0, 1.0), 0.4)
 
-	# Fern sway
-	for fn in ferns_list:
-		if is_instance_valid(fn):
-			var sway: float = sin(wave_time * 0.8 + fn.position.x * 0.03) * 0.06 * wind_direction
-			if weather_state == "rain":
-				sway *= 2.0
-			fn.rotation = sway
+	# Fern sway is now handled by the shared foliage_sway shader (R3).
 
 	# Drain-revealed objects
 	for i in range(mini(drain_reveals.size(), SWAMP_COUNT)):
@@ -6612,12 +6966,7 @@ func _process(delta: float) -> void:
 			var pulse: float = (sin(wave_time * 2.0 + ce["x"] * 0.1) + 1.0) * 0.5
 			ce["glow"].color.a = lerpf(0.15, 0.45, pulse)
 
-	# Cattail wind sway (enhanced with wind direction + rain)
-	var rain_sway_mult: float = 2.0 if weather_state == "rain" else 1.0
-	for ct in cattails:
-		if is_instance_valid(ct):
-			var sway: float = sin(wave_time * 1.2 + ct.position.x * 0.05) * 0.05 * wind_direction * rain_sway_mult
-			ct.rotation = sway
+	# Cattail wind sway is now handled by the shared foliage_sway shader (R3).
 
 func _get_cycle_color(t: float) -> Color:
 	var pre_dawn := Color(0.5, 0.45, 0.65)
