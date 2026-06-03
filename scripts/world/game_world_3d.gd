@@ -119,7 +119,7 @@ func _build_environment() -> void:
 	sun.directional_shadow_max_distance = 60.0   # tighter → crisper texels for the diorama
 	sun.directional_shadow_fade_start = 0.85
 	if not ("--nofog" in OS.get_cmdline_user_args()):
-		sun.light_volumetric_fog_energy = 3.0    # makes the god-ray shafts glow
+		sun.light_volumetric_fog_energy = 1.8    # makes the god-ray shafts glow (subtle)
 	add_child(sun)
 
 	# Procedural gradient sky → ambient source (cool sky fill in shadows)
@@ -192,30 +192,29 @@ func _build_environment() -> void:
 	env.fog_enabled = not ("--nofog" in OS.get_cmdline_user_args())
 	env.fog_mode = Environment.FOG_MODE_DEPTH
 	env.fog_light_color = Color(0.60, 0.68, 0.60)   # grey-green swamp murk
-	env.fog_sun_scatter = 0.2
-	env.fog_aerial_perspective = 0.28               # gentle distance-to-sky bleed only
-	env.fog_sky_affect = 0.35
+	env.fog_sun_scatter = 0.15
+	env.fog_aerial_perspective = 0.18               # gentle distance-to-sky bleed only
+	env.fog_sky_affect = 0.25
 	env.fog_density = 0.0                            # let volumetric carry the near haze
-	env.fog_depth_begin = 48.0                       # keep the foreground crisp
-	env.fog_depth_end = 150.0
-	env.fog_depth_curve = 0.7
+	env.fog_depth_begin = 62.0                       # keep the whole playfield crisp
+	env.fog_depth_end = 165.0
+	env.fog_depth_curve = 0.75
 
-	# Volumetric fog — SUBTLE haze + god-ray shafts raking through the cypress (the swamp's
-	# signature). Low density + high light fog-energy = shafts without milking the frame.
+	# Volumetric fog — very SUBTLE haze + faint god-ray shafts. Low density so it never milks.
 	env.volumetric_fog_enabled = not ("--nofog" in OS.get_cmdline_user_args())
-	env.volumetric_fog_density = 0.005
+	env.volumetric_fog_density = 0.0025
 	env.volumetric_fog_albedo = Color(0.86, 0.92, 0.83)
-	env.volumetric_fog_anisotropy = 0.45
+	env.volumetric_fog_anisotropy = 0.5
 	env.volumetric_fog_length = 55.0
-	env.volumetric_fog_gi_inject = 0.4
-	env.volumetric_fog_ambient_inject = 0.05
-	env.volumetric_fog_sky_affect = 0.2
+	env.volumetric_fog_gi_inject = 0.35
+	env.volumetric_fog_ambient_inject = 0.04
+	env.volumetric_fog_sky_affect = 0.15
 
-	# Re-saturate after AgX + gentle cozy contrast (punchy, not washed)
+	# Re-saturate after AgX + cozy punch (counter the soft/faded feel)
 	env.adjustment_enabled = true
 	env.adjustment_brightness = 1.0
-	env.adjustment_contrast = 1.16
-	env.adjustment_saturation = 1.3
+	env.adjustment_contrast = 1.24
+	env.adjustment_saturation = 1.38
 
 	var we := WorldEnvironment.new()
 	we.environment = env

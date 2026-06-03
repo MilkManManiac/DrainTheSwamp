@@ -14,14 +14,15 @@ render_mode cull_disabled;
 uniform float sway_strength = 0.0;          // 0 = static (props/ground); >0 = foliage sway
 uniform float sway_speed = 1.4;
 uniform float surf_roughness : hint_range(0.0, 1.0) = 0.9;
-uniform float backlight_strength : hint_range(0.0, 2.0) = 0.7;  // *COLOR.g² self-masks to greenery
+uniform vec4  albedo_tint : source_color = vec4(1.0);           // multiplies COLOR (char pieces)
+uniform float backlight_strength : hint_range(0.0, 2.0) = 0.4;  // masks to greenery (ALBEDO.g)
 uniform vec3  rim_color : source_color = vec3(0.96, 0.99, 0.82);
-uniform float rim_power : hint_range(0.5, 8.0) = 3.0;
-uniform float rim_strength : hint_range(0.0, 2.0) = 0.3;
-uniform float light_wrap : hint_range(0.0, 1.0) = 0.3;
+uniform float rim_power : hint_range(0.5, 8.0) = 3.5;
+uniform float rim_strength : hint_range(0.0, 2.0) = 0.14;
+uniform float light_wrap : hint_range(0.0, 1.0) = 0.18;
 uniform float bands : hint_range(1.0, 5.0) = 3.0;
-uniform float band_softness : hint_range(0.0, 0.5) = 0.11;
-uniform float sat_split : hint_range(0.0, 0.6) = 0.26;          // shade desat ↔ light oversat
+uniform float band_softness : hint_range(0.0, 0.5) = 0.09;
+uniform float sat_split : hint_range(0.0, 0.6) = 0.22;          // shade desat ↔ light oversat
 
 void vertex() {
 	if (sway_strength > 0.0) {
@@ -35,7 +36,7 @@ void vertex() {
 }
 
 void fragment() {
-	ALBEDO = COLOR.rgb;
+	ALBEDO = COLOR.rgb * albedo_tint.rgb;
 	ROUGHNESS = surf_roughness;
 	METALLIC = 0.0;
 	// stylized edge glow that survives shadow + fog (additive into emission)

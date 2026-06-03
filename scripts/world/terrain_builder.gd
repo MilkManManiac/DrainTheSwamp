@@ -226,16 +226,25 @@ static func _build_path(parent: Node3D, xs: PackedFloat32Array, hs: PackedFloat3
 		# follow the winding centreline in Z
 		var p0 := WorldData.path_z(x0)
 		var p1 := WorldData.path_z(x1)
-		# centre brown dirt → lighter churned edge → outer band that FADES to alpha 0,
-		# dissolving softly into the grass (no hard cut). alpha also scaled by land factor.
-		var c_mud := Color(PATH_MUD.r, PATH_MUD.g, PATH_MUD.b, PATH_MUD.a * lf)
-		var c_edge := Color(PATH_EDGE.r, PATH_EDGE.g, PATH_EDGE.b, PATH_EDGE.a * lf)
+		# worn dark CENTRE RUT → brown dirt → lighter churned edge → outer band fading to
+		# alpha 0. Per-segment tone variation breaks up the flat uniform look.
+		var hv: float = sin(xs[i] * 1.7) * 43758.5453
+		var tone: float = 0.82 + (hv - floor(hv)) * 0.36     # 0.82..1.18 brightness jitter
+		var c_mud := Color(PATH_MUD.r * tone, PATH_MUD.g * tone, PATH_MUD.b * tone, PATH_MUD.a * lf)
+		var c_rut := Color(PATH_MUD.r * 0.6 * tone, PATH_MUD.g * 0.58 * tone, PATH_MUD.b * 0.56 * tone, PATH_MUD.a * lf)
+		var c_edge := Color(PATH_EDGE.r * tone, PATH_EDGE.g * tone, PATH_EDGE.b * tone, PATH_EDGE.a * lf)
 		var c_fade := PATH_FADE
 		var ow0 := w0 * 1.75
 		var ow1 := w1 * 1.75
-		_strip(st, x0, x1, y0, y1, p0 - w0 * 0.5, p0 + w0 * 0.5, p1 - w1 * 0.5, p1 + w1 * 0.5, c_mud, c_mud)
-		_strip(st, x0, x1, y0, y1, p0 + w0 * 0.5, p0 + w0, p1 + w1 * 0.5, p1 + w1, c_mud, c_edge)
-		_strip(st, x0, x1, y0, y1, p0 - w0, p0 - w0 * 0.5, p1 - w1, p1 - w1 * 0.5, c_edge, c_mud)
+		# darker trodden rut down the centre
+		_strip(st, x0, x1, y0, y1, p0 - w0 * 0.28, p0 + w0 * 0.28, p1 - w1 * 0.28, p1 + w1 * 0.28, c_rut, c_rut)
+		# rut → mud
+		_strip(st, x0, x1, y0, y1, p0 + w0 * 0.28, p0 + w0 * 0.55, p1 + w1 * 0.28, p1 + w1 * 0.55, c_rut, c_mud)
+		_strip(st, x0, x1, y0, y1, p0 - w0 * 0.55, p0 - w0 * 0.28, p1 - w1 * 0.55, p1 - w1 * 0.28, c_mud, c_rut)
+		# mud → churned edge
+		_strip(st, x0, x1, y0, y1, p0 + w0 * 0.55, p0 + w0, p1 + w1 * 0.55, p1 + w1, c_mud, c_edge)
+		_strip(st, x0, x1, y0, y1, p0 - w0, p0 - w0 * 0.55, p1 - w1, p1 - w1 * 0.55, c_edge, c_mud)
+		# edge → grass (alpha fade)
 		_strip(st, x0, x1, y0, y1, p0 + w0, p0 + ow0, p1 + w1, p1 + ow1, c_edge, c_fade)
 		_strip(st, x0, x1, y0, y1, p0 - ow0, p0 - w0, p1 - ow1, p1 - w1, c_fade, c_edge)
 	var mi := MeshInstance3D.new()

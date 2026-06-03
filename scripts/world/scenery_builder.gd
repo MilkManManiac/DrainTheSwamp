@@ -933,10 +933,12 @@ static func build_path_detail(parent: Node3D) -> void:
 			var ss := r.randf_range(0.3, 0.66)
 			stone_tf.append(Transform3D(Basis().rotated(Vector3.UP, r.randf_range(0, TAU)).scaled(Vector3(ss, ss * 0.55, ss)),
 				Vector3(wx + r.randf_range(-0.4, 0.4), sy + 0.03, pz + r.randf_range(-1.7, 1.7))))
-		if r.randf() < 0.13:
-			var ps := r.randf_range(0.8, 1.6)
-			puddle_tf.append(Transform3D(Basis().rotated(Vector3.UP, r.randf_range(0, TAU)).scaled(Vector3(ps, 1.0, ps * 0.7)),
-				Vector3(wx, sy + 0.05, pz + r.randf_range(-0.8, 0.8))))
+		# occasional puddle — much rarer + widely varied size/aspect/rotation so no two match
+		if r.randf() < 0.05:
+			var ps := r.randf_range(0.55, 2.3)
+			var asp := r.randf_range(0.4, 1.0)
+			puddle_tf.append(Transform3D(Basis().rotated(Vector3.UP, r.randf_range(0, TAU)).scaled(Vector3(ps, 1.0, ps * asp)),
+				Vector3(wx + r.randf_range(-0.5, 0.5), sy + 0.045, pz + r.randf_range(-1.1, 1.1))))
 		if r.randf() < 0.05:
 			var bs := r.randf_range(0.9, 1.4)
 			big_tf.append(Transform3D(Basis().rotated(Vector3.UP, r.randf_range(0, TAU)).scaled(Vector3(bs, bs * 0.4, bs)),
@@ -973,7 +975,17 @@ static func _pathstone_mesh() -> ArrayMesh:
 static func _puddle_mesh() -> ArrayMesh:
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
-	_disc(st, Vector3.ZERO, 0.5, 12, Color(0.09, 0.11, 0.10))
+	# organic wavy outline (not a clean circle) so puddles read as natural pooled water
+	var col := Color(0.09, 0.11, 0.10)
+	var segs := 18
+	for s in range(segs):
+		var a0 := TAU * float(s) / segs
+		var a1 := TAU * float(s + 1) / segs
+		var r0 := 0.5 * (0.74 + 0.26 * sin(a0 * 3.0 + 1.3) + 0.12 * sin(a0 * 7.0))
+		var r1 := 0.5 * (0.74 + 0.26 * sin(a1 * 3.0 + 1.3) + 0.12 * sin(a1 * 7.0))
+		var p0 := Vector3(cos(a0) * r0, 0, sin(a0) * r0)
+		var p1 := Vector3(cos(a1) * r1, 0, sin(a1) * r1)
+		_tri(st, Vector3.ZERO, p1, p0, col, col, col, Vector3.UP)
 	return st.commit()
 
 # ── Water-edge props (reeds, lily pads) ──────────────────────────────────────────
