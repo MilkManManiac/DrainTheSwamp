@@ -296,6 +296,7 @@ var water_highlights: Array[Dictionary] = []
 var sun_node: Node2D = null
 var fish: Array[Dictionary] = []
 var frogs: Array[Dictionary] = []
+var _startle_cd: float = 0.0  # throttles wildlife reactions to scooping
 var glow_plants: Array[Dictionary] = []
 var seaweed: Array[Dictionary] = []
 var ripples: Array[Dictionary] = []
@@ -4235,6 +4236,8 @@ func _on_swamp_completed(swamp_index: int, reward: float) -> void:
 	_screen_shake(5.0, 0.3)
 	# Phase 7c: Milestone flash — golden vignette pulse + brief scale bounce
 	_milestone_flash()
+	# The habitat reacts to a drained pool — birds take flight (fish already flop in the basin)
+	_scatter_birds()
 	# Show wanted poster after pool 4
 	if swamp_index == 4 and wanted_poster:
 		wanted_poster.visible = true
@@ -4866,6 +4869,38 @@ func _on_scoop_performed(swamp_index: int, gallons: float, _money: float) -> voi
 	# Scoop impact juice: camera nudge for bigger scoops
 	if gallons > 0.01:
 		_screen_shake(clampf(gallons * 0.3, 0.5, 2.0), 0.08)
+	# Wildlife reacts to you — frogs startle-hop, fish leap (throttled so it's lively, not chaotic)
+	_startle_wildlife(swamp_index)
+
+func _startle_wildlife(swamp_index: int) -> void:
+	if _startle_cd > 0.0:
+		return
+	_startle_cd = 0.45
+	var frog_hits: int = 0
+	for fg in frogs:
+		var fnode2: Node2D = fg["node"]
+		var parent_vis: bool = fnode2.get_parent() != null and (fnode2.get_parent() as CanvasItem).visible
+		if fg["swamp"] == swamp_index and not fg["hopping"] and parent_vis and randf() < 0.6:
+			fg["hopping"] = true
+			fg["hop_progress"] = 0.0
+			fg["base_y"] = fnode2.position.y
+			frog_hits += 1
+			if frog_hits >= 2:
+				break
+	var fish_hits: int = 0
+	for fd in fish:
+		if fd["swamp"] == swamp_index and fd["alive"] and not fd["jumping"] and randf() < 0.5:
+			fd["jumping"] = true
+			fd["jump_time"] = 0.0
+			fish_hits += 1
+			if fish_hits >= 2:
+				break
+
+func _scatter_birds() -> void:
+	for brd in birds:
+		brd["speed"] = absf(brd["speed"]) * 2.2 + 40.0
+		brd["y_drift"] = -absf(brd["y_drift"]) - 0.7
+	_spawn_bird()  # a startled flock takes off
 
 func _spawn_scoop_splash(x: float, y: float, gallons: float) -> void:
 	var count: int = clampi(int(4 + gallons * 2), 4, 10)
@@ -5196,6 +5231,8 @@ func _build_distance_fog() -> void:
 
 # --- Day/Night Cycle & Animation ---
 func _process(delta: float) -> void:
+	if _startle_cd > 0.0:
+		_startle_cd -= delta
 	# Helicopter flyover — after pool 4 drained
 	if GameManager.is_swamp_completed(4):
 		helicopter_timer += delta
