@@ -166,6 +166,10 @@ static func build_surface_props(parent: Node3D) -> void:
 	# props spread across the whole landmass depth (front toward camera → forested back)
 	var pzb := WorldData.FRONT_Z - WorldData.DEPTH + 1.0
 	var pzf := WorldData.FRONT_Z - 0.5
+	# tall props (trees/cypress/snags) must stay BEHIND the camera's nearest approach (~z 10)
+	# or the camera clips through them and the double-sided foliage reads as see-through. The
+	# foreground (bottom of screen, z≈10-18) is left to grass/low cover.
+	var tall_zf := 7.0
 	var r := _rng(20)
 	var ox := x_start
 	# keep tall props off the walking path corridor (z ≈ 0)
@@ -182,7 +186,7 @@ static func build_surface_props(parent: Node3D) -> void:
 		var forest: bool = ox < 90.0
 		var tree_chance: float = 0.22 if forest else 0.05
 		if r.randf() < tree_chance:
-			var z := r.randf_range(pzb, pzf - 2.0)
+			var z := r.randf_range(pzb, tall_zf)
 			if absf(z - pz) >= PATH_CLEAR:   # never plant a tree on the path
 				var s := r.randf_range(0.7, 1.4)
 				var tf := Transform3D(Basis().rotated(Vector3.UP, r.randf_range(0, TAU)).scaled(Vector3(s, s, s)), Vector3(wx, sy, z))
@@ -197,7 +201,7 @@ static func build_surface_props(parent: Node3D) -> void:
 					tree_var.append(r.randi() % TREE_VARIANTS)
 
 		if r.randf() < 0.14:
-			var bz := r.randf_range(pzb, pzf)
+			var bz := r.randf_range(pzb, minf(pzf, 9.0))
 			if absf(bz - pz) >= PATH_CLEAR - 1.0:
 				var bs := r.randf_range(0.7, 1.3)
 				bush_tf.append(Transform3D(Basis().rotated(Vector3.UP, r.randf_range(0, TAU)).scaled(Vector3(bs, bs, bs)), Vector3(wx, sy, bz)))
@@ -248,7 +252,7 @@ static func build_surface_props(parent: Node3D) -> void:
 
 		# CYPRESS — bayou signature; loves the waterside, scattered elsewhere, off path
 		if r.randf() < (0.18 if near_water else 0.05):
-			var cz := r.randf_range(pzb, pzf - 2.0)
+			var cz := r.randf_range(pzb, tall_zf)
 			if absf(cz - pz) >= PATH_CLEAR:
 				var cs := r.randf_range(0.85, 1.5)
 				cypress_tf.append(Transform3D(Basis().rotated(Vector3.UP, r.randf_range(0, TAU)).scaled(Vector3(cs, cs, cs)), Vector3(wx, sy, cz)))
@@ -258,14 +262,14 @@ static func build_surface_props(parent: Node3D) -> void:
 
 		# dead snag — occasional grey skeleton
 		if r.randf() < 0.035:
-			var nz := r.randf_range(pzb, pzf - 2.0)
+			var nz := r.randf_range(pzb, tall_zf)
 			if absf(nz - pz) >= PATH_CLEAR:
 				var ns := r.randf_range(0.8, 1.3)
 				snag_tf.append(Transform3D(Basis().rotated(Vector3.UP, r.randf_range(0, TAU)).scaled(Vector3(ns, ns, ns)), Vector3(wx, sy, nz)))
 
 		# palmetto fan — low, clumps near water/forest, can sit closer to the path
 		if r.randf() < (0.20 if (near_water or forest) else 0.08):
-			var palz := r.randf_range(pzb, pzf)
+			var palz := r.randf_range(pzb, minf(pzf, 9.0))
 			if absf(palz - pz) >= 2.4:
 				var ps := r.randf_range(0.8, 1.35)
 				palm_tf.append(Transform3D(Basis().rotated(Vector3.UP, r.randf_range(0, TAU)).scaled(Vector3(ps, ps, ps)), Vector3(wx, sy, palz)))
@@ -281,7 +285,7 @@ static func build_surface_props(parent: Node3D) -> void:
 				rock_tf.append(Transform3D(Basis().rotated(Vector3.UP, r.randf_range(0, TAU)).scaled(Vector3(r.randf_range(0.5, 1.4), r.randf_range(0.4, 1.0), r.randf_range(0.5, 1.4))), Vector3(wx, sy, rz)))
 
 		if r.randf() < 0.025:
-			var lz := r.randf_range(pzb, pzf - 2.0)
+			var lz := r.randf_range(pzb, tall_zf)
 			if absf(lz - pz) >= PATH_CLEAR:
 				log_tf.append(Transform3D(Basis().rotated(Vector3.UP, r.randf_range(-0.3, 0.3)), Vector3(wx, sy + 0.15, lz)))
 
@@ -294,7 +298,7 @@ static func build_surface_props(parent: Node3D) -> void:
 
 		# downed/fallen trunks — bigger, kept off the walking corridor
 		if r.randf() < 0.014:
-			var ftz := r.randf_range(pzb, pzf - 2.0)
+			var ftz := r.randf_range(pzb, tall_zf)
 			if absf(ftz - pz) >= PATH_CLEAR:
 				var fts := r.randf_range(0.85, 1.3)
 				fallen_tf.append(Transform3D(Basis().rotated(Vector3.UP, r.randf_range(0, TAU)).scaled(Vector3(fts, fts, fts)), Vector3(wx, sy + 0.12, ftz)))
@@ -883,17 +887,17 @@ static func build_tree_walls(parent: Node3D) -> void:
 	var r := _rng(50)
 	var ox := x_start
 	while ox < x_end:
-		ox += r.randf_range(2.4, 4.6)
+		ox += r.randf_range(1.7, 3.3)               # tighter spacing → fuller treeline
 		var wx: float = ox * WorldData.SCALE
 		var sy: float = TerrainBuilder.surface_height(ox)
 		# a deep, dense band of big trees behind the corridor → fills the top of frame
-		for _t in range(r.randi_range(1, 2)):
-			var z := r.randf_range(-22.0, -12.0)
-			var s := r.randf_range(1.4, 2.3)
+		for _t in range(r.randi_range(2, 3)):
+			var z := r.randf_range(-22.0, -12.5)
+			var s := r.randf_range(1.5, 2.4)
 			var tf := Transform3D(Basis().rotated(Vector3.UP, r.randf_range(0, TAU)).scaled(Vector3(s, s, s)), Vector3(wx, sy, z))
-			# darker, receding into shade
-			var d := r.randf_range(0.6, 0.85)
-			var tint := Color(d * 0.95, d, d * 0.85)
+			# leafy green (was too dark → read as grey bubbles in fog); slight depth shading
+			var d := r.randf_range(0.82, 1.06)
+			var tint := Color(d * 0.86, d, d * 0.7)   # push green, not grey
 			if r.randf() < 0.45:
 				pine_tf.append(tf)
 				pine_cols.append(tint)
