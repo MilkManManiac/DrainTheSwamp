@@ -20,6 +20,7 @@ var stamina_fill_style: StyleBoxFlat = null
 
 func _ready() -> void:
 	_build_hud_icons()
+	_setup_news_ticker()
 	_setup_stamina_gradient()
 	GameManager.money_changed.connect(_on_money_changed)
 	GameManager.water_level_changed.connect(_on_water_level_changed)
@@ -196,6 +197,13 @@ func _build_hud_icons() -> void:
 	var stam_idx: int = bot_hbox.get_children().find(stamina_bar)
 	if stam_idx >= 0:
 		bot_hbox.move_child(bolt_icon, stam_idx)
+
+func _setup_news_ticker() -> void:
+	# Insert the scrolling news crawl just under the top bar (index 1).
+	var vbox: VBoxContainer = $MarginContainer/VBoxContainer
+	var ticker: PanelContainer = preload("res://scripts/ui/news_ticker.gd").new()
+	vbox.add_child(ticker)
+	vbox.move_child(ticker, 1)
 
 func _make_icon_container() -> Control:
 	var c := Control.new()
