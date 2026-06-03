@@ -3,6 +3,9 @@ extends CharacterBody2D
 const BASE_SPEED: float = 120.0
 const GRAVITY: float = 800.0
 const SCOOP_COOLDOWN: float = 0.3
+# Horizontal accel/friction give movement a little weight (subtle ramp + skid)
+const ACCEL: float = 1400.0
+const FRICTION: float = 2000.0
 
 signal shop_requested()
 signal cave_entrance_requested(cave_id: String)
@@ -104,7 +107,9 @@ func _physics_process(delta: float) -> void:
 	# Movement
 	var direction: float = Input.get_axis("move_left", "move_right")
 	var speed: float = BASE_SPEED * GameManager.get_movement_speed_multiplier()
-	velocity.x = direction * speed
+	var target_vx: float = direction * speed
+	var rate: float = ACCEL if direction != 0.0 else FRICTION
+	velocity.x = move_toward(velocity.x, target_vx, rate * delta)
 
 	if direction != 0.0:
 		facing_right = direction > 0.0

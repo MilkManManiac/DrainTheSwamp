@@ -254,16 +254,16 @@ var touch_controls_enabled: bool = false
 
 # --- Cave Definitions ---
 const CAVE_DEFINITIONS: Dictionary = {
-	"muddy_hollow": {"name": "Muddy Hollow", "swamp_index": 0, "drain_threshold": 0.0, "scene_path": "res://scenes/caves/muddy_hollow.tscn", "order": 0},
-	"gator_den": {"name": "Gator Den", "swamp_index": 1, "drain_threshold": 0.0, "scene_path": "res://scenes/caves/gator_den.tscn", "order": 1},
-	"the_sinkhole": {"name": "The Sinkhole", "swamp_index": 2, "drain_threshold": 0.0, "scene_path": "res://scenes/caves/the_sinkhole.tscn", "order": 2},
-	"collapsed_mine": {"name": "Collapsed Mine", "swamp_index": 3, "drain_threshold": 0.0, "scene_path": "res://scenes/caves/collapsed_mine.tscn", "order": 3},
-	"the_mire": {"name": "The Mire", "swamp_index": 4, "drain_threshold": 0.0, "scene_path": "res://scenes/caves/the_mire.tscn", "order": 4},
-	"sunken_grotto": {"name": "Sunken Grotto", "swamp_index": 5, "drain_threshold": 0.0, "scene_path": "res://scenes/caves/sunken_grotto.tscn", "order": 5},
-	"the_cistern": {"name": "The Cistern", "swamp_index": 6, "drain_threshold": 0.0, "scene_path": "res://scenes/caves/the_cistern.tscn", "order": 6},
-	"coral_cavern": {"name": "Coral Cavern", "swamp_index": 7, "drain_threshold": 0.0, "scene_path": "res://scenes/caves/coral_cavern.tscn", "order": 7},
-	"the_underdark": {"name": "The Underdark", "swamp_index": 8, "drain_threshold": 0.0, "scene_path": "res://scenes/caves/the_underdark.tscn", "order": 8},
-	"mariana_trench": {"name": "Mariana Trench", "swamp_index": 9, "drain_threshold": 0.0, "scene_path": "res://scenes/caves/mariana_trench.tscn", "order": 9},
+	"muddy_hollow": {"name": "Muddy Hollow", "swamp_index": 0, "drain_threshold": 0.5, "scene_path": "res://scenes/caves/muddy_hollow.tscn", "order": 0},
+	"gator_den": {"name": "Gator Den", "swamp_index": 1, "drain_threshold": 0.5, "scene_path": "res://scenes/caves/gator_den.tscn", "order": 1},
+	"the_sinkhole": {"name": "The Sinkhole", "swamp_index": 2, "drain_threshold": 0.5, "scene_path": "res://scenes/caves/the_sinkhole.tscn", "order": 2},
+	"collapsed_mine": {"name": "Collapsed Mine", "swamp_index": 3, "drain_threshold": 0.5, "scene_path": "res://scenes/caves/collapsed_mine.tscn", "order": 3},
+	"the_mire": {"name": "The Mire", "swamp_index": 4, "drain_threshold": 0.5, "scene_path": "res://scenes/caves/the_mire.tscn", "order": 4},
+	"sunken_grotto": {"name": "Sunken Grotto", "swamp_index": 5, "drain_threshold": 0.5, "scene_path": "res://scenes/caves/sunken_grotto.tscn", "order": 5},
+	"the_cistern": {"name": "The Cistern", "swamp_index": 6, "drain_threshold": 0.5, "scene_path": "res://scenes/caves/the_cistern.tscn", "order": 6},
+	"coral_cavern": {"name": "Coral Cavern", "swamp_index": 7, "drain_threshold": 0.5, "scene_path": "res://scenes/caves/coral_cavern.tscn", "order": 7},
+	"the_underdark": {"name": "The Underdark", "swamp_index": 8, "drain_threshold": 0.5, "scene_path": "res://scenes/caves/the_underdark.tscn", "order": 8},
+	"mariana_trench": {"name": "Mariana Trench", "swamp_index": 9, "drain_threshold": 0.5, "scene_path": "res://scenes/caves/mariana_trench.tscn", "order": 9},
 }
 
 # Cave state
