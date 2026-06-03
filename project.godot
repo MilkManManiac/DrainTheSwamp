@@ -13,6 +13,7 @@ config/features=PackedStringArray("4.4", "GL Compatibility")
 [autoload]
 
 GameManager="*res://scripts/autoload/game_manager.gd"
+AudioManager="*res://scripts/autoload/audio_manager.gd"
 SaveManager="*res://scripts/autoload/save_manager.gd"
 SceneManager="*res://scripts/autoload/scene_manager.gd"
 TouchControls="*res://scripts/ui/touch_controls.gd"

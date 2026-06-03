@@ -8,6 +8,7 @@ signal tool_upgraded(tool_id: String, new_level: int)
 signal stat_upgraded(stat_id: String, new_level: int)
 signal stamina_changed(current: float, maximum: float)
 signal scoop_performed(swamp_index: int, gallons: float, money_earned: float)
+signal water_sold(amount: float)
 signal hose_state_changed(active: bool, time_remaining: float)
 signal swamp_completed(swamp_index: int, reward: float)
 signal water_carried_changed(current: float, capacity: float)
@@ -110,7 +111,7 @@ var stat_definitions: Dictionary = {
 	# --- Core Stats (cheap, QoL) ---
 	"carrying_capacity": {
 		"name": "Carrying Capacity",
-		"base_value": 1.0,
+		"base_value": 1.5,
 		"growth_rate": 1.18,
 		"scale": "exponential",
 		"base_cost": 10.0,
@@ -129,7 +130,7 @@ var stat_definitions: Dictionary = {
 	},
 	"stamina": {
 		"name": "Stamina",
-		"base_value": 5.0,
+		"base_value": 10.0,
 		"growth_rate": 1.15,
 		"scale": "exponential",
 		"base_cost": 10.0,
@@ -138,7 +139,7 @@ var stat_definitions: Dictionary = {
 	},
 	"stamina_regen": {
 		"name": "Stamina Regen",
-		"base_value": 0.8,
+		"base_value": 2.0,
 		"growth_rate": 1.15,
 		"scale": "exponential",
 		"base_cost": 12.0,
@@ -193,11 +194,13 @@ var stat_levels: Dictionary = {
 	"scoop_power": 0
 }
 
-var current_stamina: float = 5.0
+var current_stamina: float = 10.0
 
 # Carrying water inventory
 var water_carried: float = 0.0
 var last_scoop_swamp: int = 0
+# Actual gallons drained on the most recent successful manual scoop (for honest feedback popups)
+var last_scoop_gallons: float = 0.0
 
 # Hose state
 var hose_active: bool = false
@@ -387,7 +390,7 @@ func get_stat_value(stat_id: String) -> float:
 	if defn.get("scale", "linear") == "exponential":
 		value = defn["base_value"] * pow(defn["growth_rate"], stat_levels[stat_id])
 	else:
-		value = defn["base_value"] + defn["per_level"] * stat_levels[stat_id]
+		value = defn["base_value"] + defn.get("per_level", 0.0) * stat_levels[stat_id]
 	if defn.has("max_value"):
 		value = minf(value, defn["max_value"])
 	return value
@@ -398,7 +401,7 @@ func get_stat_value_at_level(stat_id: String, level: int) -> float:
 	if defn.get("scale", "linear") == "exponential":
 		value = defn["base_value"] * pow(defn["growth_rate"], level)
 	else:
-		value = defn["base_value"] + defn["per_level"] * level
+		value = defn["base_value"] + defn.get("per_level", 0.0) * level
 	if defn.has("max_value"):
 		value = minf(value, defn["max_value"])
 	return value
@@ -407,7 +410,7 @@ func get_money_multiplier() -> float:
 	return get_stat_value("water_value")
 
 func get_stamina_cost() -> float:
-	return 2.0
+	return 1.0
 
 func get_max_stamina() -> float:
 	return get_stat_value("stamina")
@@ -495,6 +498,7 @@ func try_scoop(swamp_index: int) -> bool:
 	if actual > 0.0:
 		water_carried += actual
 		last_scoop_swamp = swamp_index
+		last_scoop_gallons = actual
 		water_carried_changed.emit(water_carried, capacity)
 		scoop_performed.emit(swamp_index, actual, 0.0)
 	return actual > 0.0
@@ -510,6 +514,8 @@ func sell_water() -> float:
 	water_carried = 0.0
 	money_changed.emit(money)
 	water_carried_changed.emit(0.0, get_stat_value("carrying_capacity"))
+	if earned > 0.0:
+		water_sold.emit(earned)
 	return earned
 
 func is_inventory_full() -> bool:
@@ -726,6 +732,8 @@ func camel_sell_water(index: int) -> float:
 	money += earned
 	camel_states[index]["water_carried"] = 0.0
 	money_changed.emit(money)
+	if earned > 0.0:
+		water_sold.emit(earned)
 	return earned
 
 func _init_camel_states() -> void:
@@ -854,6 +862,7 @@ func try_scoop_cave_pool(cave_id: String, pool_index: int) -> bool:
 		# Use the associated overworld pool's money_per_gallon rate
 		var swamp_index: int = CAVE_DEFINITIONS[cave_id]["swamp_index"]
 		last_scoop_swamp = swamp_index
+		last_scoop_gallons = actual
 		water_carried_changed.emit(water_carried, capacity)
 		scoop_performed.emit(swamp_index, actual, 0.0)
 	return actual > 0.0

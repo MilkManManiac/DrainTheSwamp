@@ -68,6 +68,9 @@ func _ready() -> void:
 	_setup_lantern()
 
 func _unhandled_input(event: InputEvent) -> void:
+	# Dev cheats (F4/F5) only available in debug builds — never in Steam/app releases
+	if not OS.is_debug_build():
+		return
 	if event is InputEventKey and event.pressed and not event.echo:
 		match event.keycode:
 			KEY_F4:
@@ -297,10 +300,12 @@ func _handle_scoop() -> void:
 			_scoop_feedback()
 		elif GameManager.is_inventory_full():
 			_spawn_floating_text("FULL!", Color(1.0, 0.4, 0.3))
+			AudioManager.play_error()
 			scoop_cooldown_timer = SCOOP_COOLDOWN
 		elif GameManager.current_stamina < GameManager.get_stamina_cost():
 			_spawn_floating_text("No Stamina!", Color(1.0, 0.3, 0.3))
 			_flash_red()
+			AudioManager.play_error()
 			scoop_cooldown_timer = SCOOP_COOLDOWN
 		return
 	if near_shop:
@@ -344,8 +349,8 @@ func _scoop_feedback() -> void:
 	tool_tween.tween_property(tool_sprite, "rotation", -0.7, 0.08)
 	tool_tween.tween_property(tool_sprite, "rotation", 0.0, 0.12)
 
-	# Show gallons collected (blue)
-	var output: float = GameManager.get_tool_output(GameManager.current_tool_id)
+	# Show gallons actually collected (blue) — honest amount, not raw tool output
+	var output: float = GameManager.last_scoop_gallons
 	var gal_text: String
 	if output >= 10.0:
 		gal_text = "+%.1f gal" % output
