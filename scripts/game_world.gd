@@ -319,6 +319,18 @@ var distance_fog_rect: ColorRect = null
 var post_process_layer: CanvasLayer = null
 var post_process_rect: ColorRect = null
 var water_glow_lines: Array[Line2D] = []
+# R2 water: receding waterline + foam tide + ripples
+var water_foam_lines: Array[Line2D] = []          # lagging tide-line foam
+var water_back_buffer: BackBufferCopy = null      # under water, feeds refraction
+var _water_distort_tex: NoiseTexture2D = null     # shared seamless distortion
+var _pool_high_water_y: Array[float] = []         # highest (min screen-Y) line reached
+var _pool_cur_water_y: Array[float] = []          # current water surface Y
+var _pool_wet_fade: Array[float] = []             # 0 fresh -> 1 dried
+var _pool_foam_line_y: Array[float] = []          # lagging foam tide-line Y
+var _terrain_mat: ShaderMaterial = null           # terrain shader (for waterline)
+# Interactive ripples: each {pos:Vector2 (water-poly local), t, amp}
+var _ripples: Array = []
+const RIPPLE_MAX := 8
 
 # Parallax layers
 var parallax_bg: ParallaxBackground = null
@@ -450,6 +462,46 @@ const POOL_SHADER_PARAMS: Array[Array] = [
 	[2.0, 0.20, 1.4, 0.4, 1.6],    # Lagoon: tropical waves
 	[2.8, 0.06, 2.2, 0.9, 2.2],    # Bayou: wild, opaque
 	[3.5, 0.05, 2.5, 0.95, 2.5],   # The Atlantic: massive, deep
+]
+# Per-pool R2 water params: [beers, reflect_strength, opacity_floor, refraction_strength]
+# Early pools = clearer (lower beers, more reflection, more refraction);
+# late pools = tar-black (high beers, opaque, little refraction).
+const POOL_WATER_R2: Array[Array] = [
+	[2.2, 0.45, 0.40, 0.022],  # Puddle: clear-ish
+	[2.8, 0.40, 0.48, 0.020],  # Pond
+	[3.4, 0.34, 0.55, 0.016],  # Marsh
+	[4.2, 0.28, 0.62, 0.012],  # Bog
+	[4.6, 0.24, 0.66, 0.010],  # Swamp
+	[3.0, 0.40, 0.50, 0.020],  # Lake: clearer
+	[3.6, 0.30, 0.58, 0.014],  # Reservoir
+	[3.4, 0.34, 0.55, 0.016],  # Lagoon
+	[5.2, 0.20, 0.72, 0.008],  # Bayou: near tar
+	[5.6, 0.18, 0.76, 0.006],  # The Atlantic: deep dark
+]
+# Per-pool shallow/deep depth-tint colors (murky bayou palette)
+const POOL_SHALLOW_COLORS: Array[Color] = [
+	Color(0.18, 0.30, 0.26),  # Puddle: clear teal-green
+	Color(0.16, 0.26, 0.18),  # Pond
+	Color(0.16, 0.18, 0.11),  # Marsh: mud
+	Color(0.12, 0.13, 0.09),  # Bog
+	Color(0.13, 0.18, 0.12),  # Swamp
+	Color(0.16, 0.24, 0.28),  # Lake: clearer blue-green
+	Color(0.13, 0.17, 0.20),  # Reservoir
+	Color(0.14, 0.22, 0.21),  # Lagoon
+	Color(0.09, 0.11, 0.10),  # Bayou
+	Color(0.08, 0.11, 0.14),  # The Atlantic
+]
+const POOL_DEEP_COLORS: Array[Color] = [
+	Color(0.05, 0.12, 0.10),  # Puddle
+	Color(0.04, 0.09, 0.06),  # Pond
+	Color(0.05, 0.05, 0.03),  # Marsh
+	Color(0.02, 0.03, 0.02),  # Bog: near black
+	Color(0.03, 0.06, 0.04),  # Swamp
+	Color(0.04, 0.09, 0.13),  # Lake
+	Color(0.03, 0.06, 0.10),  # Reservoir
+	Color(0.03, 0.09, 0.10),  # Lagoon
+	Color(0.01, 0.02, 0.02),  # Bayou: tar
+	Color(0.01, 0.02, 0.05),  # The Atlantic: abyss
 ]
 # Per-pool foam colors
 const POOL_FOAM_COLORS: Array[Color] = [
@@ -877,6 +929,7 @@ func _build_terrain() -> void:
 	var terrain_mat := ShaderMaterial.new()
 	terrain_mat.shader = TERRAIN_SHADER
 	terrain_polygon.material = terrain_mat
+	_terrain_mat = terrain_mat
 	add_child(terrain_polygon)
 
 	# Mid soil layer
@@ -3055,6 +3108,38 @@ func _build_water() -> void:
 	water_polygons.clear()
 	water_surface_lines.clear()
 	water_glow_lines.clear()
+	water_foam_lines.clear()
+	# Per-pool waterline tracking
+	_pool_high_water_y.clear()
+	_pool_cur_water_y.clear()
+	_pool_wet_fade.clear()
+	_pool_foam_line_y.clear()
+	_ripples.clear()
+	for _i in range(SWAMP_COUNT):
+		_pool_high_water_y.append(-100000.0)
+		_pool_cur_water_y.append(-100000.0)
+		_pool_wet_fade.append(1.0)
+		_pool_foam_line_y.append(-100000.0)
+
+	# Shared seamless distortion texture for screen-space refraction.
+	_water_distort_tex = NoiseTexture2D.new()
+	_water_distort_tex.seamless = true
+	_water_distort_tex.width = 128
+	_water_distort_tex.height = 128
+	var fnl := FastNoiseLite.new()
+	fnl.noise_type = FastNoiseLite.TYPE_SIMPLEX_SMOOTH
+	fnl.frequency = 0.04
+	_water_distort_tex.noise = fnl
+
+	# BackBufferCopy sits just under the water polygons (z below 2) so the back
+	# buffer holds the underwater terrain content for refraction sampling.
+	# NOTE: post_process_rect lives on CanvasLayer 100 and remains the last
+	# screen reader; this copy only affects in-tree screen samples beneath it.
+	water_back_buffer = BackBufferCopy.new()
+	water_back_buffer.copy_mode = BackBufferCopy.COPY_MODE_VIEWPORT
+	water_back_buffer.z_index = 1
+	add_child(water_back_buffer)
+
 	for i in range(SWAMP_COUNT):
 		var wp := Polygon2D.new()
 		wp.color = SWAMP_WATER_COLORS[i]
@@ -3066,6 +3151,18 @@ func _build_water() -> void:
 		wmat.set_shader_parameter("choppiness", POOL_SHADER_PARAMS[i][2])
 		wmat.set_shader_parameter("turbidity", POOL_SHADER_PARAMS[i][3])
 		wmat.set_shader_parameter("foam_density", POOL_SHADER_PARAMS[i][4])
+		# R2 murky-bayou params
+		wmat.set_shader_parameter("beers", POOL_WATER_R2[i][0])
+		wmat.set_shader_parameter("reflect_strength", POOL_WATER_R2[i][1])
+		wmat.set_shader_parameter("opacity_floor", POOL_WATER_R2[i][2])
+		wmat.set_shader_parameter("shallow_color", POOL_SHALLOW_COLORS[i])
+		wmat.set_shader_parameter("deep_color", POOL_DEEP_COLORS[i])
+		wmat.set_shader_parameter("foam_color", POOL_FOAM_COLORS[i])
+		wmat.set_shader_parameter("sky_color", Vector3(0.55, 0.62, 0.45))
+		# Screen-space refraction (opt-in; overworld pools get it)
+		wmat.set_shader_parameter("use_refraction", true)
+		wmat.set_shader_parameter("refraction_strength", POOL_WATER_R2[i][3])
+		wmat.set_shader_parameter("distort_tex", _water_distort_tex)
 		wp.material = wmat
 		add_child(wp)
 		water_polygons.append(wp)
@@ -3088,6 +3185,17 @@ func _build_water() -> void:
 		glow.material = glow_mat
 		add_child(glow)
 		water_glow_lines.append(glow)
+
+		# Lagging foam tide-line (brightens when it lags behind the dropping water)
+		var foam_line := Line2D.new()
+		foam_line.width = 2.5
+		foam_line.default_color = Color(POOL_FOAM_COLORS[i].r, POOL_FOAM_COLORS[i].g, POOL_FOAM_COLORS[i].b, 0.0)
+		foam_line.z_index = 3
+		var foam_mat := CanvasItemMaterial.new()
+		foam_mat.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
+		foam_line.material = foam_mat
+		add_child(foam_line)
+		water_foam_lines.append(foam_line)
 
 		_update_water_polygon(i)
 
@@ -3135,6 +3243,19 @@ func _update_water_polygon(swamp_index: int) -> void:
 	water_polygons[swamp_index].polygon = points
 	water_polygons[swamp_index].uv = uvs
 
+	# --- Receding waterline tracking ---
+	var prev_y: float = _pool_cur_water_y[swamp_index]
+	_pool_cur_water_y[swamp_index] = water_y
+	# high_water_y = the highest line ever reached (smallest screen-Y).
+	if _pool_high_water_y[swamp_index] < -90000.0 or water_y < _pool_high_water_y[swamp_index]:
+		_pool_high_water_y[swamp_index] = water_y
+	# If the water dropped (water_y increased = lower on screen), freshly expose the bank.
+	if prev_y > -90000.0 and water_y > prev_y + 0.5:
+		_pool_wet_fade[swamp_index] = 0.0
+	# Init the lagging foam line to the surface on first build.
+	if _pool_foam_line_y[swamp_index] < -90000.0:
+		_pool_foam_line_y[swamp_index] = water_y
+
 	# Tint water based on fill using per-pool colors
 	var col: Color = SWAMP_WATER_COLORS[swamp_index].lerp(SWAMP_WATER_EMPTY_COLORS[swamp_index], 1.0 - fill)
 	water_polygons[swamp_index].color = col
@@ -3163,6 +3284,114 @@ func _update_water_surface_line(swamp_index: int, left_x: float, right_x: float,
 			var gpx: float = lerpf(left_x, right_x, gt)
 			var gwave: float = sin(wave_time * 1.5 + gpx * 0.12) * 2.0
 			glow.add_point(Vector2(gpx, water_y + gwave))
+
+func _push_terrain_waterline(swamp_index: int) -> void:
+	if _terrain_mat == null:
+		return
+	_terrain_mat.set_shader_parameter("cur_water_y", _pool_cur_water_y[swamp_index])
+	_terrain_mat.set_shader_parameter("high_water_y", _pool_high_water_y[swamp_index])
+	_terrain_mat.set_shader_parameter("wet_fade", _pool_wet_fade[swamp_index])
+
+func _spawn_bank_drips(swamp_index: int, from_y: float, to_y: float) -> void:
+	# A few short downward drips on the freshly-exposed bank, alpha-fading.
+	var geo: Dictionary = _get_swamp_geometry(swamp_index)
+	var left_x: float = geo["basin_left"].x
+	var right_x: float = geo["basin_right"].x
+	var foam_col: Color = POOL_FOAM_COLORS[swamp_index]
+	for _j in range(randi_range(3, 5)):
+		var dx: float = randf_range(left_x + 6, right_x - 6)
+		var start_y: float = randf_range(minf(from_y, to_y), maxf(from_y, to_y))
+		var drip := Line2D.new()
+		drip.width = 1.5
+		drip.default_color = Color(foam_col.r + 0.2, foam_col.g + 0.2, foam_col.b + 0.2, 0.7)
+		drip.z_index = 4
+		drip.add_point(Vector2(dx, start_y))
+		drip.add_point(Vector2(dx, start_y + 1))
+		add_child(drip)
+		var fall: float = randf_range(5, 12)
+		var tw := create_tween()
+		tw.set_parallel(true)
+		tw.tween_method(func(p): drip.set_point_position(1, Vector2(dx, start_y + p)), 1.0, fall, randf_range(0.3, 0.55))
+		tw.tween_property(drip, "modulate:a", 0.0, randf_range(0.4, 0.6))
+		tw.set_parallel(false)
+		tw.tween_callback(drip.queue_free)
+
+# --- R2 interactive ripples ---
+func _spawn_water_ripple(swamp_index: int, world_x: float) -> void:
+	if swamp_index < 0 or swamp_index >= SWAMP_COUNT:
+		return
+	if swamp_index >= water_polygons.size():
+		return
+	var wp: Polygon2D = water_polygons[swamp_index]
+	var surf_y: float = _pool_cur_water_y[swamp_index]
+	if surf_y < -90000.0:
+		return
+	# Convert the world point to the water polygon's local space.
+	var local_pt: Vector2 = wp.to_local(Vector2(world_x, surf_y))
+	_ripples.append({"swamp": swamp_index, "pos": local_pt, "t": 0.0, "amp": 1.0})
+	# Keep only the most recent ripples overall.
+	while _ripples.size() > RIPPLE_MAX * 2:
+		_ripples.pop_front()
+
+func _update_ripples(delta: float) -> void:
+	var kept: Array = []
+	for r in _ripples:
+		r["t"] += delta
+		if r["t"] <= 2.5:
+			kept.append(r)
+	_ripples = kept
+
+func _feed_ripples(wmat: ShaderMaterial, swamp_index: int) -> void:
+	var pos_arr: Array[Vector2] = []
+	var t_arr: Array[float] = []
+	var amp_arr: Array[float] = []
+	for r in _ripples:
+		if r["swamp"] != swamp_index:
+			continue
+		if pos_arr.size() >= RIPPLE_MAX:
+			break
+		pos_arr.append(r["pos"])
+		t_arr.append(r["t"])
+		amp_arr.append(r["amp"])
+	# Pad to fixed size; inactive entries use t < 0.
+	while pos_arr.size() < RIPPLE_MAX:
+		pos_arr.append(Vector2.ZERO)
+		t_arr.append(-1.0)
+		amp_arr.append(0.0)
+	wmat.set_shader_parameter("ripple_pos", pos_arr)
+	wmat.set_shader_parameter("ripple_t", t_arr)
+	wmat.set_shader_parameter("ripple_amp", amp_arr)
+
+func _update_foam_tide_line(swamp_index: int, delta: float) -> void:
+	if swamp_index >= water_foam_lines.size():
+		return
+	var foam: Line2D = water_foam_lines[swamp_index]
+	var water_y: float = _pool_cur_water_y[swamp_index]
+	if water_y < -90000.0:
+		foam.clear_points()
+		return
+	# Foam line lerps toward the water surface slower than the water drops,
+	# so it lags behind and reads as "draining".
+	var prev_foam_y: float = _pool_foam_line_y[swamp_index]
+	_pool_foam_line_y[swamp_index] = lerpf(prev_foam_y, water_y, clampf(delta * 2.0, 0.0, 1.0))
+	var foam_y: float = _pool_foam_line_y[swamp_index]
+	# Brighten by how far the foam lags behind the actual surface.
+	var lag: float = clampf(absf(foam_y - water_y) / 12.0, 0.0, 1.0)
+	var base_col: Color = POOL_FOAM_COLORS[swamp_index]
+	foam.default_color = Color(base_col.r + 0.15, base_col.g + 0.15, base_col.b + 0.15, 0.18 + lag * 0.55)
+	# Reuse the surface span from the live water surface line.
+	var sline: Line2D = water_surface_lines[swamp_index]
+	foam.clear_points()
+	if sline.get_point_count() < 2:
+		return
+	var lx: float = sline.get_point_position(0).x
+	var rx: float = sline.get_point_position(sline.get_point_count() - 1).x
+	var segs: int = maxi(int((rx - lx) / 6.0), 4)
+	for i in range(segs + 1):
+		var t: float = float(i) / float(segs)
+		var px: float = lerpf(lx, rx, t)
+		var wob: float = sin(wave_time * 2.4 + px * 0.18) * (0.6 + lag * 1.4)
+		foam.add_point(Vector2(px, foam_y + wob))
 
 func _lerp_x_at_y(p1: Vector2, p2: Vector2, target_y: float) -> float:
 	if absf(p2.y - p1.y) < 0.001:
@@ -4238,7 +4467,14 @@ func _spawn_camel_sell_text(x: float, y: float, earned: float) -> void:
 
 func _on_water_level_changed(swamp_index: int, _percent: float) -> void:
 	if swamp_index >= 0 and swamp_index < SWAMP_COUNT:
+		var prev_water_y: float = _pool_cur_water_y[swamp_index]
 		_update_water_polygon(swamp_index)
+		# Feed the freshly-exposed waterline into the terrain shader.
+		_push_terrain_waterline(swamp_index)
+		# Drips on a fast level drop (water dropped a noticeable amount).
+		var new_water_y: float = _pool_cur_water_y[swamp_index]
+		if prev_water_y > -90000.0 and new_water_y - prev_water_y > 2.0:
+			_spawn_bank_drips(swamp_index, prev_water_y, new_water_y)
 		_update_water_walls(swamp_index)
 		_update_depth_gradient(swamp_index)
 		_update_mud_visibility()
@@ -4902,6 +5138,8 @@ func _on_scoop_performed(swamp_index: int, gallons: float, _money: float) -> voi
 	# Splash particles at water surface
 	var water_y: float = _get_pool_water_y(swamp_index) if swamp_index >= 0 and swamp_index < SWAMP_COUNT else py
 	_spawn_scoop_splash(px, water_y, gallons)
+	# R2: spawn an interactive ripple at the player's x on this pool's surface.
+	_spawn_water_ripple(swamp_index, px)
 	# Scoop impact juice: camera nudge for bigger scoops
 	if gallons > 0.01:
 		_screen_shake(clampf(gallons * 0.3, 0.5, 2.0), 0.08)
@@ -5448,6 +5686,14 @@ func _process(delta: float) -> void:
 				var base_wave: float = POOL_SHADER_PARAMS[wi][0]
 				wmat.set_shader_parameter("choppiness", base_chop + drain_f * 1.5)
 				wmat.set_shader_parameter("wave_strength", base_wave + drain_f * 0.8)
+				# Pack this pool's active ripples into the shader arrays.
+				_feed_ripples(wmat, wi)
+	# --- R2: age ripples, decay wet_fade, update lagging foam tide-line ---
+	_update_ripples(delta)
+	for si2 in range(SWAMP_COUNT):
+		if _pool_wet_fade[si2] < 1.0:
+			_pool_wet_fade[si2] = minf(_pool_wet_fade[si2] + delta * 0.12, 1.0)
+		_update_foam_tide_line(si2, delta)
 	# World progression: drain progress (used by multiple systems)
 	var total_drained: float = 0.0
 	var total_capacity: float = 0.0

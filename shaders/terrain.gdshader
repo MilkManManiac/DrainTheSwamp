@@ -4,6 +4,16 @@ uniform float noise_scale : hint_range(0.5, 4.0) = 1.5;
 uniform float noise_strength : hint_range(0.0, 0.15) = 0.06;
 uniform float striation_strength : hint_range(0.0, 0.1) = 0.03;
 
+// --- Receding waterline (R2) ---
+// World-Y of the highest/most-recent water line (min screen-Y the water reached)
+uniform float high_water_y = -100000.0;
+// World-Y of the current water surface
+uniform float cur_water_y = -100000.0;
+// 0 = freshly exposed (wet/dark/glossy), 1 = fully dried out
+uniform float wet_fade : hint_range(0.0, 1.0) = 1.0;
+
+varying vec2 world_pos;
+
 // Simple hash-based noise
 float hash(vec2 p) {
 	vec3 p3 = fract(vec3(p.xyx) * vec3(0.1031, 0.1030, 0.0973));
@@ -22,6 +32,10 @@ float noise(vec2 p) {
 	return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
 }
 
+void vertex() {
+	world_pos = (MODEL_MATRIX * vec4(VERTEX, 0.0, 1.0)).xy;
+}
+
 void fragment() {
 	vec4 col = COLOR;
 
@@ -34,6 +48,27 @@ void fragment() {
 	float stria = sin(FRAGCOORD.y * 0.8) * 0.5 + 0.5;
 	stria *= noise(vec2(FRAGCOORD.y * 0.3, 0.0));
 	col.rgb -= stria * striation_strength;
+
+	// --- Receding waterline wet band ---
+	// Band lives between the current water surface (cur_water_y) and the
+	// highest line the water ever reached (high_water_y). Larger world-Y = lower.
+	if (cur_water_y > -90000.0 && high_water_y > -90000.0) {
+		// In the wet band when y is above current water AND below the old high line.
+		float in_band = step(cur_water_y - 1.0, world_pos.y) * step(world_pos.y, high_water_y + 1.0);
+		// Freshly-exposed strength: strongest right at the current waterline,
+		// fading upward toward the old high line, and globally drying via wet_fade.
+		float depth_into_band = clamp((world_pos.y - cur_water_y) / max(high_water_y - cur_water_y, 1.0), 0.0, 1.0);
+		float band_falloff = 1.0 - depth_into_band;            // 1 near surface, 0 at old line
+		float wetness = in_band * band_falloff * (1.0 - wet_fade);
+		// Darken + saturate the wet mud
+		vec3 wet = col.rgb * 0.55;
+		wet = mix(vec3(dot(wet, vec3(0.299, 0.587, 0.114))), wet, 1.4); // boost saturation
+		col.rgb = mix(col.rgb, wet, wetness * 0.85);
+
+		// Thin glossy sheen right at the current waterline
+		float sheen = smoothstep(3.0, 0.0, abs(world_pos.y - cur_water_y)) * (1.0 - wet_fade);
+		col.rgb += vec3(0.10, 0.12, 0.10) * sheen;
+	}
 
 	COLOR = col;
 }
