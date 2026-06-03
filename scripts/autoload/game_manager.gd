@@ -154,7 +154,7 @@ var stat_definitions: Dictionary = {
 		"scale": "exponential",
 		"base_cost": 50.0,
 		"cost_exponent": 1.45,
-		"max_value": 15.0,
+		"max_value": 50.0,
 		"format": "multiplier"
 	},
 	"scoop_power": {
@@ -164,7 +164,7 @@ var stat_definitions: Dictionary = {
 		"scale": "exponential",
 		"base_cost": 35.0,
 		"cost_exponent": 1.40,
-		"max_value": 10.0,
+		"max_value": 40.0,
 		"format": "multiplier"
 	}
 }
@@ -375,7 +375,7 @@ func get_total_water_percent() -> float:
 func get_tool_output(tool_id: String) -> float:
 	var base: float = tool_definitions[tool_id]["base_output"]
 	var level: int = tools_owned[tool_id]["level"]
-	var raw: float = base * pow(1.15, level)
+	var raw: float = base * pow(1.20, level)
 	# Apply scoop power multiplier for manual tools
 	if tool_definitions[tool_id]["type"] == "manual":
 		raw *= get_stat_value("scoop_power")
@@ -406,6 +406,16 @@ func get_stat_value_at_level(stat_id: String, level: int) -> float:
 		value = minf(value, defn["max_value"])
 	return value
 
+func get_carrying_capacity() -> float:
+	var base: float = get_stat_value("carrying_capacity")
+	# Floor: always hold a few scoops of the current tool, so big tools never
+	# force single-scoop sell trips. (Also the canonical capacity accessor —
+	# previously called but undefined, which crashed on the first carry-walk.)
+	var tid: String = current_tool_id
+	if tool_definitions.has(tid) and tool_definitions[tid]["type"] == "manual":
+		return maxf(base, get_tool_output(tid) * 4.0)
+	return base
+
 func get_money_multiplier() -> float:
 	return get_stat_value("water_value")
 
@@ -426,7 +436,7 @@ func get_tool_upgrade_cost(tool_id: String) -> float:
 	if base_cost == 0.0:
 		base_cost = 10.0
 	var level: int = tools_owned[tool_id]["level"]
-	return base_cost * pow(1.3, level)
+	return base_cost * pow(1.20, level)
 
 func get_stat_upgrade_cost(stat_id: String) -> float:
 	var defn: Dictionary = stat_definitions[stat_id]
@@ -483,7 +493,7 @@ func try_scoop(swamp_index: int) -> bool:
 	if tool_definitions[current_tool_id]["type"] == "semi_auto":
 		return false
 
-	var capacity: float = get_stat_value("carrying_capacity")
+	var capacity: float = get_carrying_capacity()
 	var remaining_space: float = capacity - water_carried
 	if remaining_space <= 0.001:
 		return false
@@ -513,13 +523,13 @@ func sell_water() -> float:
 	money += earned
 	water_carried = 0.0
 	money_changed.emit(money)
-	water_carried_changed.emit(0.0, get_stat_value("carrying_capacity"))
+	water_carried_changed.emit(0.0, get_carrying_capacity())
 	if earned > 0.0:
 		water_sold.emit(earned)
 	return earned
 
 func is_inventory_full() -> bool:
-	var capacity: float = get_stat_value("carrying_capacity")
+	var capacity: float = get_carrying_capacity()
 	return water_carried >= capacity - 0.0001
 
 func try_activate_hose(swamp_index: int) -> bool:
@@ -717,7 +727,7 @@ func camel_take_water(index: int) -> void:
 	camel_states[index]["water_carried"] = take_amount
 	camel_states[index]["source_swamp"] = last_scoop_swamp
 	water_carried -= take_amount
-	water_carried_changed.emit(water_carried, get_stat_value("carrying_capacity"))
+	water_carried_changed.emit(water_carried, get_carrying_capacity())
 
 func camel_sell_water(index: int) -> float:
 	if index < 0 or index >= camel_states.size():
@@ -845,7 +855,7 @@ func try_scoop_cave_pool(cave_id: String, pool_index: int) -> bool:
 	if tool_definitions[current_tool_id]["type"] == "semi_auto":
 		return false
 
-	var capacity: float = get_stat_value("carrying_capacity")
+	var capacity: float = get_carrying_capacity()
 	var remaining_space: float = capacity - water_carried
 	if remaining_space <= 0.001:
 		return false
@@ -930,7 +940,7 @@ func reset_game() -> void:
 	stamina_changed.emit(current_stamina, get_max_stamina())
 	tool_changed.emit(tool_definitions[current_tool_id])
 	hose_state_changed.emit(false, 0.0)
-	water_carried_changed.emit(0.0, get_stat_value("carrying_capacity"))
+	water_carried_changed.emit(0.0, get_carrying_capacity())
 	camel_changed.emit()
 	upgrade_changed.emit()
 	day_changed.emit(current_day)
@@ -959,7 +969,7 @@ func _process(delta: float) -> void:
 					hose_swamp_index = -1
 					hose_state_changed.emit(false, 0.0)
 				else:
-					var capacity: float = get_stat_value("carrying_capacity")
+					var capacity: float = get_carrying_capacity()
 					var remaining_space: float = capacity - water_carried
 					if remaining_space <= 0.001:
 						hose_active = false
@@ -1104,6 +1114,6 @@ func load_save_data(data: Dictionary) -> void:
 		water_level_changed.emit(i, get_swamp_water_percent(i))
 	stamina_changed.emit(current_stamina, get_max_stamina())
 	tool_changed.emit(tool_definitions[current_tool_id])
-	water_carried_changed.emit(water_carried, get_stat_value("carrying_capacity"))
+	water_carried_changed.emit(water_carried, get_carrying_capacity())
 	camel_changed.emit()
 	upgrade_changed.emit()

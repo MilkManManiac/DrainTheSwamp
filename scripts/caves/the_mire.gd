@@ -56,12 +56,21 @@ func _init() -> void:
 		{
 			"x_range": [450.0, 800.0],
 			"pool_index": 0,
-			"loot_data": {},
+			"loot_data": {
+				"loot_id": "the_mire_pool_0",
+				"reward_money": 6000000.0,
+				"reward_text": "A shell company's slush fund, sealed in a waterproof case marked 'Swamp Friends LLC.'",
+			},
 		},
 		{
 			"x_range": [1200.0, 1600.0],
 			"pool_index": 1,
-			"loot_data": {},
+			"loot_data": {
+				"loot_id": "the_mire_pool_1",
+				"reward_money": 9000000.0,
+				"reward_text": "47 politicians' buried bribes — and an industrial dredge they used to bury them.",
+				"reward_stat_levels": {"scoop_power": 3},
+			},
 		},
 	]
 

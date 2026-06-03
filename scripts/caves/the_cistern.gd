@@ -66,17 +66,30 @@ func _init() -> void:
 		{
 			"x_range": [340.0, 660.0],
 			"pool_index": 0,
-			"loot_data": {},
+			"loot_data": {
+				"loot_id": "the_cistern_pool_0",
+				"reward_money": 1500000000.0,
+				"reward_text": "Cayman wire transfers, printed and laminated — the 'swamp stuff' the bank begged them to relabel.",
+			},
 		},
 		{
 			"x_range": [940.0, 1260.0],
 			"pool_index": 1,
-			"loot_data": {},
+			"loot_data": {
+				"loot_id": "the_cistern_pool_1",
+				"reward_money": 2000000000.0,
+				"reward_text": "The Goodwell Clean Government Fund — 'donations' that flowed straight into a personal account.",
+			},
 		},
 		{
 			"x_range": [1650.0, 2010.0],
 			"pool_index": 2,
-			"loot_data": {},
+			"loot_data": {
+				"loot_id": "the_cistern_pool_2",
+				"reward_money": 2500000000.0,
+				"reward_text": "Senator Swampsworth's 'personal savings' — and a reinforced scoop forged to move it fast.",
+				"reward_stat_levels": {"scoop_power": 4},
+			},
 		},
 	]
 

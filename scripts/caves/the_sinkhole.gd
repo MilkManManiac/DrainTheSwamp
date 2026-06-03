@@ -54,12 +54,21 @@ func _init() -> void:
 		{
 			"x_range": [300.0, 600.0],
 			"pool_index": 0,
-			"loot_data": {},
+			"loot_data": {
+				"loot_id": "the_sinkhole_pool_0",
+				"reward_money": 12000.0,
+				"reward_text": "A briefcase of unmarked bills, swallowed by the sinkhole along with whoever was carrying it.",
+			},
 		},
 		{
 			"x_range": [900.0, 1220.0],
 			"pool_index": 1,
-			"loot_data": {},
+			"loot_data": {
+				"loot_id": "the_sinkhole_pool_1",
+				"reward_money": 18000.0,
+				"reward_text": "A buried strongbox of hush money — and a sturdier scoop someone dropped trying to hide it.",
+				"reward_stat_levels": {"scoop_power": 2},
+			},
 		},
 	]
 

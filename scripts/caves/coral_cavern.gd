@@ -66,17 +66,30 @@ func _init() -> void:
 		{
 			"x_range": [370.0, 750.0],
 			"pool_index": 0,
-			"loot_data": {},
+			"loot_data": {
+				"loot_id": "coral_cavern_pool_0",
+				"reward_money": 30000000000.0,
+				"reward_text": "Blackmail payouts crusted in coral — the price of keeping a dozen senators 'cooperative.'",
+			},
 		},
 		{
 			"x_range": [1080.0, 1470.0],
 			"pool_index": 1,
-			"loot_data": {},
+			"loot_data": {
+				"loot_id": "coral_cavern_pool_1",
+				"reward_money": 40000000000.0,
+				"reward_text": "A very nervous Vice President's go-bag, still zipped, still full, never claimed.",
+			},
 		},
 		{
 			"x_range": [1880.0, 2240.0],
 			"pool_index": 2,
-			"loot_data": {},
+			"loot_data": {
+				"loot_id": "coral_cavern_pool_2",
+				"reward_money": 50000000000.0,
+				"reward_text": "The Consultant's secret retainer — paid by both sides — beside a refinery that purifies every haul.",
+				"reward_stat_levels": {"water_value": 4},
+			},
 		},
 	]
 

@@ -49,7 +49,11 @@ func _init() -> void:
 		{
 			"x_range": [560.0, 800.0],
 			"pool_index": 0,
-			"loot_data": {},
+			"loot_data": {
+				"loot_id": "muddy_hollow_pool_0",
+				"reward_money": 75.0,
+				"reward_text": "A soggy envelope of petty cash. Someone's lunch fund, abandoned in the muck.",
+			},
 		},
 	]
 

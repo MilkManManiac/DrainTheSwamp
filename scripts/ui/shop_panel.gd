@@ -493,7 +493,7 @@ func _get_tool_tooltip(tid: String, defn: Dictionary, owned_data: Dictionary) ->
 		else:
 			tip += "\nOutput: %.4f gal/scoop" % cur_output
 
-		var next_output: float = defn["base_output"] * pow(1.15, level + 1)
+		var next_output: float = defn["base_output"] * pow(1.20, level + 1)
 		if defn["type"] == "manual":
 			next_output *= GameManager.get_stat_value("scoop_power")
 		var gain_pct: float = (next_output / cur_output - 1.0) * 100.0

@@ -4545,6 +4545,7 @@ func _on_shop_body_entered(body: Node2D) -> void:
 		var earned: float = GameManager.sell_water()
 		if earned > 0.01 and body.has_method("show_floating_text"):
 			body.show_floating_text("+%s" % Economy.format_money(earned), Color(1.0, 0.85, 0.2))
+			_spawn_coin_fly(body.global_position, _coin_count_for(earned))
 
 func _on_shop_body_exited(body: Node2D) -> void:
 	if body is CharacterBody2D and body.has_method("set_near_shop"):
@@ -4670,19 +4671,25 @@ func _flash_lightning() -> void:
 		lightning_rect.color.a = 0.5
 
 # --- Coin Fly (Phase 16c) ---
-func _spawn_coin_fly(from_pos: Vector2) -> void:
-	for i in range(3):
+# Coin count scales with the size of the sale so a big payout feels big.
+func _coin_count_for(earned: float) -> int:
+	return clampi(3 + int(log(maxf(earned, 1.0)) / log(10.0)) * 2, 3, 16)
+
+func _spawn_coin_fly(from_pos: Vector2, count: int = 3) -> void:
+	for i in range(count):
 		var coin := ColorRect.new()
 		coin.size = Vector2(2, 2)
 		coin.color = Color(1.0, 0.85, 0.2, 0.9)
-		coin.position = from_pos + Vector2(randf_range(-4, 4), randf_range(-8, -4))
+		coin.position = from_pos + Vector2(randf_range(-5, 5), randf_range(-10, -2))
 		coin.z_index = 12
 		add_child(coin)
-		# Fly upward and to the left (toward HUD corner)
-		var target: Vector2 = Vector2(from_pos.x - 40 + randf_range(-20, 20), from_pos.y - 60)
+		# Pop outward, then arc up-left toward the HUD money counter.
+		var mid: Vector2 = coin.position + Vector2(randf_range(-16, 16), randf_range(-20, -8))
+		var target: Vector2 = Vector2(from_pos.x - 50 + randf_range(-16, 16), from_pos.y - 64)
 		var tw := create_tween()
-		tw.tween_property(coin, "position", target, 0.5 + randf_range(0, 0.2))
-		tw.parallel().tween_property(coin, "modulate:a", 0.0, 0.6)
+		tw.tween_property(coin, "position", mid, 0.18).set_ease(Tween.EASE_OUT)
+		tw.tween_property(coin, "position", target, 0.4 + randf_range(0, 0.15)).set_ease(Tween.EASE_IN)
+		tw.parallel().tween_property(coin, "modulate:a", 0.0, 0.55)
 		tw.tween_callback(coin.queue_free)
 
 # --- Screen Effects (Phase 7) ---
@@ -5212,7 +5219,7 @@ func _process(delta: float) -> void:
 		var earned: float = GameManager.sell_water()
 		if earned > 0.01 and shop_player_ref.has_method("show_floating_text"):
 			shop_player_ref.show_floating_text("+%s" % Economy.format_money(earned), Color(1.0, 0.85, 0.2))
-			_spawn_coin_fly(shop_player_ref.global_position)
+			_spawn_coin_fly(shop_player_ref.global_position, _coin_count_for(earned))
 
 	# Update camels
 	if GameManager.camel_count > 0:

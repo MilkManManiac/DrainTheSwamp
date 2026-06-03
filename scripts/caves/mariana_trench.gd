@@ -68,17 +68,30 @@ func _init() -> void:
 		{
 			"x_range": [420.0, 890.0],
 			"pool_index": 0,
-			"loot_data": {},
+			"loot_data": {
+				"loot_id": "mariana_trench_pool_0",
+				"reward_money": 22500000000000.0,
+				"reward_text": "The deepest account of all — every flight, every favor, converted to cold hard cash.",
+			},
 		},
 		{
 			"x_range": [1360.0, 1790.0],
 			"pool_index": 1,
-			"loot_data": {},
+			"loot_data": {
+				"loot_id": "mariana_trench_pool_1",
+				"reward_money": 30000000000000.0,
+				"reward_text": "Both parties' shared war chest, sunk so deep they were sure the Atlantic would keep it.",
+			},
 		},
 		{
 			"x_range": [2260.0, 2700.0],
 			"pool_index": 2,
-			"loot_data": {},
+			"loot_data": {
+				"loot_id": "mariana_trench_pool_2",
+				"reward_money": 37500000000000.0,
+				"reward_text": "The Guest List's true price, and an abyssal still that distills maximum value from the very last drop.",
+				"reward_stat_levels": {"water_value": 5},
+			},
 		},
 	]
 

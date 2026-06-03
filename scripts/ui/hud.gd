@@ -40,7 +40,7 @@ func _ready() -> void:
 	_update_water_label()
 	_update_tool_label()
 	_on_stamina_changed(GameManager.current_stamina, GameManager.get_max_stamina())
-	_on_water_carried_changed(GameManager.water_carried, GameManager.get_stat_value("carrying_capacity"))
+	_on_water_carried_changed(GameManager.water_carried, GameManager.get_carrying_capacity())
 	hose_label.visible = false
 	_update_day_label()
 
@@ -121,7 +121,7 @@ func _on_hose_state_changed(active: bool, time_remaining: float) -> void:
 
 func _on_stat_upgraded(_stat_id: String, _new_level: int) -> void:
 	_update_tool_label()
-	_on_water_carried_changed(GameManager.water_carried, GameManager.get_stat_value("carrying_capacity"))
+	_on_water_carried_changed(GameManager.water_carried, GameManager.get_carrying_capacity())
 
 func _on_water_carried_changed(current: float, capacity: float) -> void:
 	if capacity >= 10.0:

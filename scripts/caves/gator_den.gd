@@ -48,7 +48,11 @@ func _init() -> void:
 		{
 			"x_range": [600.0, 900.0],
 			"pool_index": 0,
-			"loot_data": {},
+			"loot_data": {
+				"loot_id": "gator_den_pool_0",
+				"reward_money": 1500.0,
+				"reward_text": "A waterproof bag of donor cash, gnawed at the corners. The gators couldn't spend it, but you can.",
+			},
 		},
 	]
 

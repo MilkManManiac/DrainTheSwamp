@@ -57,12 +57,21 @@ func _init() -> void:
 		{
 			"x_range": [460.0, 850.0],
 			"pool_index": 0,
-			"loot_data": {},
+			"loot_data": {
+				"loot_id": "sunken_grotto_pool_0",
+				"reward_money": 120000000.0,
+				"reward_text": "Operation Wet Blanket's black-budget cash, stashed where no auditor would ever wade.",
+			},
 		},
 		{
 			"x_range": [1310.0, 1740.0],
 			"pool_index": 1,
-			"loot_data": {},
+			"loot_data": {
+				"loot_id": "sunken_grotto_pool_1",
+				"reward_money": 180000000.0,
+				"reward_text": "A 'protected wetland' bribe fund — plus a filtration rig that wrings extra worth from every drop.",
+				"reward_stat_levels": {"water_value": 3},
+			},
 		},
 	]
 

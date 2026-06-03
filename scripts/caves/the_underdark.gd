@@ -65,17 +65,30 @@ func _init() -> void:
 		{
 			"x_range": [400.0, 820.0],
 			"pool_index": 0,
-			"loot_data": {},
+			"loot_data": {
+				"loot_id": "the_underdark_pool_0",
+				"reward_money": 600000000000.0,
+				"reward_text": "The emergency meeting's emergency fund — drawn up the night they realized you'd reached the bayou.",
+			},
 		},
 		{
 			"x_range": [1170.0, 1610.0],
 			"pool_index": 1,
-			"loot_data": {},
+			"loot_data": {
+				"loot_id": "the_underdark_pool_1",
+				"reward_money": 800000000000.0,
+				"reward_text": "Mayor Kickback's namesake stash, hidden so deep even he forgot the permit he never issued.",
+			},
 		},
 		{
 			"x_range": [1940.0, 2380.0],
 			"pool_index": 2,
-			"loot_data": {},
+			"loot_data": {
+				"loot_id": "the_underdark_pool_2",
+				"reward_money": 1000000000000.0,
+				"reward_text": "An ancient warlord-grade scoop beside a hoard so vast it predates the swamp's first lie.",
+				"reward_stat_levels": {"scoop_power": 5},
+			},
 		},
 	]
 

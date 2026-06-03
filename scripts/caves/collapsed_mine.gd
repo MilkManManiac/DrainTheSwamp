@@ -55,12 +55,21 @@ func _init() -> void:
 		{
 			"x_range": [350.0, 700.0],
 			"pool_index": 0,
-			"loot_data": {},
+			"loot_data": {
+				"loot_id": "collapsed_mine_pool_0",
+				"reward_money": 300000.0,
+				"reward_text": "A miner's lockbox stuffed with payroll the company swore was 'lost in the collapse.'",
+			},
 		},
 		{
 			"x_range": [1100.0, 1460.0],
 			"pool_index": 1,
-			"loot_data": {},
+			"loot_data": {
+				"loot_id": "collapsed_mine_pool_1",
+				"reward_money": 450000.0,
+				"reward_text": "A vein of pure embezzlement — and an old assayer's trick for squeezing more value from every scoop.",
+				"reward_stat_levels": {"water_value": 2},
+			},
 		},
 	]
 
