@@ -244,6 +244,8 @@ const SWAMP_COUNT: int = 10
 const WATER_SHADER = preload("res://shaders/water.gdshader")
 const POST_PROCESS_SHADER = preload("res://shaders/post_process.gdshader")
 const TERRAIN_SHADER = preload("res://shaders/terrain.gdshader")
+const GOD_RAYS_SHADER = preload("res://shaders/god_rays.gdshader")
+const FOG2D_SHADER = preload("res://shaders/fog2d.gdshader")
 
 # Visual nodes created procedurally
 var water_polygons: Array[Polygon2D] = []
@@ -324,6 +326,13 @@ var sky_layer: ParallaxLayer = null
 var far_hills_layer: ParallaxLayer = null
 var near_hills_layer: ParallaxLayer = null
 var treeline_layer: ParallaxLayer = null
+var foreground_layer: ParallaxLayer = null
+
+# Round-1 atmosphere overhaul
+var god_ray_rect: ColorRect = null
+var ground_fog_rect: ColorRect = null
+var haze_fog_rect: ColorRect = null
+var fog_noise_tex: NoiseTexture2D = null
 
 # Weather system
 var weather_state: String = "clear"
@@ -523,6 +532,9 @@ func _ready() -> void:
 	_build_island_politicians()
 	_build_post_processing()
 	_build_distance_fog()
+	_build_god_rays()
+	_build_fbm_fog()
+	_build_foreground_silhouette()
 	_build_weather()
 	_build_drain_reveals()
 	_build_drained_pool_beds()
@@ -548,6 +560,14 @@ func _show_tutorial() -> void:
 	var text := "ARROW KEYS — Move\nSPACE near water — Scoop\nSPACE at shop — Open shop\nSPACE near cave — Enter cave\nESC — Menu\n\nScoop water, sell it at the shop, buy upgrades, and drain the swamp!"
 	SceneManager.show_document_popup(text, "HOW TO PLAY")
 
+# --- Atmospheric perspective helper ---
+# Pushes a distant layer's color toward the sky: desaturate + lighten + blue-shift.
+# depth 0 = near (no change), 1 = far horizon.
+func _atmospheric_tint(base: Color, depth: float, atmo: Color) -> Color:
+	var g: float = base.get_luminance()
+	var c: Color = Color(g, g, g).lerp(base, lerpf(1.0, 0.35, depth))  # desaturate far
+	return c.lerp(atmo, depth * 0.65)                                  # lighten + shift to sky
+
 # --- Parallax ---
 func _build_parallax() -> void:
 	parallax_bg = ParallaxBackground.new()
@@ -556,14 +576,18 @@ func _build_parallax() -> void:
 	sky_layer.motion_scale = Vector2(0, 0)
 	parallax_bg.add_child(sky_layer)
 	far_hills_layer = ParallaxLayer.new()
-	far_hills_layer.motion_scale = Vector2(0.1, 0)
+	far_hills_layer.motion_scale = Vector2(0.1, 0.03)
 	parallax_bg.add_child(far_hills_layer)
 	near_hills_layer = ParallaxLayer.new()
-	near_hills_layer.motion_scale = Vector2(0.3, 0)
+	near_hills_layer.motion_scale = Vector2(0.3, 0.05)
 	parallax_bg.add_child(near_hills_layer)
 	treeline_layer = ParallaxLayer.new()
 	treeline_layer.motion_scale = Vector2(0.6, 0)
 	parallax_bg.add_child(treeline_layer)
+	# Foreground silhouette layer — passes faster than the world to frame the shot.
+	foreground_layer = ParallaxLayer.new()
+	foreground_layer.motion_scale = Vector2(1.1, 1.0)
+	parallax_bg.add_child(foreground_layer)
 
 # --- Sky & Atmosphere ---
 # Sky gradient presets: [top, mid, bottom] for each time of day
@@ -571,6 +595,14 @@ const SKY_DAWN: Array[Color] = [Color(0.35, 0.25, 0.50), Color(0.72, 0.45, 0.38)
 const SKY_DAY: Array[Color] = [Color(0.22, 0.38, 0.72), Color(0.45, 0.62, 0.88), Color(0.62, 0.78, 0.92)]
 const SKY_DUSK: Array[Color] = [Color(0.28, 0.18, 0.42), Color(0.75, 0.38, 0.28), Color(0.88, 0.55, 0.35)]
 const SKY_NIGHT: Array[Color] = [Color(0.04, 0.05, 0.12), Color(0.06, 0.08, 0.18), Color(0.08, 0.10, 0.22)]
+
+# Heal master-lerp endpoints (murky -> healed), applied on top of the time-of-day sky.
+# Murky overlay = sickly grey-green; healed = clean. Subtle (weighted below).
+const HEAL_SKY_MURKY := Color(0.40, 0.44, 0.34)   # tint the whole sky pushes toward when murky
+const HEAL_FOG_MURKY := Color(0.50, 0.55, 0.42)   # ground/haze fog color when murky
+const HEAL_FOG_HEALED := Color(0.66, 0.72, 0.70)  # clean cool haze when drained
+const HEAL_RAY_MURKY := Color(0.78, 0.82, 0.55)   # sickly shaft color when murky
+const HEAL_RAY_HEALED := Color(1.0, 0.90, 0.62)   # warm golden shaft when drained
 
 func _build_sky() -> void:
 	var world_w: float = terrain_points[terrain_points.size() - 1].x + 200.0
@@ -761,9 +793,11 @@ func _build_distant_hills() -> void:
 	far_pts.append(Vector2(world_w, 116))
 	far_pts.append(Vector2(world_w, 150))
 	far_pts.append(Vector2(-100, 150))
+	var atmo: Color = SKY_DAY[2]  # sky-bottom color drives the haze
 	var hills := Polygon2D.new()
 	hills.polygon = far_pts
-	hills.color = Color(0.12, 0.28, 0.12, 0.6)
+	var far_tint: Color = _atmospheric_tint(Color(0.12, 0.28, 0.12), 0.9, atmo)
+	hills.color = Color(far_tint.r, far_tint.g, far_tint.b, 0.6)
 	hills.z_index = -7
 	far_hills_layer.add_child(hills)
 
@@ -778,7 +812,8 @@ func _build_distant_hills() -> void:
 	mid_pts.append(Vector2(-100, 156))
 	var hills2 := Polygon2D.new()
 	hills2.polygon = mid_pts
-	hills2.color = Color(0.08, 0.22, 0.08, 0.7)
+	var mid_tint: Color = _atmospheric_tint(Color(0.08, 0.22, 0.08), 0.65, atmo)
+	hills2.color = Color(mid_tint.r, mid_tint.g, mid_tint.b, 0.7)
 	hills2.z_index = -6
 	near_hills_layer.add_child(hills2)
 
@@ -796,9 +831,10 @@ func _build_treeline() -> void:
 	tree_points.append(Vector2(world_w, 164))
 	tree_points.append(Vector2(-100, 164))
 
+	var atmo: Color = SKY_DAY[2]
 	var treeline := Polygon2D.new()
 	treeline.polygon = tree_points
-	treeline.color = Color(0.06, 0.18, 0.05)
+	treeline.color = _atmospheric_tint(Color(0.06, 0.18, 0.05), 0.3, atmo)
 	treeline.z_index = -5
 	treeline_layer.add_child(treeline)
 
@@ -816,7 +852,7 @@ func _build_treeline() -> void:
 
 	var treeline2 := Polygon2D.new()
 	treeline2.polygon = tree_points2
-	treeline2.color = Color(0.1, 0.25, 0.08)
+	treeline2.color = _atmospheric_tint(Color(0.1, 0.25, 0.08), 0.22, atmo)
 	treeline2.z_index = -4
 	treeline_layer.add_child(treeline2)
 
@@ -5229,6 +5265,123 @@ func _build_distance_fog() -> void:
 	distance_fog_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	distance_fog_layer.add_child(distance_fog_rect)
 
+# --- God-ray light shafts (R1) ---
+func _build_god_rays() -> void:
+	var world_w: float = terrain_points[terrain_points.size() - 1].x + 200.0
+	var max_y: float = 0.0
+	for pt in terrain_points:
+		if pt.y > max_y:
+			max_y = pt.y
+	# Sits behind the treeline (treeline z is -5..-4); rays at -6.
+	god_ray_rect = ColorRect.new()
+	god_ray_rect.position = Vector2(-200, -80)
+	god_ray_rect.size = Vector2(world_w + 400, max_y + 200)
+	god_ray_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	god_ray_rect.z_index = -6
+	var mat := ShaderMaterial.new()
+	mat.shader = GOD_RAYS_SHADER
+	mat.set_shader_parameter("angle", 0.45)
+	mat.set_shader_parameter("ray_density", 12.0)
+	mat.set_shader_parameter("ray_color", Vector3(1.0, 0.88, 0.6))
+	mat.set_shader_parameter("ray_speed", 0.05)
+	mat.set_shader_parameter("strength", 0.0)
+	mat.set_shader_parameter("time", 0.0)
+	# Additive blend is set via `render_mode blend_add` in god_rays.gdshader.
+	god_ray_rect.material = mat
+	near_hills_layer.add_child(god_ray_rect)
+
+# --- Foreground silhouette fronds (R1) ---
+func _build_foreground_silhouette() -> void:
+	var frond_color := Color(0.02, 0.04, 0.03, 0.82)
+	# A few big soft drooping fronds anchored at top corners that pass faster
+	# than the world (motion_scale 1.1) to frame the shot. Behind UI, never blocks input.
+	var fronds: Array = [
+		{"origin": Vector2(0, -20), "dir": 1.0, "len": 120.0, "droop": 70.0},
+		{"origin": Vector2(40, -30), "dir": 1.0, "len": 90.0, "droop": 55.0},
+		{"origin": Vector2(640, -20), "dir": -1.0, "len": 120.0, "droop": 70.0},
+		{"origin": Vector2(600, -30), "dir": -1.0, "len": 95.0, "droop": 60.0},
+	]
+	for f in fronds:
+		var poly := Polygon2D.new()
+		poly.color = frond_color
+		poly.polygon = _make_frond_shape(f["len"], f["droop"], f["dir"])
+		poly.position = f["origin"]
+		poly.z_index = 8
+		foreground_layer.add_child(poly)
+
+func _make_frond_shape(length: float, droop: float, dir: float) -> PackedVector2Array:
+	# A tapered drooping leaf blade as a soft arc.
+	var top := PackedVector2Array()
+	var bottom := PackedVector2Array()
+	var steps := 8
+	for i in range(steps + 1):
+		var u: float = float(i) / float(steps)
+		var x: float = dir * length * u
+		var y: float = droop * u * u  # accelerating droop
+		var width: float = lerpf(14.0, 1.5, u)  # taper to tip
+		top.append(Vector2(x, y - width * 0.5))
+		bottom.append(Vector2(x, y + width * 0.5))
+	var pts := PackedVector2Array()
+	for p in top:
+		pts.append(p)
+	for i in range(bottom.size()):
+		pts.append(bottom[bottom.size() - 1 - i])
+	return pts
+
+# --- fbm drifting fog bands (R1) ---
+func _build_fbm_fog() -> void:
+	# Shared seamless noise texture
+	var noise := FastNoiseLite.new()
+	noise.noise_type = FastNoiseLite.TYPE_SIMPLEX_SMOOTH
+	noise.frequency = 0.02
+	fog_noise_tex = NoiseTexture2D.new()
+	fog_noise_tex.width = 256
+	fog_noise_tex.height = 256
+	fog_noise_tex.seamless = true
+	fog_noise_tex.noise = noise
+
+	var world_w: float = terrain_points[terrain_points.size() - 1].x + 200.0
+	var max_y: float = 0.0
+	for pt in terrain_points:
+		if pt.y > max_y:
+			max_y = pt.y
+
+	# High atmospheric haze band — in the parallax (far hills), gentle sideways drift.
+	haze_fog_rect = ColorRect.new()
+	haze_fog_rect.position = Vector2(-200, 60)
+	haze_fog_rect.size = Vector2(world_w + 400, 90)
+	haze_fog_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	haze_fog_rect.z_index = -3
+	var hmat := ShaderMaterial.new()
+	hmat.shader = FOG2D_SHADER
+	hmat.set_shader_parameter("noise_tex", fog_noise_tex)
+	hmat.set_shader_parameter("fog_color", Vector3(0.66, 0.72, 0.70))
+	hmat.set_shader_parameter("drift", Vector2(0.012, 0.0))
+	hmat.set_shader_parameter("shift", 0.42)
+	hmat.set_shader_parameter("density", 0.22)
+	hmat.set_shader_parameter("scale", 1.6)
+	hmat.set_shader_parameter("time", 0.0)
+	haze_fog_rect.material = hmat
+	far_hills_layer.add_child(haze_fog_rect)
+
+	# Low ground mist band over the water surfaces — gentle upward drift, mixes in world space.
+	ground_fog_rect = ColorRect.new()
+	ground_fog_rect.position = Vector2(-100, 110)
+	ground_fog_rect.size = Vector2(world_w + 200, max_y - 80)
+	ground_fog_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	ground_fog_rect.z_index = 5
+	var gmat := ShaderMaterial.new()
+	gmat.shader = FOG2D_SHADER
+	gmat.set_shader_parameter("noise_tex", fog_noise_tex)
+	gmat.set_shader_parameter("fog_color", Vector3(0.62, 0.68, 0.60))
+	gmat.set_shader_parameter("drift", Vector2(0.01, -0.02))
+	gmat.set_shader_parameter("shift", 0.5)
+	gmat.set_shader_parameter("density", 0.18)
+	gmat.set_shader_parameter("scale", 2.4)
+	gmat.set_shader_parameter("time", 0.0)
+	ground_fog_rect.material = gmat
+	add_child(ground_fog_rect)
+
 # --- Day/Night Cycle & Animation ---
 func _process(delta: float) -> void:
 	if _startle_cd > 0.0:
@@ -5323,8 +5476,15 @@ func _process(delta: float) -> void:
 			warmth = 0.02
 		elif t > 0.65 or t < 0.15:
 			warmth = -0.02
-		pp_mat.set_shader_parameter("warmth", warmth)
-		pp_mat.set_shader_parameter("saturation", lerpf(0.75, 1.05, drain_progress))
+		# Heal master-lerp: warmth + saturation clear as the swamp drains.
+		pp_mat.set_shader_parameter("warmth", warmth + lerpf(-0.01, 0.01, drain_progress))
+		pp_mat.set_shader_parameter("saturation", lerpf(0.75, 1.06, drain_progress))
+		# New R1 uniforms (constant defaults; bloom/dither not yet driven dynamically)
+		pp_mat.set_shader_parameter("bloom_threshold", 0.7)
+		pp_mat.set_shader_parameter("bloom_intensity", 0.6)
+		pp_mat.set_shader_parameter("bloom_radius", 3.0)
+		pp_mat.set_shader_parameter("dither_levels", 14.0)
+		pp_mat.set_shader_parameter("dither_strength", 0.5)
 		# Night blue shift factor
 		var night_f: float = 0.0
 		if t > 0.72 or t < 0.12:
@@ -5339,6 +5499,37 @@ func _process(delta: float) -> void:
 		if weather_state == "rain":
 			ca_val = 1.2
 		pp_mat.set_shader_parameter("chromatic_aberration", ca_val)
+
+	# God-ray strength: peaks at dawn/dusk, ~0 midday/night; stronger when murky.
+	if god_ray_rect and god_ray_rect.material:
+		var gr_mat: ShaderMaterial = god_ray_rect.material as ShaderMaterial
+		var tod_ray: float = 0.0
+		if t >= 0.15 and t < 0.30:
+			tod_ray = sin((t - 0.15) / 0.15 * PI) * 0.5   # dawn peak
+		elif t >= 0.60 and t < 0.75:
+			tod_ray = sin((t - 0.60) / 0.15 * PI) * 0.5   # dusk peak
+		# Murkier swamp -> hazier light, slightly stronger shafts.
+		var murk: float = 1.0 - drain_progress
+		var ray_strength: float = clampf(tod_ray * (1.0 + murk * 0.4), 0.0, 1.0)
+		gr_mat.set_shader_parameter("time", wave_time)
+		gr_mat.set_shader_parameter("strength", ray_strength)
+		gr_mat.set_shader_parameter("ray_color",
+			Vector3(HEAL_RAY_MURKY.r, HEAL_RAY_MURKY.g, HEAL_RAY_MURKY.b).lerp(
+				Vector3(HEAL_RAY_HEALED.r, HEAL_RAY_HEALED.g, HEAL_RAY_HEALED.b), drain_progress))
+
+	# fbm fog: animate + heal-lerp color and density (murky thicker/greener -> clean thinner/cooler).
+	var heal_fog_col: Color = HEAL_FOG_MURKY.lerp(HEAL_FOG_HEALED, drain_progress)
+	var fog_col_v := Vector3(heal_fog_col.r, heal_fog_col.g, heal_fog_col.b)
+	if haze_fog_rect and haze_fog_rect.material:
+		var hm: ShaderMaterial = haze_fog_rect.material as ShaderMaterial
+		hm.set_shader_parameter("time", wave_time)
+		hm.set_shader_parameter("fog_color", fog_col_v)
+		hm.set_shader_parameter("density", lerpf(0.30, 0.14, drain_progress))
+	if ground_fog_rect and ground_fog_rect.material:
+		var gm: ShaderMaterial = ground_fog_rect.material as ShaderMaterial
+		gm.set_shader_parameter("time", wave_time)
+		gm.set_shader_parameter("fog_color", fog_col_v)
+		gm.set_shader_parameter("density", lerpf(0.26, 0.10, drain_progress))
 
 	# Environmental storytelling: ground color shifts with drain progress
 	if terrain_polygon:
@@ -5371,11 +5562,13 @@ func _process(delta: float) -> void:
 		else:
 			# Night
 			sky_a = SKY_NIGHT; sky_b = SKY_NIGHT; sky_blend = 0.0
-		sky_gradient_res.colors = PackedColorArray([
-			sky_a[0].lerp(sky_b[0], sky_blend),
-			sky_a[1].lerp(sky_b[1], sky_blend),
-			sky_a[2].lerp(sky_b[2], sky_blend),
-		])
+		# Heal master-lerp: when murky, push the whole sky subtly toward sickly grey-green.
+		# Weight is small and fades fully to the clean time-of-day sky as drain completes.
+		var murk_sky: float = (1.0 - drain_progress) * 0.18
+		var c0: Color = sky_a[0].lerp(sky_b[0], sky_blend).lerp(HEAL_SKY_MURKY, murk_sky)
+		var c1: Color = sky_a[1].lerp(sky_b[1], sky_blend).lerp(HEAL_SKY_MURKY, murk_sky)
+		var c2: Color = sky_a[2].lerp(sky_b[2], sky_blend).lerp(HEAL_SKY_MURKY, murk_sky)
+		sky_gradient_res.colors = PackedColorArray([c0, c1, c2])
 	# Horizon glow (bright at dawn/dusk, invisible otherwise)
 	if horizon_glow:
 		var glow_a: float = 0.0
