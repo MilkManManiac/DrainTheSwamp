@@ -127,17 +127,58 @@ static func elev(orig_y: float) -> float:
 	# higher terrain (smaller orig_y) → larger 3D y
 	return (REF_Y - orig_y) * SCALE
 
-# winding of the walking path in Z, as a function of 3D world-x. Multi-octave with a
-# big slow sweep so it curves quite a bit in places. (player + path mesh + prop-clearing
-# all follow this.)
-# big SMOOTH north/south arcs — only low frequencies (no fast wiggle) so the trail
-# sweeps in long rounded curves and the camera/character don't jitter
-static func path_z(world_x: float) -> float:
-	return sin(world_x * 0.006) * 8.0 + sin(world_x * 0.014 + 1.0) * 3.4
+# Winding of the walking path in Z, as a function of 3D world-x. The path swings north/
+# south in big SMOOTH arcs on LAND between pools, but is pulled back to CENTRE (z=0) at
+# every pool so the player crosses each pool dead-centre. (player + path mesh + prop-
+# clearing + grass exclusion all read this.) Low frequencies only → no camera jitter.
+# pool intervals in (stretched) orig-x, built once
+static var _pool_iv: Array = []
+static func _pools() -> Array:
+	if _pool_iv.is_empty():
+		var pts := points()
+		for r in SWAMP_RANGES:
+			_pool_iv.append([pts[r[0]].x, pts[r[1]].x])
+	return _pool_iv
 
+# Each LAND segment between two pools is one smooth raised-cosine lobe: it leaves the pool
+# at centre (z=0) with zero slope, swings out to a bump/dip in the middle, and returns to
+# centre at the next pool with zero slope — so the player crosses every pool straight and
+# the heading never kinks. Segments alternate NORTH/SOUTH; swing scales with segment length.
+static func path_z(world_x: float) -> float:
+	var ox := world_x / WorldData.SCALE
+	var ivs := _pools()
+	var pts := points()
+	var seg_start: float = pts[0].x
+	var seg_end: float = pts[pts.size() - 1].x
+	var k := 0                                  # segment index = pools entirely to the left
+	for i in range(ivs.size()):
+		var a: float = ivs[i][0]
+		var b: float = ivs[i][1]
+		if ox >= a and ox <= b:
+			return 0.0                          # crossing a pool → dead centre
+		if ox > b:
+			seg_start = b
+			k = i + 1
+		elif ox < a:
+			seg_end = a
+			break
+	var seg_len := seg_end - seg_start
+	if seg_len <= 1.0:
+		return 0.0
+	var t := (ox - seg_start) / seg_len         # 0..1 across the land segment
+	var bump := 0.5 * (1.0 - cos(TAU * t))      # 0 at both ends, zero slope at both ends
+	var sgn: float = 1.0 if (k % 2 == 0) else -1.0   # alternate north / south
+	var hsv: float = sin(float(k) * 12.9898) * 43758.5453
+	var hv: float = hsv - floor(hsv)
+	# swing scales with segment length (keeps the steepest heading ~constant) + variety
+	var amp: float = sgn * clampf(seg_len * 0.013, 2.5, 7.5) * (0.78 + 0.22 * hv)
+	return amp * bump
+
+# heading along the trail — numerical derivative (path_z is piecewise, no clean analytic form)
 static func path_tangent_yaw(world_x: float) -> float:
-	var dz := 0.006 * 8.0 * cos(world_x * 0.006) + 0.014 * 3.4 * cos(world_x * 0.014 + 1.0)
-	return atan2(dz, 1.0)
+	var e := 0.6
+	var dz := path_z(world_x + e) - path_z(world_x - e)
+	return atan2(dz, 2.0 * e)
 
 # ── Land extension ───────────────────────────────────────────────────────────────
 # The raw TERRAIN_POINTS have short ridges between pools. We remap the X coords once so
