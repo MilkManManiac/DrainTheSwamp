@@ -167,9 +167,11 @@ func _physics_process(delta: float) -> void:
 		if prev_walk_sin > 0.0 and walk_sin <= 0.0:
 			# Left foot lands
 			_spawn_dust_puff(boot_left.position.x)
+			AudioManager.play_footstep()
 		elif prev_walk_sin < 0.0 and walk_sin >= 0.0:
 			# Right foot lands
 			_spawn_dust_puff(boot_right.position.x)
+			AudioManager.play_footstep()
 		prev_walk_sin = walk_sin
 	else:
 		walk_time = 0.0

@@ -19,7 +19,7 @@ var _bus_ambient: int = 0
 
 # Linear volumes 0..1 (persisted to user://settings.cfg)
 var vol_master: float = 1.0
-var vol_sfx: float = 0.9
+var vol_sfx: float = 0.75
 var vol_music: float = 0.8
 var vol_ambient: float = 0.45
 
@@ -44,10 +44,8 @@ func _ready() -> void:
 	_connect_game_signals()
 	# Auto-attach a UI click to every button created anywhere in the game.
 	get_tree().node_added.connect(_on_node_added)
-	# Start the ambient swamp bed.
-	if _ambient_player and _streams.has("ambient"):
-		_ambient_player.stream = _streams["ambient"]
-		_ambient_player.play()
+	# Background music: the Music bus + _music_player are ready for user-provided
+	# songs (TODO). No procedural ambient bed — it read as a "weird bass" drone.
 
 # =============================================================================
 # Bus / player setup
@@ -181,8 +179,8 @@ func play_scoop(tool_id: String) -> void:
 	if GameManager.tool_definitions.has(tool_id):
 		order = int(GameManager.tool_definitions[tool_id].get("order", 0))
 	var t: float = clampf(float(order) / 8.0, 0.0, 1.0)
-	var pitch: float = lerpf(1.32, 0.78, t) * randf_range(0.95, 1.06)
-	var vol: float = lerpf(-3.0, 1.5, t)
+	var pitch: float = lerpf(1.12, 0.82, t) * randf_range(0.94, 1.05)
+	var vol: float = lerpf(-13.0, -5.0, t)
 	play("scoop", pitch, vol)
 
 func play_sell(amount: float) -> void:
@@ -195,7 +193,10 @@ func play_ui_click() -> void:
 	if now - _last_click_ms < 45:
 		return
 	_last_click_ms = now
-	play("ui_click", randf_range(0.97, 1.04), -4.0)
+	play("ui_click", randf_range(0.97, 1.04), -8.0)
+
+func play_footstep() -> void:
+	play("footstep", randf_range(0.9, 1.12), -17.0)
 
 # =============================================================================
 # Signal wiring
@@ -233,7 +234,7 @@ func _build_streams() -> void:
 	_streams["error"] = _make_wav(_synth_error())
 	_streams["discovery"] = _make_wav(_synth_discovery())
 	_streams["loot"] = _make_wav(_synth_loot())
-	_streams["ambient"] = _make_wav(_synth_ambient(), true)
+	_streams["footstep"] = _make_wav(_synth_footstep())
 
 func _make_wav(samples: PackedFloat32Array, loop: bool = false) -> AudioStreamWAV:
 	var n: int = samples.size()
@@ -252,6 +253,21 @@ func _make_wav(samples: PackedFloat32Array, loop: bool = false) -> AudioStreamWA
 		wav.loop_begin = 0
 		wav.loop_end = n
 	return wav
+
+# A pitch-sweeping sine (gentle "bloop"/water drop).
+func _sweep(f0: float, f1: float, dur: float, amp: float, decay: float) -> PackedFloat32Array:
+	var n: int = int(dur * MIX_RATE)
+	var out := PackedFloat32Array()
+	out.resize(n)
+	var phase: float = 0.0
+	for i in n:
+		var t: float = float(i) / MIX_RATE
+		var f: float = lerpf(f0, f1, t / dur)
+		phase += f / MIX_RATE
+		var env: float = exp(-decay * t)
+		var atk: float = clampf(t / 0.006, 0.0, 1.0)
+		out[i] = sin(phase * TAU) * env * atk * amp
+	return out
 
 # A single decaying tone. wave: "sine" | "tri" | "square" | "saw".
 func _blip(freq: float, dur: float, amp: float, decay: float, wave: String = "sine") -> PackedFloat32Array:
@@ -299,20 +315,24 @@ func _noise_burst(dur: float, amp: float, decay: float, lp: float) -> PackedFloa
 	return out
 
 func _synth_scoop() -> PackedFloat32Array:
-	# Watery: muffled noise splash + a low "blub".
+	# Gentle water "bloop": soft descending sine + a quiet, heavily muffled splash tail.
 	var buf := PackedFloat32Array()
-	buf = _mix_into(buf, _noise_burst(0.17, 0.55, 20.0, 0.22), 0)
-	buf = _mix_into(buf, _blip(190.0, 0.13, 0.30, 17.0, "sine"), 0)
-	buf = _mix_into(buf, _blip(120.0, 0.10, 0.18, 22.0, "sine"), int(0.02 * MIX_RATE))
+	buf = _mix_into(buf, _sweep(540.0, 280.0, 0.13, 0.32, 11.0), 0)
+	buf = _mix_into(buf, _noise_burst(0.09, 0.10, 26.0, 0.06), int(0.015 * MIX_RATE))
+	return buf
+
+func _synth_footstep() -> PackedFloat32Array:
+	# Soft muffled tap: heavily low-passed short noise + faint low thud.
+	var buf := PackedFloat32Array()
+	buf = _mix_into(buf, _noise_burst(0.055, 0.16, 42.0, 0.05), 0)
+	buf = _mix_into(buf, _blip(95.0, 0.05, 0.10, 32.0, "sine"), 0)
 	return buf
 
 func _synth_sell() -> PackedFloat32Array:
-	# Two-note coin "cha-ching" with a little shimmer.
+	# Warm two-note coin chime (no harsh highs).
 	var buf := PackedFloat32Array()
-	buf = _mix_into(buf, _blip(988.0, 0.16, 0.34, 9.0, "sine"), 0)
-	buf = _mix_into(buf, _blip(1976.0, 0.14, 0.10, 11.0, "sine"), 0)
-	buf = _mix_into(buf, _blip(1319.0, 0.22, 0.38, 7.5, "sine"), int(0.06 * MIX_RATE))
-	buf = _mix_into(buf, _blip(2637.0, 0.18, 0.09, 9.0, "sine"), int(0.06 * MIX_RATE))
+	buf = _mix_into(buf, _blip(880.0, 0.16, 0.24, 9.5, "sine"), 0)
+	buf = _mix_into(buf, _blip(1318.5, 0.22, 0.26, 7.5, "sine"), int(0.06 * MIX_RATE))
 	return buf
 
 func _synth_pool_complete() -> PackedFloat32Array:
@@ -321,28 +341,27 @@ func _synth_pool_complete() -> PackedFloat32Array:
 	var buf := PackedFloat32Array()
 	for i in notes.size():
 		var start: int = int(i * 0.11 * MIX_RATE)
-		buf = _mix_into(buf, _blip(notes[i], 0.30, 0.32, 5.5, "tri"), start)
-		buf = _mix_into(buf, _blip(notes[i] * 2.0, 0.26, 0.08, 6.5, "sine"), start)
+		buf = _mix_into(buf, _blip(notes[i], 0.32, 0.22, 5.0, "sine"), start)
 	return buf
 
 func _synth_upgrade() -> PackedFloat32Array:
-	# Bright confirming ding (root + fifth).
+	# Soft confirming ding (root + fifth).
 	var buf := PackedFloat32Array()
-	buf = _mix_into(buf, _blip(880.0, 0.22, 0.34, 7.0, "sine"), 0)
-	buf = _mix_into(buf, _blip(1318.5, 0.20, 0.20, 8.0, "sine"), int(0.01 * MIX_RATE))
+	buf = _mix_into(buf, _blip(880.0, 0.22, 0.22, 7.0, "sine"), 0)
+	buf = _mix_into(buf, _blip(1318.5, 0.18, 0.10, 8.0, "sine"), int(0.01 * MIX_RATE))
 	return buf
 
 func _synth_ui_click() -> PackedFloat32Array:
 	var buf := PackedFloat32Array()
-	buf = _mix_into(buf, _noise_burst(0.025, 0.30, 70.0, 0.6), 0)
-	buf = _mix_into(buf, _blip(1100.0, 0.03, 0.16, 40.0, "sine"), 0)
+	buf = _mix_into(buf, _noise_burst(0.018, 0.12, 95.0, 0.45), 0)
+	buf = _mix_into(buf, _blip(820.0, 0.03, 0.09, 50.0, "sine"), 0)
 	return buf
 
 func _synth_error() -> PackedFloat32Array:
-	# Dull descending buzz.
+	# Soft low "nope" — two muted descending tones.
 	var buf := PackedFloat32Array()
-	buf = _mix_into(buf, _blip(196.0, 0.10, 0.30, 11.0, "square"), 0)
-	buf = _mix_into(buf, _blip(147.0, 0.13, 0.28, 10.0, "square"), int(0.08 * MIX_RATE))
+	buf = _mix_into(buf, _blip(220.0, 0.10, 0.16, 13.0, "tri"), 0)
+	buf = _mix_into(buf, _blip(165.0, 0.13, 0.15, 12.0, "tri"), int(0.07 * MIX_RATE))
 	return buf
 
 func _synth_discovery() -> PackedFloat32Array:
@@ -360,27 +379,6 @@ func _synth_loot() -> PackedFloat32Array:
 	buf = _mix_into(buf, _blip(1046.5, 0.14, 0.32, 8.0, "sine"), int(0.07 * MIX_RATE))
 	return buf
 
-func _synth_ambient() -> PackedFloat32Array:
-	# 4.0s seamless loop: low drone (integer Hz => loops cleanly) + slow tremolo
-	# + a single low-passed wind "gust" windowed to zero at both ends (seamless).
-	var dur: float = 4.0
-	var n: int = int(dur * MIX_RATE)
-	var out := PackedFloat32Array()
-	out.resize(n)
-	var wind_y: float = 0.0
-	for i in n:
-		var t: float = float(i) / MIX_RATE
-		var frac: float = float(i) / float(n)
-		var trem: float = 0.55 + 0.45 * sin(TAU * 0.25 * t)
-		var drone: float = (
-			sin(TAU * 55.0 * t) * 0.5
-			+ sin(TAU * 110.0 * t) * 0.20
-			+ sin(TAU * 165.0 * t) * 0.10
-		) * trem * 0.5
-		# Wind: heavily low-passed noise, Hann-windowed (0 at loop seam).
-		var x: float = randf_range(-1.0, 1.0)
-		wind_y += (x - wind_y) * 0.015
-		var gust: float = (0.5 - 0.5 * cos(TAU * frac))
-		var wind: float = wind_y * 6.0 * gust * 0.18
-		out[i] = (drone + wind) * 0.7
-	return out
+# (Procedural ambient bed removed — it read as a "weird bass" drone. Background
+# music will come from user-provided songs on the Music bus. Any future ambient
+# should be sparse/occasional with variety, not a constant loop.)
