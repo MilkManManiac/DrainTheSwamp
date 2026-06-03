@@ -28,12 +28,13 @@ static func build_background(parent: Node3D) -> Node3D:
 	var x0: float = WorldData.points()[0].x * WorldData.SCALE - 60.0
 	var x1: float = WorldData.points()[WorldData.points().size() - 1].x * WorldData.SCALE + 60.0
 
-	# far mountains (jagged blue) → mid → low green hills, near the horizon band
-	_ridge(bg, x0, x1, -46.0, 2.0, 7.0, 14.0, 20.0, FAR_MTN, 1)
-	_ridge(bg, x0, x1, -30.0, -1.0, 4.0, 9.0, 22.0, MID_MTN, 2)
-	_ridge(bg, x0, x1, -17.0, -4.0, 2.0, 6.0, 14.0, NEAR_HILL, 3)
-	_build_bg_trees(bg, x0, x1)
-	_build_clouds(bg, x0, x1)
+	# soft distant hills BEHIND the terrain back edge (z<-22), fading into the sky. The crude
+	# box "bg trees" + cloud slabs were removed — they overlapped the dense real treeline and
+	# read as grey bubbles. The back forest wall now provides the treeline; these just tint the
+	# far horizon a soft green/blue.
+	_ridge(bg, x0, x1, -56.0, 3.0, 7.0, 14.0, 20.0, FAR_MTN, 1)
+	_ridge(bg, x0, x1, -42.0, 0.0, 4.0, 9.0, 22.0, MID_MTN, 2)
+	_ridge(bg, x0, x1, -28.0, -3.0, 3.0, 7.0, 14.0, NEAR_HILL, 3)
 	return bg
 
 static func _build_bg_trees(parent: Node3D, x0: float, x1: float) -> void:

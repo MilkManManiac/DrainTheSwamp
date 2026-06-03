@@ -115,11 +115,11 @@ const SWAMP_WATER_COLORS: Array[Color] = [
 # ── 3D mapping constants (shared by all builders) ───────────────────────────────
 const SCALE: float = 0.0625          # world px → 3D units (1/16)
 const REF_Y: float = 130.0           # original-y mapping: left shore ≈ y0, later pools descend
-const DEPTH: float = 52.0            # solid landmass depth along Z (extends toward camera AND back)
-const FRONT_Z: float = 30.0          # front edge sits well beyond the tilted camera so the
+const DEPTH: float = 60.0            # solid landmass depth along Z (extends toward camera AND back)
+const FRONT_Z: float = 38.0          # front edge sits FAR beyond the tilted camera so the
                                      # dig-face is never in frame AND there's always ground below
-                                     # the bottom of the screen even when the path bends forward.
-                                     # player rail z=0; land spans [FRONT_Z-DEPTH .. FRONT_Z]
+                                     # the bottom corners of the screen even when the path bends
+                                     # forward. player rail z=0; land spans [FRONT_Z-DEPTH .. FRONT_Z]
 
 static func to_world_x(orig_x: float) -> float:
 	return orig_x * SCALE

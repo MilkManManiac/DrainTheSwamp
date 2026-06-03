@@ -22,7 +22,7 @@ uniform float rim_strength : hint_range(0.0, 2.0) = 0.14;
 uniform float light_wrap : hint_range(0.0, 1.0) = 0.18;
 uniform float bands : hint_range(1.0, 5.0) = 3.0;
 uniform float band_softness : hint_range(0.0, 0.5) = 0.09;
-uniform float sat_split : hint_range(0.0, 0.6) = 0.22;          // shade desat ↔ light oversat
+uniform float sat_split : hint_range(0.0, 0.6) = 0.13;          // shade desat ↔ light oversat
 
 void vertex() {
 	if (sway_strength > 0.0) {

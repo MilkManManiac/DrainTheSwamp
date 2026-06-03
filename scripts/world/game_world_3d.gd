@@ -108,7 +108,7 @@ func _build_environment() -> void:
 	sun.rotation_degrees = Vector3(-42, 44, 0)
 	sun.light_color = Color(1.0, 0.92, 0.76)   # warm, hazy swamp sun
 	sun.light_energy = 1.25
-	sun.light_indirect_energy = 1.25           # boost the SDFGI bounce warmth
+	sun.light_indirect_energy = 1.5            # boost the SDFGI bounce warmth into the shade
 	sun.shadow_enabled = true
 	sun.light_angular_distance = 1.4           # contact-hardening penumbra
 	sun.directional_shadow_mode = DirectionalLight3D.SHADOW_PARALLEL_2_SPLITS
@@ -128,20 +128,22 @@ func _build_environment() -> void:
 	sky_mat.sky_top_color = Color(0.40, 0.50, 0.55)
 	sky_mat.sky_horizon_color = Color(0.62, 0.66, 0.58)
 	sky_mat.sky_curve = 0.18
-	sky_mat.ground_bottom_color = Color(0.46, 0.52, 0.50)
-	sky_mat.ground_horizon_color = Color(0.60, 0.65, 0.60)
+	# green-tinted ground hemisphere → shaded foliage picks up GREEN ambient, not grey
+	sky_mat.ground_bottom_color = Color(0.34, 0.46, 0.34)
+	sky_mat.ground_horizon_color = Color(0.52, 0.60, 0.50)
 	sky_mat.sun_angle_max = 22.0
 	sky_mat.sun_curve = 0.08
-	sky_mat.energy_multiplier = 0.55
+	sky_mat.energy_multiplier = 0.6
 	var sky := Sky.new()
 	sky.sky_material = sky_mat
 
 	var env := Environment.new()
 	env.background_mode = Environment.BG_SKY
 	env.sky = sky
-	# SDFGI provides the indirect fill now → keep flat ambient LOW or it double-fills/flattens
+	# SDFGI provides indirect fill, but a bit more sky ambient keeps shaded foliage from
+	# reading as flat grey (the camera-facing side of foreground trees was going grey)
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_SKY
-	env.ambient_light_energy = 0.12
+	env.ambient_light_energy = 0.22
 	env.ambient_light_sky_contribution = 1.0
 
 	# Global illumination — colored bounce light (warm sun → green foliage bounce into shade,
