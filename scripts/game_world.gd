@@ -547,11 +547,13 @@ const ROCK_DARK_COLOR := Color(0.32, 0.3, 0.28)
 var wave_time: float = 0.0
 
 var _hdr_glow: bool = false  # true on Forward+/Mobile (real HDR-2D glow); false on GL Compatibility (web)
+var _shot_path: String = ""  # dev screenshot hook (env DTS_SHOT); no-op in normal play
 
 func _ready() -> void:
 	cycle_time = CYCLE_DURATION * GameManager.cycle_progress
 	_init_sway_materials()
 	_setup_hdr_glow()
+	_setup_debug_shot()
 	_build_parallax()
 	_build_sky()
 	_build_sun()
@@ -5818,6 +5820,27 @@ func _spawn_drain_plant(sx: float, sy: float) -> void:
 	tw.set_trans(Tween.TRANS_BACK)
 	tw.tween_property(plant, "scale", Vector2(1.0, 1.0), 0.8)
 	grown_plants.append({"node": plant})
+
+# Dev-only: when launched with env DTS_SHOT=<abs path>, save the rendered viewport
+# to that PNG every 2s so tooling can inspect the actual frame (focus/occlusion proof).
+# Completely inert when the env var is unset (i.e. normal play / shipped builds).
+func _setup_debug_shot() -> void:
+	_shot_path = OS.get_environment("DTS_SHOT")
+	if _shot_path == "":
+		return
+	var st := Timer.new()
+	st.wait_time = 2.0
+	st.autostart = true
+	st.timeout.connect(_save_debug_shot)
+	add_child(st)
+
+func _save_debug_shot() -> void:
+	var tex: ViewportTexture = get_viewport().get_texture()
+	if tex == null:
+		return
+	var img: Image = tex.get_image()
+	if img != null:
+		img.save_png(_shot_path)
 
 # --- HDR-2D glow (R1, Forward+/Mobile desktop only) ---
 func _setup_hdr_glow() -> void:
