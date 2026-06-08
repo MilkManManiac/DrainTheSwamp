@@ -3824,9 +3824,11 @@ func _place_cypress(pos: Vector2, scale: float = 1.0, zi: int = 4) -> void:
 		add_child(knee)
 
 	# Sparse high canopy blobs.
+	var blob_centers: Array[Vector2] = []
 	for c in range(randi_range(3, 5)):
 		var bcx: float = top.x + randf_range(-12, 12) * scale
 		var bcy: float = top.y + randf_range(-2, 14) * scale
+		blob_centers.append(Vector2(bcx, bcy))
 		var blob := Polygon2D.new()
 		var bpts := PackedVector2Array()
 		for a in range(9):
@@ -3852,8 +3854,11 @@ func _place_cypress(pos: Vector2, scale: float = 1.0, zi: int = 4) -> void:
 	# Spanish moss: thin vertical strands hanging from the canopy, gray-green,
 	# on the moss sway material (high strength / low stiffness = it drapes & drifts).
 	for m in range(randi_range(4, 8)):
-		var mx: float = top.x + randf_range(-14, 14) * scale
-		var my: float = top.y + randf_range(2, 16) * scale
+		# Anchor each strand UNDER an actual canopy blob so it always hangs from
+		# foliage, never from empty air.
+		var anchor_c: Vector2 = blob_centers[randi() % blob_centers.size()] if blob_centers.size() > 0 else top
+		var mx: float = anchor_c.x + randf_range(-7, 7) * scale
+		var my: float = anchor_c.y + randf_range(2, 7) * scale
 		var mlen: float = randf_range(12, 26) * scale
 		var strand := Polygon2D.new()
 		var w: float = randf_range(0.8, 1.6)
