@@ -6061,6 +6061,11 @@ func _process(delta: float) -> void:
 		GameManager.day_changed.emit(GameManager.current_day)
 
 	var t: float = cycle_time / CYCLE_DURATION
+	# Debug-shot only: force time-of-day via DTS_TOD (0..1) to inspect any lighting.
+	if _shot_path != "":
+		var tod_ov: String = OS.get_environment("DTS_TOD")
+		if tod_ov != "":
+			t = clampf(tod_ov.to_float(), 0.0, 1.0)
 	GameManager.cycle_progress = t
 	var tint: Color = _get_cycle_color(t)
 	canvas_modulate.color = tint
@@ -6103,6 +6108,11 @@ func _process(delta: float) -> void:
 		total_capacity += cap
 		total_drained += GameManager.swamp_states[si]["gallons_drained"]
 	var drain_progress: float = total_drained / maxf(total_capacity, 1.0)
+	# Debug-shot only: force overall heal level via DTS_DRAIN (0..1) to preview the grade.
+	if _shot_path != "":
+		var dr_ov: String = OS.get_environment("DTS_DRAIN")
+		if dr_ov != "":
+			drain_progress = clampf(dr_ov.to_float(), 0.0, 1.0)
 
 	if post_process_rect and post_process_rect.material:
 		var pp_mat: ShaderMaterial = post_process_rect.material as ShaderMaterial
@@ -6117,8 +6127,11 @@ func _process(delta: float) -> void:
 		elif t > 0.65 or t < 0.15:
 			warmth = -0.02
 		# Heal master-lerp: warmth + saturation clear as the swamp drains.
-		pp_mat.set_shader_parameter("warmth", warmth + lerpf(-0.01, 0.01, drain_progress))
-		pp_mat.set_shader_parameter("saturation", lerpf(0.75, 1.06, drain_progress))
+		# R2 heal: widen the safe (smooth desaturate + small additive warm) channels so the
+		# murky→golden transformation actually reads. Murky = desaturated & cool; healed =
+		# vibrant & warm. These don't amplify the posterize banding like a tint-multiply did.
+		pp_mat.set_shader_parameter("warmth", warmth + lerpf(-0.028, 0.035, drain_progress))
+		pp_mat.set_shader_parameter("saturation", lerpf(0.62, 1.15, drain_progress))
 		# New R1 uniforms (constant defaults; bloom/dither not yet driven dynamically)
 		pp_mat.set_shader_parameter("bloom_threshold", 0.7)
 		# On desktop (Forward+) real HDR-2D WorldEnvironment glow handles bloom, so
@@ -6178,8 +6191,8 @@ func _process(delta: float) -> void:
 
 	# Environmental storytelling: ground color shifts with drain progress
 	if terrain_polygon:
-		var healthy_ground := Color(0.52, 0.40, 0.22)
-		terrain_polygon.color = GROUND_COLOR.lerp(healthy_ground, drain_progress * 0.6)
+		var healthy_ground := Color(0.54, 0.42, 0.22)
+		terrain_polygon.color = GROUND_COLOR.lerp(healthy_ground, drain_progress * 0.9)
 
 	# Update sky gradient colors based on time of day
 	if sky_gradient_res:
@@ -6209,7 +6222,7 @@ func _process(delta: float) -> void:
 			sky_a = SKY_NIGHT; sky_b = SKY_NIGHT; sky_blend = 0.0
 		# Heal master-lerp: when murky, push the whole sky subtly toward sickly grey-green.
 		# Weight is small and fades fully to the clean time-of-day sky as drain completes.
-		var murk_sky: float = (1.0 - drain_progress) * 0.18
+		var murk_sky: float = (1.0 - drain_progress) * 0.28
 		var c0: Color = sky_a[0].lerp(sky_b[0], sky_blend).lerp(HEAL_SKY_MURKY, murk_sky)
 		var c1: Color = sky_a[1].lerp(sky_b[1], sky_blend).lerp(HEAL_SKY_MURKY, murk_sky)
 		var c2: Color = sky_a[2].lerp(sky_b[2], sky_blend).lerp(HEAL_SKY_MURKY, murk_sky)
