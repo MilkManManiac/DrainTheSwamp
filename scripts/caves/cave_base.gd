@@ -962,11 +962,16 @@ func _build_dust_motes() -> void:
 	for pt in cave_terrain_points:
 		if pt.y > bottom_y:
 			bottom_y = pt.y
-	for i in range(randi_range(18, 26)):
+	for i in range(randi_range(26, 36)):
 		var mote := ColorRect.new()
-		var mote_sz: float = 1.0 if randf() < 0.7 else 2.0
+		var glowing: bool = randf() < 0.5
+		var mote_sz: float = (1.0 if randf() < 0.7 else 2.0) + (1.0 if glowing else 0.0)
 		mote.size = Vector2(mote_sz, mote_sz)
-		mote.color = Color(0.72, 0.66, 0.45, randf_range(0.18, 0.35))
+		if glowing:
+			# Bioluminescent spore — crystal-tinted, overbright so it blooms in the cave air.
+			mote.color = _emit(Color(crystal_color.r, crystal_color.g, crystal_color.b, randf_range(0.5, 0.85)), 1.8)
+		else:
+			mote.color = Color(0.72, 0.66, 0.45, randf_range(0.16, 0.30))
 		var mx: float = randf_range(left_x + 20, right_x - 20)
 		var my: float = randf_range(top_y + 10, bottom_y - 10)
 		mote.position = Vector2(mx, my)
