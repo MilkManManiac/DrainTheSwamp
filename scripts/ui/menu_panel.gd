@@ -61,7 +61,7 @@ func _build_buttons() -> void:
 	if not confirming_reset:
 		var reset_btn := Button.new()
 		reset_btn.add_theme_font_size_override("font_size", 16)
-		reset_btn.text = "Reset Game"
+		reset_btn.text = "Restart Game"
 		reset_btn.custom_minimum_size = Vector2(160, 28)
 		reset_btn.add_theme_color_override("font_color", Color(1.0, 0.6, 0.5))
 		reset_btn.pressed.connect(func() -> void: confirming_reset = true; _build_buttons())
@@ -84,7 +84,7 @@ func _build_buttons() -> void:
 
 		var yes_btn := Button.new()
 		yes_btn.add_theme_font_size_override("font_size", 14)
-		yes_btn.text = "Yes, Reset"
+		yes_btn.text = "Yes, Restart"
 		yes_btn.add_theme_color_override("font_color", Color(1.0, 0.4, 0.4))
 		yes_btn.pressed.connect(func() -> void: reset_confirmed.emit(); _close())
 		_style_button(yes_btn, Color(0.3, 0.08, 0.06))

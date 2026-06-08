@@ -1122,8 +1122,8 @@ func _build_exit_zone() -> void:
 	exit_area.body_entered.connect(_on_exit_body_entered)
 
 func _on_exit_body_entered(body: Node2D) -> void:
-	if OS.get_environment("DTS_SHOT") != "":
-		return  # debug screenshot mode: stay in the cave instead of exiting
+	if OS.get_environment("DTS_FREEZE") != "":
+		return  # debug-only: stay in the cave for screenshots (never set in real builds)
 	if body is CharacterBody2D:
 		SceneManager.transition_to_return()
 

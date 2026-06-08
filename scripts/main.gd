@@ -45,13 +45,9 @@ func _on_reset_confirmed() -> void:
 	_close_all_panels()
 	GameManager.reset_game()
 	SaveManager.save_game()
-	player.position = Vector2(40, 126)
-	player.velocity = Vector2.ZERO
-	player.near_water = false
-	player.near_swamp_index = -1
-	player.near_shop = false
-	player.near_cave_entrance = false
-	player.near_cave_id = ""
+	# Full restart: reload the scene so the whole world rebuilds from fresh state.
+	get_tree().paused = false
+	get_tree().reload_current_scene()
 
 func _on_cave_entrance_requested(cave_id: String) -> void:
 	if SceneManager.is_transitioning:
