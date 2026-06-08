@@ -632,19 +632,19 @@ func _show_tutorial() -> void:
 func _init_sway_materials() -> void:
 	_sway_mat_grass = ShaderMaterial.new()
 	_sway_mat_grass.shader = FOLIAGE_SWAY_SHADER
-	_sway_mat_grass.set_shader_parameter("sway_strength", 2.4)
+	_sway_mat_grass.set_shader_parameter("sway_strength", 1.9)
 	_sway_mat_grass.set_shader_parameter("sway_speed", 1.5)
 	_sway_mat_grass.set_shader_parameter("gust_wavelength", 200.0)
 	_sway_mat_grass.set_shader_parameter("gust_speed", 70.0)
-	_sway_mat_grass.set_shader_parameter("stiffness", 1.4)
+	_sway_mat_grass.set_shader_parameter("stiffness", 2.6)  # stiff lower blade = planted, only tip flutters
 
 	_sway_mat_frond = ShaderMaterial.new()
 	_sway_mat_frond.shader = FOLIAGE_SWAY_SHADER
-	_sway_mat_frond.set_shader_parameter("sway_strength", 3.2)
+	_sway_mat_frond.set_shader_parameter("sway_strength", 2.6)
 	_sway_mat_frond.set_shader_parameter("sway_speed", 1.0)
 	_sway_mat_frond.set_shader_parameter("gust_wavelength", 240.0)
 	_sway_mat_frond.set_shader_parameter("gust_speed", 60.0)
-	_sway_mat_frond.set_shader_parameter("stiffness", 1.8)
+	_sway_mat_frond.set_shader_parameter("stiffness", 2.5)  # planted base, tip leads
 
 	_sway_mat_canopy = ShaderMaterial.new()
 	_sway_mat_canopy.shader = FOLIAGE_SWAY_SHADER
@@ -1513,8 +1513,8 @@ func _build_vegetation() -> void:
 			var dy: float = absf(terrain_points[i + 1].y - pt.y) / absf(terrain_points[i + 1].x - pt.x + 0.01)
 			if dy < 0.3:  # Mostly flat
 				# 3-5x density; cluster noise inside _place_grass_tuft carves bare gaps
-				for j in range(randi_range(8, 14)):
-					var gx: float = pt.x + randf_range(-18, 18)
+				for j in range(randi_range(16, 26)):
+					var gx: float = pt.x + randf_range(-24, 24)
 					_place_grass_tuft(Vector2(gx, _get_terrain_y_at(gx)))
 
 	# Flowers scattered on shore and ridges
@@ -1609,8 +1609,9 @@ func _make_blade(parent: Node2D, base_local: Vector2, height: float, width: floa
 	parent.add_child(blade)
 
 func _place_grass_tuft(pos: Vector2) -> void:
-	# Cluster gating: skip in "bare" gaps so grass forms dense patches.
-	if _cluster_noise(pos.x) < 0.32:
+	# Cluster gating: skip in "bare" gaps so grass forms dense patches (lowered
+	# threshold = fuller coverage with only occasional bare patches).
+	if _cluster_noise(pos.x) < 0.20:
 		return
 	# Color zone: darker near water, lighter on dry ridges
 	var near_water: float = 0.0
@@ -1630,8 +1631,8 @@ func _place_grass_tuft(pos: Vector2) -> void:
 	tuft.z_index = zi
 	add_child(tuft)
 	grass_tufts.append(tuft)
-	var per_scale: float = randf_range(0.7, 1.4) * depth_scale
-	var n_blades: int = randi_range(3, 5)
+	var per_scale: float = randf_range(0.65, 1.55) * depth_scale  # wider size variation
+	var n_blades: int = randi_range(4, 7)
 	for k in range(n_blades):
 		# Green stops + occasional dead yellow-green / brown blade.
 		var dark: Color
@@ -3846,9 +3847,10 @@ func _place_cypress(pos: Vector2, scale: float = 1.0, zi: int = 4) -> void:
 			Vector2(mx - w, my), Vector2(mx + w, my),
 			Vector2(mx + w * 0.4, my + mlen), Vector2(mx - w * 0.4, my + mlen),
 		])
-		# UV.y = 1 at the hanging tip (max sway), 0 at the attached top (anchored)
+		# Shader anchors UV.y=1 and sways UV.y=0. Moss must hang from its attachment:
+		# top (at my) = UV.y 1 (pinned to the branch), hanging tip (my+mlen) = UV.y 0 (drifts).
 		strand.uv = PackedVector2Array([
-			Vector2(0, 0), Vector2(1, 0), Vector2(1, 1), Vector2(0, 1)])
+			Vector2(0, 1), Vector2(1, 1), Vector2(1, 0), Vector2(0, 0)])
 		var moss_top := Color(0.42, 0.46, 0.34, 0.85)
 		var moss_tip := Color(0.55, 0.58, 0.46, 0.55)
 		strand.vertex_colors = PackedColorArray([moss_top, moss_top, moss_tip, moss_tip])
@@ -5828,8 +5830,12 @@ func _setup_debug_shot() -> void:
 	_shot_path = OS.get_environment("DTS_SHOT")
 	if _shot_path == "":
 		return
+	var iv: String = OS.get_environment("DTS_SHOT_INTERVAL")
+	var wait: float = iv.to_float() if iv != "" else 2.0
+	if wait <= 0.0:
+		wait = 2.0
 	var st := Timer.new()
-	st.wait_time = 2.0
+	st.wait_time = wait
 	st.autostart = true
 	st.timeout.connect(_save_debug_shot)
 	add_child(st)
@@ -6066,6 +6072,13 @@ func _process(delta: float) -> void:
 		var tod_ov: String = OS.get_environment("DTS_TOD")
 		if tod_ov != "":
 			t = clampf(tod_ov.to_float(), 0.0, 1.0)
+		# Debug zoom (DTS_ZOOM>1 zooms in) to inspect foliage/detail up close.
+		var zoomv: String = OS.get_environment("DTS_ZOOM")
+		if zoomv != "":
+			var dcam: Camera2D = get_viewport().get_camera_2d()
+			if dcam:
+				var z: float = zoomv.to_float()
+				dcam.zoom = Vector2(z, z)
 	GameManager.cycle_progress = t
 	var tint: Color = _get_cycle_color(t)
 	canvas_modulate.color = tint
