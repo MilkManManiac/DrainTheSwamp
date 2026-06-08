@@ -6084,6 +6084,7 @@ func _process(delta: float) -> void:
 			var wmat: ShaderMaterial = wp.material as ShaderMaterial
 			wmat.set_shader_parameter("time", wave_time)
 			wmat.set_shader_parameter("daytime", daytime_val)
+			wmat.set_shader_parameter("hdr_boost", 2.6 if _hdr_glow else 1.0)
 			# Phase 8B: Modulate shader params based on drain level
 			if wi < SWAMP_COUNT:
 				var pool_fill: float = GameManager.get_swamp_fill_fraction(wi)

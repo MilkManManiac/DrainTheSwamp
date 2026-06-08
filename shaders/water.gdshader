@@ -19,6 +19,9 @@ uniform float specular_intensity : hint_range(0.0, 1.0) = 0.25;
 uniform float foam_density : hint_range(0.0, 2.0) = 1.0;
 uniform vec3 foam_color : source_color = vec3(0.85, 0.92, 0.80);
 uniform float daytime : hint_range(0.0, 1.0) = 1.0;
+// HDR: push surface highlights (sparkle/spec/glint) >1.0 so they bloom on Forward+.
+// 1.0 = no change (GL-compat/web). Set ~2.5 from GDScript on desktop.
+uniform float hdr_boost = 1.0;
 
 // --- Screen-space refraction (opt-in; 0 = no-op, safe for caves) ---
 uniform sampler2D screen_tex : hint_screen_texture, filter_linear;
@@ -123,15 +126,15 @@ void fragment() {
 	float spec_wave = sin(world_pos.x * 0.12 + time * 1.2) * sin(world_pos.x * 0.05 - time * 0.7);
 	float spec = pow(max(0.0, spec_wave), 3.0) * specular_intensity;
 	spec *= smoothstep(0.35, 0.0, UV.y);
-	base += vec3(spec) * vec3(1.0, 0.96, 0.85);
+	base += vec3(spec) * vec3(1.0, 0.96, 0.85) * hdr_boost;
 
 	// --- Surface sparkle (warm tint) ---
 	if (daytime > 0.1) {
 		vec2 sparkle_uv = floor(FRAGCOORD.xy * 0.5) * 0.5;
 		float sparkle = hash(sparkle_uv + vec2(floor(time * 4.0)));
-		sparkle = step(0.985, sparkle) * daytime * 0.5;
+		sparkle = step(0.984, sparkle) * daytime * 0.65;
 		sparkle *= smoothstep(0.18, 0.0, UV.y);
-		base += vec3(sparkle) * vec3(1.0, 0.95, 0.80);
+		base += vec3(sparkle) * vec3(1.0, 0.95, 0.80) * hdr_boost;
 	}
 
 	// --- Drifting foam at the surface ---
@@ -142,7 +145,7 @@ void fragment() {
 
 	// --- Interactive ripple surface glint ---
 	float rp = ripple_field(world_pos);
-	base += vec3(max(0.0, rp)) * 0.15 * smoothstep(0.25, 0.0, UV.y) * vec3(1.0, 0.98, 0.9);
+	base += vec3(max(0.0, rp)) * 0.15 * smoothstep(0.25, 0.0, UV.y) * vec3(1.0, 0.98, 0.9) * hdr_boost;
 
 	// --- Faint caustics (swamp = murky; gated by turbidity) ---
 	float caustic1 = sin(world_pos.x * 0.18 + UV.y * 8.0 + time * 1.5);
