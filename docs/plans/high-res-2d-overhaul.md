@@ -89,7 +89,7 @@ Restructure the scene back-to-front into depth bands, each **lit and graded diff
 - **R1 — HDR glow + lighting (desktop).** `use_hdr_2d` + WorldEnvironment glow; push hero elements overbright; one warm key light + cool shadows; web faked-bloom parity pass. *(Biggest single visible jump on desktop.)*
 - **R2 — Grisaille→glaze color system.** Audit value hierarchy; unify the heal under one murk↔healed palette grade in post-process; re-point existing `drain_progress` lerps. *(The signature, made premium.)*
 - **R3 — Depth + atmospheric perspective.** 8-layer restructure; `_atmospheric_tint` on distant layers; near foreground silhouette band; fog band tuning. *(The #1 "flat" fix.)*
-- **R4 — Detail density + ambient life + grain.** 3–5× foliage with per-instance variation + noise clustering; constant ambient motion; fine grain; soft-edge audit. *(Kills the procedural/AI tells.)*
+- **R4 — Detail density + ambient life + foliage fixes.** ✅ (2026-06-08) Ambient life density up (fireflies/dragonflies). **Water hero pass** (HDR-blooming sparkle). **Foliage floating bug fixed** — root cause was Godot not passing Polygon2D uv to shaders without a texture ([[godot-polygon2d-uv-needs-texture]]); attached a 1×1 white tex to all swaying foliage so the sway anchors at the planted base. Denser/lusher grass. All tree-moss now anchored (cypress under canopy blobs; bayou moss re-hung from dead-tree branches). Dev tooling added: env-gated screenshot (DTS_SHOT/_INTERVAL), teleport (DTS_CAMX), zoom (DTS_ZOOM), `--audio-driver Dummy` for muted launches.
 - **R5 — Cave consistency + tuning.** Bring the stack into caves; final grade/glow/perf tuning pass; profile node counts on min-spec + in-browser.
 
 ## Tooling & skills
