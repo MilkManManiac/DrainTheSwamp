@@ -6132,9 +6132,12 @@ func _process(delta: float) -> void:
 		var ray_strength: float = clampf(tod_ray * (1.0 + murk * 0.4), 0.0, 1.0)
 		gr_mat.set_shader_parameter("time", wave_time)
 		gr_mat.set_shader_parameter("strength", ray_strength)
-		gr_mat.set_shader_parameter("ray_color",
-			Vector3(HEAL_RAY_MURKY.r, HEAL_RAY_MURKY.g, HEAL_RAY_MURKY.b).lerp(
-				Vector3(HEAL_RAY_HEALED.r, HEAL_RAY_HEALED.g, HEAL_RAY_HEALED.b), drain_progress))
+		var ray_rgb: Vector3 = Vector3(HEAL_RAY_MURKY.r, HEAL_RAY_MURKY.g, HEAL_RAY_MURKY.b).lerp(
+			Vector3(HEAL_RAY_HEALED.r, HEAL_RAY_HEALED.g, HEAL_RAY_HEALED.b), drain_progress)
+		# Overbright the shaft cores on HDR so the brightest rays bloom (additive shader).
+		if _hdr_glow:
+			ray_rgb *= 1.5
+		gr_mat.set_shader_parameter("ray_color", ray_rgb)
 
 	# fbm fog: animate + heal-lerp color and density (murky thicker/greener -> clean thinner/cooler).
 	var heal_fog_col: Color = HEAL_FOG_MURKY.lerp(HEAL_FOG_HEALED, drain_progress)

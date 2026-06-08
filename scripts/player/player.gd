@@ -64,8 +64,11 @@ var lantern_flicker_time: float = 0.0
 # Tool visual elements (built dynamically)
 var tool_visuals: Array[ColorRect] = []
 
+var _hdr_glow: bool = false  # Forward+/Mobile: lantern emits overbright to bloom under HDR glow
+
 func _ready() -> void:
 	add_to_group("player")
+	_hdr_glow = RenderingServer.get_rendering_device() != null
 	GameManager.tool_changed.connect(func(_d: Dictionary) -> void: _update_tool_visual())
 	_update_tool_visual()
 	_setup_lantern()
@@ -790,16 +793,18 @@ func _update_lantern(delta: float) -> void:
 
 	# Texture scale: radius to texture mapping
 	var radius: float = GameManager.get_lantern_radius()
-	lantern_light.texture_scale = (radius * 2.0) / 256.0
+	lantern_light.texture_scale = (radius * 2.0) / 256.0 * 0.88
 
-	# Animate flame color and size
+	# Animate flame color and size (overbright on HDR so it blooms into a warm halo)
 	var flame_brightness: float = 0.85 + flicker * 0.15
-	lantern_flame.color = Color(1.0, 0.95 * flame_brightness, 0.4 * flame_brightness)
+	var flame_boost: float = 1.7 if _hdr_glow else 1.0
+	lantern_flame.color = Color(flame_boost, 0.95 * flame_brightness * flame_boost, 0.4 * flame_brightness * flame_boost)
 	lantern_flame.size.y = 3.0 + sin(lantern_flicker_time * 12.0) * 0.5
 
 	# Animate glass glow intensity
 	var glass_alpha: float = 0.5 + darkness * 0.3 * flicker
-	lantern_glass.color = Color(1.0, 0.85, 0.5, glass_alpha)
+	var glass_boost: float = 1.3 if _hdr_glow else 1.0
+	lantern_glass.color = Color(glass_boost, 0.85 * glass_boost, 0.5 * glass_boost, glass_alpha)
 
 	# Slight position wobble for organic feel
 	lantern_light.position.x = sin(lantern_flicker_time * 3.1) * 0.5
