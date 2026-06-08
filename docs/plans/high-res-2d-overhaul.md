@@ -90,7 +90,12 @@ Restructure the scene back-to-front into depth bands, each **lit and graded diff
 - **R2 — Grisaille→glaze color system.** Audit value hierarchy; unify the heal under one murk↔healed palette grade in post-process; re-point existing `drain_progress` lerps. *(The signature, made premium.)*
 - **R3 — Depth + atmospheric perspective.** 8-layer restructure; `_atmospheric_tint` on distant layers; near foreground silhouette band; fog band tuning. *(The #1 "flat" fix.)*
 - **R4 — Detail density + ambient life + foliage fixes.** ✅ (2026-06-08) Ambient life density up (fireflies/dragonflies). **Water hero pass** (HDR-blooming sparkle). **Foliage floating bug fixed** — root cause was Godot not passing Polygon2D uv to shaders without a texture ([[godot-polygon2d-uv-needs-texture]]); attached a 1×1 white tex to all swaying foliage so the sway anchors at the planted base. Denser/lusher grass. All tree-moss now anchored (cypress under canopy blobs; bayou moss re-hung from dead-tree branches). Dev tooling added: env-gated screenshot (DTS_SHOT/_INTERVAL), teleport (DTS_CAMX), zoom (DTS_ZOOM), `--audio-driver Dummy` for muted launches.
-- **R5 — Cave consistency + tuning.** Bring the stack into caves; final grade/glow/perf tuning pass; profile node counts on min-spec + in-browser.
+- **R5 — Cave consistency + tuning.** ✅ Cave overhaul DONE (2026-06-08): HDR-2D glow + WorldEnvironment into `cave_base.gd` (all 10 caves); fixed broken post-process bloom param; overbright crystals/water/light-shafts/gleams so they bloom; bigger/brighter crystals with real light pools; lifted ambient; luminous pools. Each cave keeps its themed crystal color. *(Remaining: final perf profiling + web gl-compat verification.)*
+
+## Also delivered this session (beyond original rounds)
+- **Drainsville town overhaul** — painterly bayou storefronts (gradient walls, varied roofs, glowing windows, shutters, bracket signs, pilings, moss) + water tower, NA dead-drop (stub), boardwalk, props (lamps/barrels/crates/string-lights) all HDR-blooming at night. Plan: `town-build.md`. *(Town Phase 2 — per-store shop routing + water-tower auto-sell — NOT yet built.)*
+- **Story rework design** (`story-rework.md`): Northwind Analytics foreign-handler arc; not yet implemented.
+- **Dev tooling**: env-gated screenshot/teleport/zoom + muted launches + day-freeze + transition-block, in both `game_world.gd` and `cave_base.gd`.
 
 ## Tooling & skills
 
