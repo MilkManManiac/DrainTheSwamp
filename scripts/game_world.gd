@@ -569,6 +569,7 @@ func _ready() -> void:
 	_build_terrain_details()
 	_build_terrain_zones()
 	_build_shop()
+	_build_town()
 	_build_water()
 	_build_water_walls()
 	_build_water_detect_areas()
@@ -1101,8 +1102,9 @@ func _build_terrain() -> void:
 	# Left wall
 	var left_wall := CollisionShape2D.new()
 	var lw_shape := SegmentShape2D.new()
-	lw_shape.a = Vector2(-20, -100)
-	lw_shape.b = Vector2(-20, fill_bottom)
+	# Moved west from -20 to make room for Drainsville (town spans to ~-182).
+	lw_shape.a = Vector2(-205, -100)
+	lw_shape.b = Vector2(-205, fill_bottom)
 	left_wall.shape = lw_shape
 	terrain_body.add_child(left_wall)
 
@@ -5074,8 +5076,8 @@ func _build_shop() -> void:
 	add_child(sign_board)
 
 	var shop_lbl := Label.new()
-	shop_lbl.text = "SHOP"
-	shop_lbl.add_theme_font_size_override("font_size", 10)
+	shop_lbl.text = "HARDWARE"
+	shop_lbl.add_theme_font_size_override("font_size", 7)
 	shop_lbl.add_theme_color_override("font_color", Color(1.0, 0.9, 0.4, 0.9))
 	shop_lbl.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.5))
 	shop_lbl.add_theme_constant_override("shadow_offset_x", 1)
@@ -5218,6 +5220,230 @@ func _on_shop_body_exited(body: Node2D) -> void:
 		body.set_near_shop(false)
 		player_in_shop_area = false
 		shop_player_ref = null
+
+# --- Town (Drainsville): storefronts around the Hardware shop + water tower + NA drop ---
+func _build_town() -> void:
+	# Extra themed storefronts WEST of the existing Hardware (Swamp Mike's) shop.
+	var stores: Array = [
+		{"x": -66.0, "w": 40.0, "h": 36.0, "wall": Color(0.40, 0.34, 0.26), "roof": Color(0.22, 0.42, 0.34), "sign": "DINER", "sc": Color(1.0, 0.86, 0.5)},
+		{"x": -112.0, "w": 40.0, "h": 42.0, "wall": Color(0.36, 0.31, 0.29), "roof": Color(0.34, 0.24, 0.22), "sign": "PAWN", "sc": Color(1.0, 0.9, 0.45)},
+		{"x": -158.0, "w": 44.0, "h": 38.0, "wall": Color(0.39, 0.35, 0.23), "roof": Color(0.34, 0.36, 0.20), "sign": "OUTFITTER", "sc": Color(0.95, 0.88, 0.6)},
+	]
+	for s in stores:
+		var gy: float = _get_terrain_y_at(s["x"] + s["w"] * 0.5)
+		if gy <= 0.0:
+			gy = 136.0
+		_town_storefront(s["x"], gy, s["w"], s["h"], s["wall"], s["roof"], s["sign"], s["sc"])
+	# Boardwalk under the whole town strip
+	for bx in range(-180, 44, 9):
+		var bgy: float = _get_terrain_y_at(float(bx))
+		if bgy <= 0.0:
+			bgy = 136.0
+		var plank := ColorRect.new()
+		plank.position = Vector2(float(bx), bgy - 2.0)
+		plank.size = Vector2(8, 4)
+		plank.color = Color(0.32, 0.24, 0.16) if (bx / 9) % 2 == 0 else Color(0.28, 0.21, 0.14)
+		plank.z_index = 2
+		add_child(plank)
+	# Water tower — east home-base landmark (future auto-sell point)
+	var tgy: float = _get_terrain_y_at(48.0)
+	if tgy <= 0.0:
+		tgy = 136.0
+	_town_water_tower(48.0, tgy)
+	# NA dead-drop — tucked at the quiet west edge (stub; behavior added in story rework)
+	var dgy: float = _get_terrain_y_at(-182.0)
+	if dgy <= 0.0:
+		dgy = 136.0
+	_town_dropbox(-182.0, dgy)
+
+func _town_storefront(base_x: float, ground_y: float, w: float, h: float, wall_col: Color, roof_col: Color, sign_text: String, sign_col: Color) -> void:
+	var found := ColorRect.new()
+	found.position = Vector2(base_x, ground_y - 5)
+	found.size = Vector2(w, 7)
+	found.color = Color(0.30, 0.26, 0.22)
+	found.z_index = 2
+	add_child(found)
+	var wall := ColorRect.new()
+	wall.position = Vector2(base_x + 2, ground_y - h)
+	wall.size = Vector2(w - 4, h - 5)
+	wall.color = wall_col
+	wall.z_index = 3
+	add_child(wall)
+	for pi in range(int((h - 5) / 8.0)):
+		var plank := ColorRect.new()
+		plank.position = Vector2(base_x + 2, ground_y - h + 5 + pi * 8)
+		plank.size = Vector2(w - 4, 1)
+		var pc: Color = wall_col.darkened(0.25)
+		pc.a = 0.5
+		plank.color = pc
+		plank.z_index = 3
+		add_child(plank)
+	# Gable roof (overhangs the wall)
+	var roof := Polygon2D.new()
+	roof.polygon = PackedVector2Array([
+		Vector2(base_x - 3, ground_y - h),
+		Vector2(base_x + w * 0.5, ground_y - h - 14),
+		Vector2(base_x + w + 3, ground_y - h),
+	])
+	roof.color = roof_col
+	roof.z_index = 4
+	add_child(roof)
+	# Door
+	var door := ColorRect.new()
+	door.position = Vector2(base_x + w * 0.5 - 6, ground_y - 22)
+	door.size = Vector2(12, 17)
+	door.color = wall_col.darkened(0.55)
+	door.z_index = 4
+	add_child(door)
+	# Lit window (overbright -> blooms at night) + warm light pool
+	var win := ColorRect.new()
+	win.position = Vector2(base_x + w - 12, ground_y - h + 9)
+	win.size = Vector2(7, 7)
+	win.color = _emit(Color(1.0, 0.82, 0.45, 0.92), 1.4)
+	win.z_index = 4
+	add_child(win)
+	var winlight := PointLight2D.new()
+	winlight.position = Vector2(base_x + w - 8.5, ground_y - h + 12)
+	winlight.color = Color(1.0, 0.8, 0.5)
+	winlight.energy = 0.45
+	winlight.blend_mode = PointLight2D.BLEND_MODE_ADD
+	winlight.texture = _make_light_texture()
+	winlight.texture_scale = 0.45
+	add_child(winlight)
+	# Hanging sign
+	var signboard := ColorRect.new()
+	signboard.position = Vector2(base_x + w * 0.5 - 19, ground_y - h - 1)
+	signboard.size = Vector2(38, 11)
+	signboard.color = Color(0.20, 0.15, 0.10)
+	signboard.z_index = 5
+	add_child(signboard)
+	var lbl := Label.new()
+	lbl.text = sign_text
+	lbl.add_theme_font_size_override("font_size", 6)
+	lbl.add_theme_color_override("font_color", sign_col)
+	lbl.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.6))
+	lbl.add_theme_constant_override("shadow_offset_x", 1)
+	lbl.add_theme_constant_override("shadow_offset_y", 1)
+	lbl.position = Vector2(base_x + w * 0.5 - 18, ground_y - h)
+	lbl.size = Vector2(36, 9)
+	lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	lbl.z_index = 6
+	add_child(lbl)
+
+func _town_water_tower(cx: float, ground_y: float) -> void:
+	var tank_top: float = ground_y - 88.0
+	var tank_bot: float = ground_y - 60.0
+	var tw: float = 30.0
+	# Legs (splayed) + a cross-brace
+	for s in [-1.0, 1.0]:
+		var leg := Line2D.new()
+		leg.width = 2.0
+		leg.default_color = Color(0.28, 0.22, 0.16)
+		leg.add_point(Vector2(cx + s * tw * 0.42, tank_bot))
+		leg.add_point(Vector2(cx + s * tw * 0.7, ground_y - 2))
+		leg.z_index = 2
+		add_child(leg)
+	var brace := Line2D.new()
+	brace.width = 1.0
+	brace.default_color = Color(0.26, 0.20, 0.14)
+	brace.add_point(Vector2(cx - tw * 0.55, ground_y - 28))
+	brace.add_point(Vector2(cx + tw * 0.55, ground_y - 16))
+	brace.z_index = 2
+	add_child(brace)
+	var brace2 := Line2D.new()
+	brace2.width = 1.0
+	brace2.default_color = Color(0.26, 0.20, 0.14)
+	brace2.add_point(Vector2(cx + tw * 0.55, ground_y - 28))
+	brace2.add_point(Vector2(cx - tw * 0.55, ground_y - 16))
+	brace2.z_index = 2
+	add_child(brace2)
+	# Tank body
+	var tank := Polygon2D.new()
+	tank.polygon = PackedVector2Array([
+		Vector2(cx - tw * 0.5, tank_top + 4),
+		Vector2(cx - tw * 0.5, tank_bot),
+		Vector2(cx + tw * 0.5, tank_bot),
+		Vector2(cx + tw * 0.5, tank_top + 4),
+	])
+	tank.color = Color(0.42, 0.44, 0.43)
+	tank.z_index = 3
+	add_child(tank)
+	# Conical roof
+	var cone := Polygon2D.new()
+	cone.polygon = PackedVector2Array([
+		Vector2(cx - tw * 0.56, tank_top + 4),
+		Vector2(cx, tank_top - 9),
+		Vector2(cx + tw * 0.56, tank_top + 4),
+	])
+	cone.color = Color(0.30, 0.22, 0.16)
+	cone.z_index = 4
+	add_child(cone)
+	# Rivet band
+	var band := ColorRect.new()
+	band.position = Vector2(cx - tw * 0.5, (tank_top + tank_bot) * 0.5 + 4.0)
+	band.size = Vector2(tw, 2)
+	band.color = Color(0.30, 0.33, 0.31)
+	band.z_index = 4
+	add_child(band)
+	# Label
+	var lbl := Label.new()
+	lbl.text = "WATER"
+	lbl.add_theme_font_size_override("font_size", 6)
+	lbl.add_theme_color_override("font_color", Color(0.86, 0.91, 0.96))
+	lbl.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.6))
+	lbl.add_theme_constant_override("shadow_offset_x", 1)
+	lbl.add_theme_constant_override("shadow_offset_y", 1)
+	lbl.position = Vector2(cx - 15, (tank_top + tank_bot) * 0.5 - 9.0)
+	lbl.size = Vector2(30, 8)
+	lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	lbl.z_index = 5
+	add_child(lbl)
+	# Down-pipe / spout (where you offload your haul)
+	var pipe := Line2D.new()
+	pipe.width = 2.0
+	pipe.default_color = Color(0.32, 0.34, 0.32)
+	pipe.add_point(Vector2(cx + tw * 0.4, tank_bot))
+	pipe.add_point(Vector2(cx + tw * 0.4, ground_y - 9))
+	pipe.add_point(Vector2(cx + tw * 0.4 + 7, ground_y - 9))
+	pipe.z_index = 3
+	add_child(pipe)
+
+func _town_dropbox(cx: float, ground_y: float) -> void:
+	# A weathered, understated mailbox on a post (the secret NA dead-drop).
+	var post := ColorRect.new()
+	post.position = Vector2(cx - 1, ground_y - 15)
+	post.size = Vector2(2, 15)
+	post.color = Color(0.26, 0.20, 0.14)
+	post.z_index = 4
+	add_child(post)
+	var box := ColorRect.new()
+	box.position = Vector2(cx - 6, ground_y - 23)
+	box.size = Vector2(12, 8)
+	box.color = Color(0.30, 0.34, 0.33)
+	box.z_index = 5
+	add_child(box)
+	var lid := Polygon2D.new()
+	lid.polygon = PackedVector2Array([
+		Vector2(cx - 6, ground_y - 23),
+		Vector2(cx - 4, ground_y - 26),
+		Vector2(cx + 4, ground_y - 26),
+		Vector2(cx + 6, ground_y - 23),
+	])
+	lid.color = Color(0.25, 0.29, 0.28)
+	lid.z_index = 5
+	add_child(lid)
+	var slot := ColorRect.new()
+	slot.position = Vector2(cx - 3, ground_y - 21)
+	slot.size = Vector2(6, 1)
+	slot.color = Color(0.04, 0.04, 0.04)
+	slot.z_index = 6
+	add_child(slot)
+	var flag := ColorRect.new()
+	flag.position = Vector2(cx + 6, ground_y - 23)
+	flag.size = Vector2(3, 3)
+	flag.color = Color(0.62, 0.22, 0.16)
+	flag.z_index = 6
+	add_child(flag)
 
 # --- Weather System ---
 func _build_weather() -> void:
@@ -6105,11 +6331,15 @@ func _process(delta: float) -> void:
 	if GameManager.camel_count > 0:
 		_update_camels(delta)
 
-	cycle_time += delta
-	if cycle_time >= CYCLE_DURATION:
-		cycle_time -= CYCLE_DURATION
-		GameManager.current_day += 1
-		GameManager.day_changed.emit(GameManager.current_day)
+	# Debug-shot with a locked time-of-day also freezes day progression so news/
+	# day-change popups don't fire and block captures.
+	var _shot_tod_locked: bool = _shot_path != "" and OS.get_environment("DTS_TOD") != ""
+	if not _shot_tod_locked:
+		cycle_time += delta
+		if cycle_time >= CYCLE_DURATION:
+			cycle_time -= CYCLE_DURATION
+			GameManager.current_day += 1
+			GameManager.day_changed.emit(GameManager.current_day)
 
 	var t: float = cycle_time / CYCLE_DURATION
 	# Debug-shot only: force time-of-day via DTS_TOD (0..1) to inspect any lighting.
