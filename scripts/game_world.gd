@@ -1670,7 +1670,7 @@ func _build_stars() -> void:
 
 # --- Fireflies ---
 func _build_fireflies() -> void:
-	for i in range(20):
+	for i in range(36):
 		var fly := ColorRect.new()
 		fly.size = Vector2(2, 2)
 		fly.color = Color(0.8, 1.0, 0.3, 0.0)
@@ -2081,7 +2081,7 @@ func _build_dragonflies() -> void:
 		Color(0.7, 0.3, 0.6),   # Purple
 		Color(0.9, 0.4, 0.2),   # Orange
 	]
-	for i in range(8):
+	for i in range(16):
 		var df := Node2D.new()
 		df.z_index = 6
 		add_child(df)
