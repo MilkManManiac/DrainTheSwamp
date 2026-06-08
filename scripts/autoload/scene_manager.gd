@@ -654,6 +654,8 @@ func _do_scene_change(scene_path: String) -> void:
 	_fade_in()
 
 func transition_to_return() -> void:
+	if OS.get_environment("DTS_SHOT") != "":
+		return  # debug screenshot mode: stay in the current scene
 	if is_transitioning:
 		return
 	is_transitioning = true

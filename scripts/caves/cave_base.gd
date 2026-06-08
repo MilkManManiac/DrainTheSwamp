@@ -39,6 +39,7 @@ const POST_PROCESS_SHADER = preload("res://shaders/post_process.gdshader")
 
 # Post-processing
 var cave_post_process_rect: ColorRect = null
+var _hdr: bool = false  # Forward+/Mobile: overbright cave elements bloom via HDR glow
 var cave_post_time: float = 0.0
 
 # Cave UI refs
@@ -52,9 +53,10 @@ func _ready() -> void:
 func _setup_cave() -> void:
 	# CanvasModulate — moody but readable (lifted from near-black 0.05)
 	var modulate := CanvasModulate.new()
-	modulate.color = Color(0.18, 0.19, 0.26)
+	modulate.color = Color(0.30, 0.31, 0.39)
 	add_child(modulate)
 
+	_setup_cave_hdr()
 	_build_floor()
 	_build_ceiling()
 	_build_walls()
@@ -82,6 +84,64 @@ func _setup_cave() -> void:
 	# Connect cave pool signals
 	GameManager.cave_pool_level_changed.connect(_on_cave_pool_level_changed)
 	GameManager.cave_pool_completed.connect(_on_cave_pool_completed)
+
+	_setup_debug_shot()
+
+# Dev: when launched with DTS_SHOT=<path>, save the rendered viewport every 2s (or
+# DTS_SHOT_INTERVAL). DTS_ZOOM overrides camera zoom. Inert without DTS_SHOT.
+func _setup_debug_shot() -> void:
+	var sp: String = OS.get_environment("DTS_SHOT")
+	if sp == "":
+		return
+	var zoomv: String = OS.get_environment("DTS_ZOOM")
+	if zoomv != "":
+		var cam: Camera2D = get_viewport().get_camera_2d()
+		if cam:
+			var z: float = zoomv.to_float()
+			cam.zoom = Vector2(z, z)
+	var iv: String = OS.get_environment("DTS_SHOT_INTERVAL")
+	var wait: float = iv.to_float() if iv != "" else 2.0
+	if wait <= 0.0:
+		wait = 2.0
+	var st := Timer.new()
+	st.wait_time = wait
+	st.autostart = true
+	st.timeout.connect(func() -> void:
+		var tex: ViewportTexture = get_viewport().get_texture()
+		if tex:
+			var img: Image = tex.get_image()
+			if img:
+				img.save_png(sp))
+	add_child(st)
+
+# --- HDR-2D glow (Forward+/Mobile) so crystals/water/shafts bloom ---
+func _setup_cave_hdr() -> void:
+	if RenderingServer.get_rendering_device() == null:
+		return
+	_hdr = true
+	get_viewport().use_hdr_2d = true
+	var env := Environment.new()
+	env.background_mode = Environment.BG_CANVAS
+	env.glow_enabled = true
+	env.glow_blend_mode = Environment.GLOW_BLEND_MODE_SCREEN
+	env.glow_intensity = 1.15
+	env.glow_strength = 1.2
+	env.glow_bloom = 0.12
+	env.glow_hdr_threshold = 1.0
+	env.glow_hdr_scale = 2.0
+	env.set_glow_level(1, 0.8)
+	env.set_glow_level(2, 1.0)
+	env.set_glow_level(3, 0.85)
+	env.set_glow_level(4, 0.45)
+	var we := WorldEnvironment.new()
+	we.environment = env
+	add_child(we)
+
+# Push a color overbright (>1.0) so it blooms; pass-through on GL compat.
+func _emit(c: Color, boost: float) -> Color:
+	if not _hdr:
+		return c
+	return Color(c.r * boost, c.g * boost, c.b * boost, c.a)
 
 # --- Radial soft-light gradient texture (shared helper) ---
 func _make_radial_light_texture() -> GradientTexture2D:
@@ -133,7 +193,7 @@ func _build_ambient_fill_lights() -> void:
 		# Cool blue-teal fill
 		fill_light.color = Color(0.45, 0.62, 0.78)
 		fill_light.blend_mode = PointLight2D.BLEND_MODE_ADD
-		fill_light.energy = 0.25
+		fill_light.energy = 0.42
 		fill_light.shadow_enabled = false
 		fill_light.texture = _make_radial_light_texture()
 		fill_light.texture_scale = randf_range(1.6, 2.2)
@@ -151,13 +211,19 @@ func _build_cave_post_processing() -> void:
 	cave_post_process_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var mat := ShaderMaterial.new()
 	mat.shader = POST_PROCESS_SHADER
-	mat.set_shader_parameter("vignette_strength", 0.5)
-	mat.set_shader_parameter("bloom_strength", 0.55)
-	mat.set_shader_parameter("saturation", 1.1)
+	mat.set_shader_parameter("vignette_strength", 0.4)
+	# Was "bloom_strength" (not a real uniform) — fixed. Real HDR glow handles bloom on
+	# desktop; fall back to the shader's single-pass bloom on GL Compatibility (web).
+	mat.set_shader_parameter("bloom_threshold", 0.6)
+	mat.set_shader_parameter("bloom_intensity", 0.0 if _hdr else 0.7)
+	mat.set_shader_parameter("bloom_radius", 3.0)
+	mat.set_shader_parameter("saturation", 1.22)
 	mat.set_shader_parameter("chromatic_aberration", 0.4)
 	mat.set_shader_parameter("film_grain_strength", 0.04)
-	mat.set_shader_parameter("night_factor", 0.35)
-	mat.set_shader_parameter("warmth", -0.02)
+	mat.set_shader_parameter("dither_levels", 14.0)
+	mat.set_shader_parameter("dither_strength", 0.4)
+	mat.set_shader_parameter("night_factor", 0.12)
+	mat.set_shader_parameter("warmth", -0.01)
 	mat.set_shader_parameter("time", 0.0)
 	cave_post_process_rect.material = mat
 	pp_layer.add_child(cave_post_process_rect)
@@ -398,7 +464,7 @@ func _build_stalagmites() -> void:
 func _build_crystals() -> void:
 	var left_x: float = cave_terrain_points[0].x
 	var right_x: float = cave_terrain_points[cave_terrain_points.size() - 1].x
-	var num_clusters: int = randi_range(4, 8)
+	var num_clusters: int = randi_range(8, 13)
 	for i in range(num_clusters):
 		var on_ceiling: bool = randf() < 0.3
 		var cx: float = randf_range(left_x + 60, right_x - 40)
@@ -411,8 +477,8 @@ func _build_crystals() -> void:
 		# 2-4 parallelogram crystals per cluster
 		var num_crystals: int = randi_range(2, 4)
 		for j in range(num_crystals):
-			var cw: float = randf_range(2, 5)
-			var ch: float = randf_range(6, 14)
+			var cw: float = randf_range(3, 7)
+			var ch: float = randf_range(9, 20)
 			var skew: float = randf_range(-2, 2)
 			var offset_x: float = randf_range(-6, 6)
 			var crystal := Polygon2D.new()
@@ -442,10 +508,11 @@ func _build_crystals() -> void:
 				Vector2(offset_x + skew + core_inset, tip_y * 0.92),
 			])
 			core.position = Vector2(cx, cy)
-			core.color = crystal_color.lightened(0.65)
-			var hot: Color = crystal_color.lightened(0.85)
+			core.color = _emit(crystal_color.lightened(0.65), 1.7)
+			var hot: Color = _emit(crystal_color.lightened(0.85), 1.9)
 			hot.a = 0.9
-			core.vertex_colors = PackedColorArray([crystal_color.lightened(0.4), crystal_color.lightened(0.4), hot, hot])
+			var warm_base: Color = _emit(crystal_color.lightened(0.4), 1.5)
+			core.vertex_colors = PackedColorArray([warm_base, warm_base, hot, hot])
 			core.z_index = 3
 			add_child(core)
 
@@ -454,7 +521,7 @@ func _build_crystals() -> void:
 		light.position = Vector2(cx, cy + (6 if on_ceiling else -6))
 		light.color = crystal_color
 		light.blend_mode = PointLight2D.BLEND_MODE_ADD
-		light.energy = randf_range(0.7, 1.25)
+		light.energy = randf_range(0.95, 1.55)
 		light.shadow_enabled = false
 		var gradient := GradientTexture2D.new()
 		gradient.width = 128
@@ -469,7 +536,7 @@ func _build_crystals() -> void:
 		grad.set_color(1, Color(0, 0, 0, 0))
 		gradient.gradient = grad
 		light.texture = gradient
-		light.texture_scale = randf_range(0.2, 0.3)
+		light.texture_scale = randf_range(0.6, 1.0)
 		add_child(light)
 		crystal_lights.append(light)
 		crystal_phases.append(randf() * TAU)
@@ -563,6 +630,7 @@ func _build_cave_pools() -> void:
 		wmat.set_shader_parameter("daytime", 0.0)
 		wmat.set_shader_parameter("sky_color", Vector3(0.20, 0.34, 0.46))
 		wmat.set_shader_parameter("time", 0.0)
+		wmat.set_shader_parameter("hdr_boost", 2.4 if _hdr else 1.0)
 		water_poly.material = wmat
 		_update_water_poly_shape(water_poly, x_start, x_end, water_y)
 		water_poly.visible = not completed
@@ -572,7 +640,7 @@ func _build_cave_pools() -> void:
 		var water_hl := ColorRect.new()
 		water_hl.size = Vector2(x_end - x_start - 4, 1)
 		water_hl.position = Vector2(x_start + 2, water_y)
-		water_hl.color = Color(0.3, 0.5, 0.7, 0.35)
+		water_hl.color = _emit(Color(0.42, 0.62, 0.86, 0.5), 1.7)
 		water_hl.z_index = 2
 		water_hl.visible = not completed
 		add_child(water_hl)
@@ -614,19 +682,19 @@ func _build_cave_pools() -> void:
 		glow_grad.set_color(1, Color(0, 0, 0, 0))
 		glow_grad_tex.gradient = glow_grad
 		glow_light.texture = glow_grad_tex
-		glow_light.texture_scale = 0.4
+		glow_light.texture_scale = 0.7
 		glow_light.visible = not completed
 		add_child(glow_light)
 
 		# Soft surface glow over the pool (cool, additive)
 		var surface_glow := PointLight2D.new()
 		surface_glow.position = Vector2(valley_min_x, water_y - 4)
-		surface_glow.color = Color(0.4, 0.62, 0.78)
+		surface_glow.color = Color(0.45, 0.66, 0.82)
 		surface_glow.blend_mode = PointLight2D.BLEND_MODE_ADD
-		surface_glow.energy = 0.4
+		surface_glow.energy = 0.75
 		surface_glow.shadow_enabled = false
 		surface_glow.texture = _make_radial_light_texture()
-		surface_glow.texture_scale = 0.7
+		surface_glow.texture_scale = 1.1
 		surface_glow.visible = not completed
 		add_child(surface_glow)
 
@@ -935,7 +1003,7 @@ func _build_moisture_gleams() -> void:
 				gy = _get_cave_ceiling_y_at(gx) + randf_range(2, 15)  # Below ceiling
 			var gleam := ColorRect.new()
 			gleam.size = Vector2(1, 1)
-			gleam.color = Color(1.0, 1.0, 1.0, 0.0)
+			gleam.color = _emit(Color(1.0, 1.0, 1.0, 0.0), 2.2)
 			gleam.position = Vector2(gx, gy)
 			gleam.z_index = 8
 			add_child(gleam)
@@ -969,8 +1037,8 @@ func _build_light_shafts() -> void:
 			Vector2(sx + drift + bot_w, ceil_y + beam_len),
 			Vector2(sx + drift - bot_w, ceil_y + beam_len),
 		])
-		var ray_col: Color = Color(0.92, 0.87, 0.72, randf_range(0.06, 0.11))
-		var ray_fade: Color = Color(0.92, 0.87, 0.72, 0.0)
+		var ray_col: Color = _emit(Color(0.92, 0.87, 0.72, randf_range(0.06, 0.11)), 1.8)
+		var ray_fade: Color = _emit(Color(0.92, 0.87, 0.72, 0.0), 1.8)
 		cone.vertex_colors = PackedColorArray([ray_col, ray_col, ray_fade, ray_fade])
 		cone.color = Color(1, 1, 1, 1)
 		var cone_mat := CanvasItemMaterial.new()
@@ -981,7 +1049,7 @@ func _build_light_shafts() -> void:
 		# Light beam Line2D (bright core)
 		var beam := Line2D.new()
 		beam.width = randf_range(4, 8)
-		beam.default_color = Color(0.9, 0.85, 0.7, randf_range(0.03, 0.06))
+		beam.default_color = _emit(Color(0.9, 0.85, 0.7, randf_range(0.03, 0.06)), 2.2)
 		beam.add_point(Vector2(sx, ceil_y))
 		beam.add_point(Vector2(sx + randf_range(-3, 3), ceil_y + beam_len))
 		beam.z_index = 6
@@ -1049,6 +1117,8 @@ func _build_exit_zone() -> void:
 	exit_area.body_entered.connect(_on_exit_body_entered)
 
 func _on_exit_body_entered(body: Node2D) -> void:
+	if OS.get_environment("DTS_SHOT") != "":
+		return  # debug screenshot mode: stay in the cave instead of exiting
 	if body is CharacterBody2D:
 		SceneManager.transition_to_return()
 
