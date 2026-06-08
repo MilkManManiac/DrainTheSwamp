@@ -1102,9 +1102,9 @@ func _build_terrain() -> void:
 	# Left wall
 	var left_wall := CollisionShape2D.new()
 	var lw_shape := SegmentShape2D.new()
-	# Moved west from -20 to make room for Drainsville (town spans to ~-182).
-	lw_shape.a = Vector2(-205, -100)
-	lw_shape.b = Vector2(-205, fill_bottom)
+	# Moved west from -20 to make room for Drainsville (town spans to ~-232).
+	lw_shape.a = Vector2(-240, -100)
+	lw_shape.b = Vector2(-240, fill_bottom)
 	left_wall.shape = lw_shape
 	terrain_body.add_child(left_wall)
 
@@ -4985,151 +4985,20 @@ func _build_shop() -> void:
 	var sx: float = -22.0  # Shop left edge x
 	var shop_y: float = 136.0  # Shore ground level
 
-	# Stone platform/foundation
-	var platform := ColorRect.new()
-	platform.position = Vector2(sx, shop_y - 6)
-	platform.size = Vector2(56, 8)
-	platform.color = Color(0.45, 0.4, 0.35)
-	platform.z_index = 2
-	add_child(platform)
+	# Hardware (Swamp Mike's) storefront — built with the shared painterly town helper.
+	_town_building(sx, shop_y, 46.0, 42.0, Color(0.46, 0.34, 0.22), Color(0.46, 0.24, 0.16), "HARDWARE", Color(1.0, 0.86, 0.4), 0)
 
-	# Main wall
-	var wall := ColorRect.new()
-	wall.position = Vector2(sx + 6, shop_y - 46)
-	wall.size = Vector2(44, 40)
-	wall.color = Color(0.42, 0.32, 0.2)
-	wall.z_index = 3
-	add_child(wall)
-
-	# Plank lines on wall
-	for pi in range(5):
-		var plank := ColorRect.new()
-		plank.position = Vector2(sx + 6, shop_y - 46 + pi * 8)
-		plank.size = Vector2(44, 1)
-		plank.color = Color(0.35, 0.26, 0.15, 0.4)
-		plank.z_index = 3
-		add_child(plank)
-
-	# Roof (triangle using Polygon2D)
-	var roof := Polygon2D.new()
-	roof.polygon = PackedVector2Array([
-		Vector2(sx + 2, shop_y - 46),
-		Vector2(sx + 28, shop_y - 62),
-		Vector2(sx + 54, shop_y - 46),
-	])
-	roof.color = Color(0.5, 0.22, 0.12)
-	roof.z_index = 4
-	add_child(roof)
-
-	# Roof edge line
-	var roof_edge := ColorRect.new()
-	roof_edge.position = Vector2(sx + 2, shop_y - 47)
-	roof_edge.size = Vector2(52, 2)
-	roof_edge.color = Color(0.4, 0.18, 0.1)
-	roof_edge.z_index = 4
-	add_child(roof_edge)
-
-	# Door
-	var door_frame := ColorRect.new()
-	door_frame.position = Vector2(sx + 19, shop_y - 30)
-	door_frame.size = Vector2(18, 24)
-	door_frame.color = Color(0.25, 0.18, 0.1)
-	door_frame.z_index = 4
-	add_child(door_frame)
-
-	# Door handle
-	var handle := ColorRect.new()
-	handle.position = Vector2(sx + 32, shop_y - 18)
-	handle.size = Vector2(2, 2)
-	handle.color = Color(0.7, 0.6, 0.3)
-	handle.z_index = 5
-	add_child(handle)
-
-	# Window
-	var window := ColorRect.new()
-	window.position = Vector2(sx + 36, shop_y - 40)
-	window.size = Vector2(8, 8)
-	window.color = Color(0.6, 0.55, 0.35, 0.6)
-	window.z_index = 4
-	add_child(window)
-
-	# Window cross-frame
-	var wh := ColorRect.new()
-	wh.position = Vector2(sx + 36, shop_y - 36)
-	wh.size = Vector2(8, 1)
-	wh.color = Color(0.35, 0.26, 0.15)
-	wh.z_index = 5
-	add_child(wh)
-	var wv := ColorRect.new()
-	wv.position = Vector2(sx + 40, shop_y - 40)
-	wv.size = Vector2(1, 8)
-	wv.color = Color(0.35, 0.26, 0.15)
-	wv.z_index = 5
-	add_child(wv)
-
-	# Shop sign
-	var sign_board := ColorRect.new()
-	sign_board.position = Vector2(sx + 12, shop_y - 56)
-	sign_board.size = Vector2(32, 10)
-	sign_board.color = Color(0.35, 0.28, 0.15)
-	sign_board.z_index = 5
-	add_child(sign_board)
-
-	var shop_lbl := Label.new()
-	shop_lbl.text = "HARDWARE"
-	shop_lbl.add_theme_font_size_override("font_size", 7)
-	shop_lbl.add_theme_color_override("font_color", Color(1.0, 0.9, 0.4, 0.9))
-	shop_lbl.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.5))
-	shop_lbl.add_theme_constant_override("shadow_offset_x", 1)
-	shop_lbl.add_theme_constant_override("shadow_offset_y", 1)
-	shop_lbl.position = Vector2(sx + 14, shop_y - 57)
-	shop_lbl.z_index = 6
-	add_child(shop_lbl)
-
-	# "SELL" indicator
+	# "SELL" indicator (sell point; will move to the water tower in a later pass)
 	var sell_lbl := Label.new()
 	sell_lbl.text = "SELL"
-	sell_lbl.add_theme_font_size_override("font_size", 10)
-	sell_lbl.add_theme_color_override("font_color", Color(1.0, 0.9, 0.3, 0.7))
+	sell_lbl.add_theme_font_size_override("font_size", 9)
+	sell_lbl.add_theme_color_override("font_color", Color(1.0, 0.9, 0.3, 0.75))
 	sell_lbl.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.5))
 	sell_lbl.add_theme_constant_override("shadow_offset_x", 1)
 	sell_lbl.add_theme_constant_override("shadow_offset_y", 1)
 	sell_lbl.position = Vector2(sx + 20, shop_y - 8)
 	sell_lbl.z_index = 5
 	add_child(sell_lbl)
-
-	# Shop lantern (warm light beside door)
-	var shop_lantern := PointLight2D.new()
-	shop_lantern.position = Vector2(sx + 18, shop_y - 32)
-	shop_lantern.color = Color(1.0, 0.85, 0.5)
-	shop_lantern.blend_mode = PointLight2D.BLEND_MODE_ADD
-	shop_lantern.energy = 0.8
-	shop_lantern.shadow_enabled = false
-	var grad := GradientTexture2D.new()
-	grad.width = 64
-	grad.height = 64
-	grad.fill = GradientTexture2D.FILL_RADIAL
-	grad.fill_from = Vector2(0.5, 0.5)
-	grad.fill_to = Vector2(0.5, 0.0)
-	var g := Gradient.new()
-	g.set_offset(0, 0.0)
-	g.set_color(0, Color(1, 1, 1, 1))
-	g.set_offset(1, 1.0)
-	g.set_color(1, Color(0, 0, 0, 0))
-	grad.gradient = g
-	shop_lantern.texture = grad
-	shop_lantern.texture_scale = 0.3
-	add_child(shop_lantern)
-
-	# Vine detail on wall
-	var vine := Line2D.new()
-	vine.width = 1.5
-	vine.default_color = Color(0.2, 0.4, 0.15, 0.6)
-	vine.add_point(Vector2(sx + 6, shop_y - 10))
-	vine.add_point(Vector2(sx + 8, shop_y - 22))
-	vine.add_point(Vector2(sx + 5, shop_y - 34))
-	vine.z_index = 4
-	add_child(vine)
 
 	# Shop interaction Area2D
 	var shop_area := Area2D.new()
@@ -5223,112 +5092,273 @@ func _on_shop_body_exited(body: Node2D) -> void:
 
 # --- Town (Drainsville): storefronts around the Hardware shop + water tower + NA drop ---
 func _build_town() -> void:
-	# Extra themed storefronts WEST of the existing Hardware (Swamp Mike's) shop.
-	var stores: Array = [
-		{"x": -66.0, "w": 40.0, "h": 36.0, "wall": Color(0.40, 0.34, 0.26), "roof": Color(0.22, 0.42, 0.34), "sign": "DINER", "sc": Color(1.0, 0.86, 0.5)},
-		{"x": -112.0, "w": 40.0, "h": 42.0, "wall": Color(0.36, 0.31, 0.29), "roof": Color(0.34, 0.24, 0.22), "sign": "PAWN", "sc": Color(1.0, 0.9, 0.45)},
-		{"x": -158.0, "w": 44.0, "h": 38.0, "wall": Color(0.39, 0.35, 0.23), "roof": Color(0.34, 0.36, 0.20), "sign": "OUTFITTER", "sc": Color(0.95, 0.88, 0.6)},
+	# Drainsville — a weathered bayou hamlet on the home shore (painterly procedural).
+	var gnd := 136.0
+	# --- Background rooftops: a deeper town behind the main street (depth) ---
+	var bg_roofs: Array = [
+		Vector2(-150, 26), Vector2(-118, 34), Vector2(-86, 24),
+		Vector2(-44, 32), Vector2(-6, 26), Vector2(24, 30),
 	]
-	for s in stores:
-		var gy: float = _get_terrain_y_at(s["x"] + s["w"] * 0.5)
-		if gy <= 0.0:
-			gy = 136.0
-		_town_storefront(s["x"], gy, s["w"], s["h"], s["wall"], s["roof"], s["sign"], s["sc"])
-	# Boardwalk under the whole town strip
-	for bx in range(-180, 44, 9):
-		var bgy: float = _get_terrain_y_at(float(bx))
+	for r in bg_roofs:
+		var bx: float = r.x
+		var bh: float = r.y
+		var bw: float = 26.0
+		var rg: float = gnd - 26.0
+		var bwall := Polygon2D.new()
+		bwall.polygon = PackedVector2Array([Vector2(bx, rg - bh), Vector2(bx + bw, rg - bh), Vector2(bx + bw, rg), Vector2(bx, rg)])
+		var bc := Color(0.16, 0.18, 0.19)
+		bwall.vertex_colors = PackedColorArray([bc.lightened(0.05), bc.lightened(0.02), bc.darkened(0.12), bc.darkened(0.16)])
+		bwall.z_index = -1
+		add_child(bwall)
+		var broof := Polygon2D.new()
+		broof.polygon = PackedVector2Array([Vector2(bx - 3, rg - bh), Vector2(bx + bw * 0.5, rg - bh - 9), Vector2(bx + bw + 3, rg - bh)])
+		broof.color = Color(0.12, 0.12, 0.14)
+		broof.z_index = -1
+		add_child(broof)
+	# --- Boardwalk along the street ---
+	for bxi in range(-236, 58, 9):
+		var bgy: float = _get_terrain_y_at(float(bxi))
 		if bgy <= 0.0:
-			bgy = 136.0
-		var plank := ColorRect.new()
-		plank.position = Vector2(float(bx), bgy - 2.0)
-		plank.size = Vector2(8, 4)
-		plank.color = Color(0.32, 0.24, 0.16) if (bx / 9) % 2 == 0 else Color(0.28, 0.21, 0.14)
-		plank.z_index = 2
+			bgy = gnd
+		var plank := Polygon2D.new()
+		var pcol := Color(0.34, 0.25, 0.16) if (bxi / 9) % 2 == 0 else Color(0.29, 0.21, 0.13)
+		plank.polygon = PackedVector2Array([Vector2(bxi, bgy - 3), Vector2(bxi + 8.5, bgy - 3), Vector2(bxi + 8.5, bgy + 2), Vector2(bxi, bgy + 2)])
+		plank.color = pcol
+		plank.z_index = 1
 		add_child(plank)
-	# Water tower — east home-base landmark (future auto-sell point)
-	var tgy: float = _get_terrain_y_at(48.0)
-	if tgy <= 0.0:
-		tgy = 136.0
-	_town_water_tower(48.0, tgy)
-	# NA dead-drop — tucked at the quiet west edge (stub; behavior added in story rework)
-	var dgy: float = _get_terrain_y_at(-182.0)
-	if dgy <= 0.0:
-		dgy = 136.0
-	_town_dropbox(-182.0, dgy)
+	# --- Main street buildings (west of the Hardware shop, which is built in _build_shop) ---
+	var buildings: Array = [
+		{"x": -66.0, "w": 44.0, "h": 36.0, "wall": Color(0.40, 0.36, 0.28), "roof": Color(0.30, 0.20, 0.16), "sign": "DINER", "sc": Color(1.0, 0.84, 0.5), "style": 1},
+		{"x": -112.0, "w": 38.0, "h": 44.0, "wall": Color(0.37, 0.31, 0.31), "roof": Color(0.34, 0.27, 0.23), "sign": "PAWN", "sc": Color(1.0, 0.9, 0.45), "style": 2},
+		{"x": -160.0, "w": 46.0, "h": 38.0, "wall": Color(0.39, 0.36, 0.24), "roof": Color(0.30, 0.34, 0.22), "sign": "OUTFITTER", "sc": Color(0.95, 0.88, 0.6), "style": 0},
+		{"x": -212.0, "w": 40.0, "h": 33.0, "wall": Color(0.35, 0.33, 0.30), "roof": Color(0.26, 0.28, 0.30), "sign": "", "sc": Color(1, 1, 1), "style": 1},
+	]
+	for b in buildings:
+		var gy: float = _get_terrain_y_at(b["x"] + b["w"] * 0.5)
+		if gy <= 0.0:
+			gy = gnd
+		_town_building(b["x"], gy, b["w"], b["h"], b["wall"], b["roof"], b["sign"], b["sc"], b["style"])
+	# --- Street props ---
+	_town_lamp_post(-40.0, _grnd(-40.0, gnd))
+	_town_lamp_post(-136.0, _grnd(-136.0, gnd))
+	_town_barrels(-90.0, _grnd(-90.0, gnd))
+	_town_crates(-188.0, _grnd(-188.0, gnd))
+	_town_string_lights(-66.0, 24.0, gnd - 42.0)
+	_town_string_lights(-160.0, -68.0, gnd - 44.0)
+	# Water tower — east landmark / future auto-sell point
+	_town_water_tower(50.0, _grnd(50.0, gnd))
+	# NA dead-drop — tucked at the quiet west edge by the trees
+	_town_dropbox(-232.0, _grnd(-232.0, gnd))
 
-func _town_storefront(base_x: float, ground_y: float, w: float, h: float, wall_col: Color, roof_col: Color, sign_text: String, sign_col: Color) -> void:
+func _grnd(x: float, fallback: float) -> float:
+	var y: float = _get_terrain_y_at(x)
+	return y if y > 0.0 else fallback
+
+func _town_building(base_x: float, ground_y: float, w: float, h: float, wall_col: Color, roof_col: Color, sign_text: String, sign_col: Color, style: int) -> void:
+	var z := 3
+	var cx := base_x + w * 0.5
+	var top_y := ground_y - h
+	# Contact shadow under the building
+	var shadow := ColorRect.new()
+	shadow.position = Vector2(base_x - 3, ground_y - 1)
+	shadow.size = Vector2(w + 6, 4)
+	shadow.color = Color(0.0, 0.0, 0.0, 0.22)
+	shadow.z_index = z - 1
+	add_child(shadow)
+	# Stone foundation + a couple cypress pilings
 	var found := ColorRect.new()
-	found.position = Vector2(base_x, ground_y - 5)
+	found.position = Vector2(base_x, ground_y - 6)
 	found.size = Vector2(w, 7)
-	found.color = Color(0.30, 0.26, 0.22)
-	found.z_index = 2
+	found.color = Color(0.33, 0.30, 0.27)
+	found.z_index = z
 	add_child(found)
-	var wall := ColorRect.new()
-	wall.position = Vector2(base_x + 2, ground_y - h)
-	wall.size = Vector2(w - 4, h - 5)
-	wall.color = wall_col
-	wall.z_index = 3
+	for px in [base_x + 4.0, base_x + w - 6.0]:
+		var pile := ColorRect.new()
+		pile.position = Vector2(px, ground_y - 4)
+		pile.size = Vector2(3, 6)
+		pile.color = Color(0.22, 0.16, 0.11)
+		pile.z_index = z - 1
+		add_child(pile)
+	# Wall with a soft light->shade + top->bottom gradient (painterly)
+	var wall := Polygon2D.new()
+	wall.polygon = PackedVector2Array([
+		Vector2(base_x + 1, top_y), Vector2(base_x + w - 1, top_y),
+		Vector2(base_x + w - 1, ground_y - 5), Vector2(base_x + 1, ground_y - 5)])
+	wall.vertex_colors = PackedColorArray([
+		wall_col.lightened(0.16), wall_col.darkened(0.05),
+		wall_col.darkened(0.24), wall_col.darkened(0.04)])
+	wall.z_index = z
 	add_child(wall)
-	for pi in range(int((h - 5) / 8.0)):
+	# Plank seams
+	for pi in range(1, int((h - 5) / 7.0)):
 		var plank := ColorRect.new()
-		plank.position = Vector2(base_x + 2, ground_y - h + 5 + pi * 8)
-		plank.size = Vector2(w - 4, 1)
-		var pc: Color = wall_col.darkened(0.25)
-		pc.a = 0.5
+		plank.position = Vector2(base_x + 1, top_y + pi * 7)
+		plank.size = Vector2(w - 2, 1)
+		var pc: Color = wall_col.darkened(0.32)
+		pc.a = 0.45
 		plank.color = pc
-		plank.z_index = 3
+		plank.z_index = z
 		add_child(plank)
-	# Gable roof (overhangs the wall)
+	# Corner trim boards
+	for tx in [base_x + 1.0, base_x + w - 3.0]:
+		var trim := ColorRect.new()
+		trim.position = Vector2(tx, top_y)
+		trim.size = Vector2(2, h - 5)
+		trim.color = wall_col.darkened(0.3)
+		trim.z_index = z
+		add_child(trim)
+	# Roof (style: 0 gable, 1 shed-slant, 2 flat parapet) with tin gradient + corrugation
 	var roof := Polygon2D.new()
-	roof.polygon = PackedVector2Array([
-		Vector2(base_x - 3, ground_y - h),
-		Vector2(base_x + w * 0.5, ground_y - h - 14),
-		Vector2(base_x + w + 3, ground_y - h),
-	])
-	roof.color = roof_col
-	roof.z_index = 4
+	var eave := 4.0
+	if style == 2:
+		# flat with parapet
+		roof.polygon = PackedVector2Array([
+			Vector2(base_x - eave, top_y - 5), Vector2(base_x + w + eave, top_y - 5),
+			Vector2(base_x + w + eave, top_y + 1), Vector2(base_x - eave, top_y + 1)])
+		roof.vertex_colors = PackedColorArray([roof_col.lightened(0.12), roof_col.darkened(0.05), roof_col.darkened(0.2), roof_col.darkened(0.12)])
+	elif style == 1:
+		# shed slant (high on the left)
+		roof.polygon = PackedVector2Array([
+			Vector2(base_x - eave, top_y - 11), Vector2(base_x + w + eave, top_y - 1),
+			Vector2(base_x + w + eave, top_y + 3), Vector2(base_x - eave, top_y - 7)])
+		roof.vertex_colors = PackedColorArray([roof_col.lightened(0.16), roof_col.darkened(0.04), roof_col.darkened(0.18), roof_col.darkened(0.02)])
+	else:
+		# gable
+		roof.polygon = PackedVector2Array([
+			Vector2(base_x - eave, top_y + 2), Vector2(cx, top_y - 14), Vector2(base_x + w + eave, top_y + 2)])
+		roof.vertex_colors = PackedColorArray([roof_col.darkened(0.16), roof_col.lightened(0.18), roof_col.darkened(0.2)])
+	roof.z_index = z + 2
 	add_child(roof)
-	# Door
+	# Eave shadow on the wall
+	var eaveshadow := ColorRect.new()
+	eaveshadow.position = Vector2(base_x + 1, top_y)
+	eaveshadow.size = Vector2(w - 2, 2)
+	eaveshadow.color = Color(0.0, 0.0, 0.0, 0.22)
+	eaveshadow.z_index = z + 1
+	add_child(eaveshadow)
+	# Door: frame + inset panel + knob + stoop
+	var dw := 13.0
+	var dh := 18.0
+	var dx := cx - dw * 0.5
+	var dframe := ColorRect.new()
+	dframe.position = Vector2(dx - 1, ground_y - 5 - dh)
+	dframe.size = Vector2(dw + 2, dh)
+	dframe.color = wall_col.darkened(0.45)
+	dframe.z_index = z + 1
+	add_child(dframe)
 	var door := ColorRect.new()
-	door.position = Vector2(base_x + w * 0.5 - 6, ground_y - 22)
-	door.size = Vector2(12, 17)
-	door.color = wall_col.darkened(0.55)
-	door.z_index = 4
+	door.position = Vector2(dx, ground_y - 5 - dh + 1)
+	door.size = Vector2(dw, dh - 1)
+	door.color = Color(0.30, 0.21, 0.13)
+	door.z_index = z + 1
 	add_child(door)
-	# Lit window (overbright -> blooms at night) + warm light pool
-	var win := ColorRect.new()
-	win.position = Vector2(base_x + w - 12, ground_y - h + 9)
-	win.size = Vector2(7, 7)
-	win.color = _emit(Color(1.0, 0.82, 0.45, 0.92), 1.4)
-	win.z_index = 4
-	add_child(win)
+	for pyi in range(2):
+		var panel := ColorRect.new()
+		panel.position = Vector2(dx + 2, ground_y - 5 - dh + 3 + pyi * 8)
+		panel.size = Vector2(dw - 4, 6)
+		panel.color = Color(0.24, 0.16, 0.10)
+		panel.z_index = z + 1
+		add_child(panel)
+	var knob := ColorRect.new()
+	knob.position = Vector2(dx + dw - 3, ground_y - 5 - dh * 0.5)
+	knob.size = Vector2(2, 2)
+	knob.color = Color(0.85, 0.7, 0.3)
+	knob.z_index = z + 2
+	add_child(knob)
+	var stoop := ColorRect.new()
+	stoop.position = Vector2(dx - 2, ground_y - 6)
+	stoop.size = Vector2(dw + 4, 2)
+	stoop.color = Color(0.30, 0.27, 0.24)
+	stoop.z_index = z + 1
+	add_child(stoop)
+	# Window: framed warm glow (blooms at night) + mullion + shutters + light pool
+	var wx := base_x + w - 14.0
+	var wy := top_y + 8.0
+	var wframe := ColorRect.new()
+	wframe.position = Vector2(wx - 1, wy - 1)
+	wframe.size = Vector2(11, 11)
+	wframe.color = wall_col.darkened(0.4)
+	wframe.z_index = z + 1
+	add_child(wframe)
+	var glass := ColorRect.new()
+	glass.position = Vector2(wx, wy)
+	glass.size = Vector2(9, 9)
+	glass.color = _emit(Color(1.0, 0.82, 0.46, 0.95), 1.5)
+	glass.z_index = z + 1
+	add_child(glass)
+	var mh := ColorRect.new()
+	mh.position = Vector2(wx, wy + 4)
+	mh.size = Vector2(9, 1)
+	mh.color = wall_col.darkened(0.4)
+	mh.z_index = z + 2
+	add_child(mh)
+	var mv := ColorRect.new()
+	mv.position = Vector2(wx + 4, wy)
+	mv.size = Vector2(1, 9)
+	mv.color = wall_col.darkened(0.4)
+	mv.z_index = z + 2
+	add_child(mv)
+	for sxoff in [-3.0, 9.0]:
+		var shutter := ColorRect.new()
+		shutter.position = Vector2(wx + sxoff, wy - 1)
+		shutter.size = Vector2(3, 11)
+		shutter.color = roof_col.darkened(0.1)
+		shutter.z_index = z + 1
+		add_child(shutter)
 	var winlight := PointLight2D.new()
-	winlight.position = Vector2(base_x + w - 8.5, ground_y - h + 12)
+	winlight.position = Vector2(wx + 4, wy + 4)
 	winlight.color = Color(1.0, 0.8, 0.5)
-	winlight.energy = 0.45
+	winlight.energy = 0.5
 	winlight.blend_mode = PointLight2D.BLEND_MODE_ADD
 	winlight.texture = _make_light_texture()
-	winlight.texture_scale = 0.45
+	winlight.texture_scale = 0.5
 	add_child(winlight)
-	# Hanging sign
-	var signboard := ColorRect.new()
-	signboard.position = Vector2(base_x + w * 0.5 - 19, ground_y - h - 1)
-	signboard.size = Vector2(38, 11)
-	signboard.color = Color(0.20, 0.15, 0.10)
-	signboard.z_index = 5
-	add_child(signboard)
-	var lbl := Label.new()
-	lbl.text = sign_text
-	lbl.add_theme_font_size_override("font_size", 6)
-	lbl.add_theme_color_override("font_color", sign_col)
-	lbl.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.6))
-	lbl.add_theme_constant_override("shadow_offset_x", 1)
-	lbl.add_theme_constant_override("shadow_offset_y", 1)
-	lbl.position = Vector2(base_x + w * 0.5 - 18, ground_y - h)
-	lbl.size = Vector2(36, 9)
-	lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	lbl.z_index = 6
-	add_child(lbl)
+	# Moss patch at the base + a climbing vine (weathering)
+	var moss := Polygon2D.new()
+	moss.polygon = PackedVector2Array([
+		Vector2(base_x + 2, ground_y - 5), Vector2(base_x + 10, ground_y - 5),
+		Vector2(base_x + 8, ground_y - 11), Vector2(base_x + 3, ground_y - 9)])
+	moss.color = Color(0.22, 0.36, 0.16, 0.7)
+	moss.z_index = z + 1
+	add_child(moss)
+	var vine := Line2D.new()
+	vine.width = 1.4
+	vine.default_color = Color(0.20, 0.38, 0.16, 0.7)
+	vine.add_point(Vector2(base_x + 3, ground_y - 5))
+	vine.add_point(Vector2(base_x + 5, top_y + h * 0.4))
+	vine.add_point(Vector2(base_x + 2, top_y + h * 0.15))
+	vine.z_index = z + 1
+	add_child(vine)
+	# Hanging bracket sign
+	if sign_text != "":
+		var sbw := minf(w - 6.0, float(sign_text.length()) * 5.0 + 12.0)
+		var sby := top_y - 3.0
+		var bracket := Line2D.new()
+		bracket.width = 1.0
+		bracket.default_color = Color(0.12, 0.10, 0.08)
+		bracket.add_point(Vector2(cx - sbw * 0.5, sby - 4))
+		bracket.add_point(Vector2(cx + sbw * 0.5, sby - 4))
+		bracket.z_index = z + 3
+		add_child(bracket)
+		var board := Polygon2D.new()
+		board.polygon = PackedVector2Array([
+			Vector2(cx - sbw * 0.5, sby), Vector2(cx + sbw * 0.5, sby),
+			Vector2(cx + sbw * 0.5, sby + 11), Vector2(cx - sbw * 0.5, sby + 11)])
+		board.vertex_colors = PackedColorArray([Color(0.24, 0.18, 0.11), Color(0.20, 0.15, 0.09), Color(0.14, 0.10, 0.06), Color(0.18, 0.13, 0.08)])
+		board.z_index = z + 3
+		add_child(board)
+		var lbl := Label.new()
+		lbl.text = sign_text
+		lbl.add_theme_font_size_override("font_size", 6)
+		lbl.add_theme_color_override("font_color", sign_col)
+		lbl.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.7))
+		lbl.add_theme_constant_override("shadow_offset_x", 1)
+		lbl.add_theme_constant_override("shadow_offset_y", 1)
+		lbl.position = Vector2(cx - sbw * 0.5, sby + 1)
+		lbl.size = Vector2(sbw, 9)
+		lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		lbl.z_index = z + 4
+		add_child(lbl)
 
 func _town_water_tower(cx: float, ground_y: float) -> void:
 	var tank_top: float = ground_y - 88.0
@@ -5444,6 +5474,116 @@ func _town_dropbox(cx: float, ground_y: float) -> void:
 	flag.color = Color(0.62, 0.22, 0.16)
 	flag.z_index = 6
 	add_child(flag)
+
+# --- Town props ---
+func _town_lamp_post(x: float, ground_y: float) -> void:
+	var post := ColorRect.new()
+	post.position = Vector2(x - 1, ground_y - 30)
+	post.size = Vector2(2, 30)
+	post.color = Color(0.15, 0.12, 0.09)
+	post.z_index = 4
+	add_child(post)
+	var arm := ColorRect.new()
+	arm.position = Vector2(x, ground_y - 30)
+	arm.size = Vector2(7, 2)
+	arm.color = Color(0.15, 0.12, 0.09)
+	arm.z_index = 4
+	add_child(arm)
+	var housing := Polygon2D.new()
+	housing.polygon = PackedVector2Array([
+		Vector2(x + 3, ground_y - 30), Vector2(x + 10, ground_y - 30),
+		Vector2(x + 9, ground_y - 22), Vector2(x + 4, ground_y - 22)])
+	housing.color = Color(0.11, 0.09, 0.07)
+	housing.z_index = 4
+	add_child(housing)
+	var flame := ColorRect.new()
+	flame.position = Vector2(x + 4.7, ground_y - 28.5)
+	flame.size = Vector2(3.5, 5)
+	flame.color = _emit(Color(1.0, 0.78, 0.4, 0.95), 2.1)
+	flame.z_index = 4
+	add_child(flame)
+	var light := PointLight2D.new()
+	light.position = Vector2(x + 6.5, ground_y - 26)
+	light.color = Color(1.0, 0.82, 0.5)
+	light.energy = 0.7
+	light.blend_mode = PointLight2D.BLEND_MODE_ADD
+	light.texture = _make_light_texture()
+	light.texture_scale = 0.9
+	add_child(light)
+
+func _town_barrels(x: float, ground_y: float) -> void:
+	for i in range(3):
+		var bx: float = x + i * 8.0
+		var by: float = ground_y - 11.0
+		var bw: float = 7.0
+		var barrel := Polygon2D.new()
+		barrel.polygon = PackedVector2Array([
+			Vector2(bx + 0.8, by), Vector2(bx + bw - 0.8, by),
+			Vector2(bx + bw, by + 5), Vector2(bx + bw - 0.8, by + 11),
+			Vector2(bx + 0.8, by + 11), Vector2(bx, by + 5)])
+		var wc := Color(0.42, 0.30, 0.18)
+		barrel.vertex_colors = PackedColorArray([
+			wc.lightened(0.12), wc.darkened(0.04), wc.darkened(0.2),
+			wc.darkened(0.24), wc.darkened(0.12), wc.lightened(0.04)])
+		barrel.z_index = 4
+		add_child(barrel)
+		for byo in [3.0, 8.0]:
+			var band := ColorRect.new()
+			band.position = Vector2(bx, by + byo)
+			band.size = Vector2(bw, 1)
+			band.color = Color(0.20, 0.16, 0.10)
+			band.z_index = 5
+			add_child(band)
+
+func _town_crates(x: float, ground_y: float) -> void:
+	var sizes: Array = [Vector2(10, 10), Vector2(8, 8), Vector2(9, 9)]
+	var offsets: Array = [Vector2(0, 0), Vector2(11, 2), Vector2(4, -10)]
+	for i in range(3):
+		var s: Vector2 = sizes[i]
+		var o: Vector2 = offsets[i]
+		var cx0: float = x + o.x
+		var cy0: float = ground_y - s.y + o.y
+		var crate := Polygon2D.new()
+		crate.polygon = PackedVector2Array([
+			Vector2(cx0, cy0), Vector2(cx0 + s.x, cy0),
+			Vector2(cx0 + s.x, cy0 + s.y), Vector2(cx0, cy0 + s.y)])
+		var wc := Color(0.40, 0.29, 0.17)
+		crate.vertex_colors = PackedColorArray([
+			wc.lightened(0.13), wc.darkened(0.03), wc.darkened(0.2), wc.darkened(0.08)])
+		crate.z_index = 4
+		add_child(crate)
+		var d1 := Line2D.new()
+		d1.width = 1.0
+		d1.default_color = Color(0.24, 0.17, 0.10)
+		d1.add_point(Vector2(cx0, cy0))
+		d1.add_point(Vector2(cx0 + s.x, cy0 + s.y))
+		d1.z_index = 5
+		add_child(d1)
+
+func _town_string_lights(x0: float, x1: float, y: float) -> void:
+	# Drooping wire with HDR-blooming bulbs strung along the street (cozy at night).
+	var n: int = maxi(int((x1 - x0) / 12.0), 2)
+	var wire := Line2D.new()
+	wire.width = 1.0
+	wire.default_color = Color(0.10, 0.09, 0.08, 0.8)
+	var bulbs: Array = []
+	for i in range(n + 1):
+		var t: float = float(i) / float(n)
+		var px: float = lerpf(x0, x1, t)
+		var py: float = y + sin(t * PI) * 10.0
+		wire.add_point(Vector2(px, py))
+		bulbs.append(Vector2(px, py + 2.0))
+	wire.z_index = 7
+	add_child(wire)
+	var warm: Array = [Color(1.0, 0.8, 0.45), Color(1.0, 0.6, 0.4), Color(0.7, 0.9, 1.0), Color(1.0, 0.9, 0.6)]
+	for i in range(bulbs.size()):
+		var b: Vector2 = bulbs[i]
+		var bulb := ColorRect.new()
+		bulb.position = Vector2(b.x - 1, b.y)
+		bulb.size = Vector2(2, 3)
+		bulb.color = _emit(warm[i % warm.size()], 2.0)
+		bulb.z_index = 7
+		add_child(bulb)
 
 # --- Weather System ---
 func _build_weather() -> void:
