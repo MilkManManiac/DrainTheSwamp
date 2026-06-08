@@ -9,9 +9,9 @@ var cycle_time: float = 0.0
 # Terrain: array of Vector2 points defining the ground surface
 # Each pool has a unique contour; ridges between them vary in shape
 var terrain_points: Array[Vector2] = [
-	# Left forest edge — indices 0-5
-	Vector2(-240, 118), Vector2(-220, 122), Vector2(-195, 128),
-	Vector2(-160, 132), Vector2(-110, 134), Vector2(-60, 136),
+	# Left forest edge + wide flat town shelf — indices 0-5 (widened for a roomier town)
+	Vector2(-540, 118), Vector2(-500, 130), Vector2(-470, 136),
+	Vector2(-360, 136), Vector2(-240, 136), Vector2(-110, 136),
 	# Left shore (shop area) — indices 6-7
 	Vector2(-40, 136), Vector2(80, 136),
 	# Puddle (7 pts) — indices 2-8: shallow worn dip, left-leaning
@@ -1102,9 +1102,9 @@ func _build_terrain() -> void:
 	# Left wall
 	var left_wall := CollisionShape2D.new()
 	var lw_shape := SegmentShape2D.new()
-	# Moved west from -20 to make room for Drainsville (town spans to ~-232).
-	lw_shape.a = Vector2(-240, -100)
-	lw_shape.b = Vector2(-240, fill_bottom)
+	# Moved west for a roomier, spread-out Drainsville (town spans to ~-465).
+	lw_shape.a = Vector2(-490, -100)
+	lw_shape.b = Vector2(-490, fill_bottom)
 	left_wall.shape = lw_shape
 	terrain_body.add_child(left_wall)
 
@@ -5096,13 +5096,13 @@ func _build_town() -> void:
 	var gnd := 136.0
 	# --- Background rooftops: a deeper town behind the main street (depth) ---
 	var bg_roofs: Array = [
-		Vector2(-150, 26), Vector2(-118, 34), Vector2(-86, 24),
-		Vector2(-44, 32), Vector2(-6, 26), Vector2(24, 30),
+		Vector2(-430, 28), Vector2(-360, 34), Vector2(-285, 24),
+		Vector2(-205, 32), Vector2(-130, 26), Vector2(-55, 30), Vector2(20, 28),
 	]
 	for r in bg_roofs:
 		var bx: float = r.x
 		var bh: float = r.y
-		var bw: float = 26.0
+		var bw: float = 28.0
 		var rg: float = gnd - 26.0
 		var bwall := Polygon2D.new()
 		bwall.polygon = PackedVector2Array([Vector2(bx, rg - bh), Vector2(bx + bw, rg - bh), Vector2(bx + bw, rg), Vector2(bx, rg)])
@@ -5115,8 +5115,8 @@ func _build_town() -> void:
 		broof.color = Color(0.12, 0.12, 0.14)
 		broof.z_index = -1
 		add_child(broof)
-	# --- Boardwalk along the street ---
-	for bxi in range(-236, 58, 9):
+	# --- Boardwalk along the (now much wider) street ---
+	for bxi in range(-485, 70, 9):
 		var bgy: float = _get_terrain_y_at(float(bxi))
 		if bgy <= 0.0:
 			bgy = gnd
@@ -5126,29 +5126,32 @@ func _build_town() -> void:
 		plank.color = pcol
 		plank.z_index = 1
 		add_child(plank)
-	# --- Main street buildings (west of the Hardware shop, which is built in _build_shop) ---
+	# --- Main street buildings, spread out (Hardware is built in _build_shop at ~-22) ---
 	var buildings: Array = [
-		{"x": -66.0, "w": 44.0, "h": 36.0, "wall": Color(0.40, 0.36, 0.28), "roof": Color(0.30, 0.20, 0.16), "sign": "DINER", "sc": Color(1.0, 0.84, 0.5), "style": 1},
-		{"x": -112.0, "w": 38.0, "h": 44.0, "wall": Color(0.37, 0.31, 0.31), "roof": Color(0.34, 0.27, 0.23), "sign": "PAWN", "sc": Color(1.0, 0.9, 0.45), "style": 2},
-		{"x": -160.0, "w": 46.0, "h": 38.0, "wall": Color(0.39, 0.36, 0.24), "roof": Color(0.30, 0.34, 0.22), "sign": "OUTFITTER", "sc": Color(0.95, 0.88, 0.6), "style": 0},
-		{"x": -212.0, "w": 40.0, "h": 33.0, "wall": Color(0.35, 0.33, 0.30), "roof": Color(0.26, 0.28, 0.30), "sign": "", "sc": Color(1, 1, 1), "style": 1},
+		{"x": -130.0, "w": 44.0, "h": 36.0, "wall": Color(0.40, 0.36, 0.28), "roof": Color(0.30, 0.20, 0.16), "sign": "DINER", "sc": Color(1.0, 0.84, 0.5), "style": 1},
+		{"x": -240.0, "w": 40.0, "h": 44.0, "wall": Color(0.37, 0.31, 0.31), "roof": Color(0.34, 0.27, 0.23), "sign": "PAWN", "sc": Color(1.0, 0.9, 0.45), "style": 2},
+		{"x": -345.0, "w": 46.0, "h": 38.0, "wall": Color(0.39, 0.36, 0.24), "roof": Color(0.30, 0.34, 0.22), "sign": "OUTFITTER", "sc": Color(0.95, 0.88, 0.6), "style": 0},
+		{"x": -448.0, "w": 40.0, "h": 33.0, "wall": Color(0.35, 0.33, 0.30), "roof": Color(0.26, 0.28, 0.30), "sign": "", "sc": Color(1, 1, 1), "style": 1},
 	]
 	for b in buildings:
 		var gy: float = _get_terrain_y_at(b["x"] + b["w"] * 0.5)
 		if gy <= 0.0:
 			gy = gnd
 		_town_building(b["x"], gy, b["w"], b["h"], b["wall"], b["roof"], b["sign"], b["sc"], b["style"])
-	# --- Street props ---
-	_town_lamp_post(-40.0, _grnd(-40.0, gnd))
-	_town_lamp_post(-136.0, _grnd(-136.0, gnd))
-	_town_barrels(-90.0, _grnd(-90.0, gnd))
-	_town_crates(-188.0, _grnd(-188.0, gnd))
-	_town_string_lights(-66.0, 24.0, gnd - 42.0)
-	_town_string_lights(-160.0, -68.0, gnd - 44.0)
+	# --- Street props (in the wide gaps between shops) ---
+	_town_lamp_post(-75.0, _grnd(-75.0, gnd))
+	_town_lamp_post(-185.0, _grnd(-185.0, gnd))
+	_town_lamp_post(-295.0, _grnd(-295.0, gnd))
+	_town_lamp_post(-400.0, _grnd(-400.0, gnd))
+	_town_barrels(-180.0, _grnd(-180.0, gnd))
+	_town_crates(-300.0, _grnd(-300.0, gnd))
+	_town_string_lights(-130.0, 28.0, gnd - 42.0)
+	_town_string_lights(-345.0, -130.0, gnd - 44.0)
+	_town_string_lights(-465.0, -345.0, gnd - 42.0)
 	# Water tower — east landmark / future auto-sell point
-	_town_water_tower(50.0, _grnd(50.0, gnd))
+	_town_water_tower(55.0, _grnd(55.0, gnd))
 	# NA dead-drop — tucked at the quiet west edge by the trees
-	_town_dropbox(-232.0, _grnd(-232.0, gnd))
+	_town_dropbox(-468.0, _grnd(-468.0, gnd))
 
 func _grnd(x: float, fallback: float) -> float:
 	var y: float = _get_terrain_y_at(x)

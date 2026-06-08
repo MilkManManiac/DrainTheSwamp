@@ -199,6 +199,7 @@ func _build_hud_icons() -> void:
 		bot_hbox.move_child(bolt_icon, stam_idx)
 
 func _setup_news_ticker() -> void:
+	return  # Scrolling news ticker disabled (distracting). Story still flows via newspapers.
 	# Insert the scrolling news crawl just under the top bar (index 1).
 	var vbox: VBoxContainer = $MarginContainer/VBoxContainer
 	var ticker: PanelContainer = preload("res://scripts/ui/news_ticker.gd").new()
