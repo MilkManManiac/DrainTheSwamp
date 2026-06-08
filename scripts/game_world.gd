@@ -3153,19 +3153,44 @@ func _build_bayou_features(bl: Vector2, br: Vector2, _et: Vector2, _xt: Vector2,
 		root.add_point(Vector2(rx + randf_range(-15, 15), ry - randf_range(8, 20)))
 		root.add_point(Vector2(rx + randf_range(-25, 25), ry - randf_range(15, 30)))
 		add_child(root)
-	# Spanish moss draping
-	for j in range(randi_range(6, 10)):
-		var moss := Line2D.new()
-		moss.width = 1.0
-		moss.default_color = Color(0.35, 0.42, 0.30, 0.45)
-		moss.z_index = 4
-		var mx: float = bl.x + randf_range(0, bw)
-		var terrain_y: float = _get_terrain_y_at(mx)
-		if terrain_y < 0:
-			terrain_y = basin_y - 30
-		moss.add_point(Vector2(mx, terrain_y - randf_range(10, 25)))
-		moss.add_point(Vector2(mx + randf_range(-3, 3), terrain_y - randf_range(0, 8)))
-		add_child(moss)
+	# Dead bayou trees draped in Spanish moss — moss hangs FROM the branches so it
+	# never floats free (previously moss was scattered at random basin-x with no tree).
+	for j in range(randi_range(3, 5)):
+		var tx2: float = bl.x + randf_range(12, bw - 12)
+		var ty2: float = _get_terrain_y_at(tx2)
+		if ty2 < 0:
+			ty2 = basin_y
+		var th2: float = randf_range(30, 52)
+		var dtrunk := Line2D.new()
+		dtrunk.width = 4.0
+		dtrunk.default_color = Color(0.24, 0.16, 0.09, 0.85)
+		dtrunk.z_index = 4
+		dtrunk.add_point(Vector2(tx2, ty2))
+		dtrunk.add_point(Vector2(tx2 + randf_range(-3, 3), ty2 - th2))
+		add_child(dtrunk)
+		for k in range(randi_range(2, 4)):
+			var by2: float = ty2 - th2 + randf_range(4, th2 * 0.45)
+			var bdir2: float = 1.0 if randf() > 0.5 else -1.0
+			var blen2: float = randf_range(14, 30)
+			var btip := Vector2(tx2 + bdir2 * blen2, by2 - randf_range(2, 8))
+			var brl := Line2D.new()
+			brl.width = 2.0
+			brl.default_color = Color(0.26, 0.18, 0.10, 0.8)
+			brl.z_index = 4
+			brl.add_point(Vector2(tx2, by2))
+			brl.add_point(btip)
+			add_child(brl)
+			# 1-2 moss strands dangling from points ALONG this branch.
+			for s in range(randi_range(1, 2)):
+				var f: float = randf_range(0.4, 0.95)
+				var anchor := Vector2(tx2, by2).lerp(btip, f)
+				var moss := Line2D.new()
+				moss.width = 1.0
+				moss.default_color = Color(0.35, 0.42, 0.30, 0.5)
+				moss.z_index = 4
+				moss.add_point(anchor)
+				moss.add_point(Vector2(anchor.x + randf_range(-3, 3), anchor.y + randf_range(10, 24)))
+				add_child(moss)
 	# Ancient crumbled stone blocks
 	for j in range(randi_range(2, 4)):
 		var stone := ColorRect.new()
