@@ -8,7 +8,7 @@ config_version=5
 
 config/name="Drain The Swamp"
 run/main_scene="res://scenes/title_screen.tscn"
-config/features=PackedStringArray("4.4", "GL Compatibility")
+config/features=PackedStringArray("4.6", "Forward Plus")
 
 [autoload]
 
@@ -61,6 +61,15 @@ scoop={
 
 [rendering]
 
-textures/canvas_textures/default_texture_filter=0
-renderer/rendering_method="gl_compatibility"
+; R0 high-res overhaul: linear filtering for crisp HD gradients/textures
+; (per-CanvasItem override anything that must stay nearest-filtered).
+textures/canvas_textures/default_texture_filter=1
+; Two-preset renderer: desktop = Forward+ (true HDR 2D glow), web/mobile = GL
+; Compatibility fallback (Forward+ unsupported on web; HDR-2D glow faked in shader there).
+renderer/rendering_method="forward_plus"
 renderer/rendering_method.mobile="gl_compatibility"
+renderer/rendering_method.web="gl_compatibility"
+; HDR 2D enables real glow/bloom on overbright (>1.0) pixels. Only takes effect on
+; Forward+/Mobile (desktop); silently ignored on GL Compatibility (web), which keeps
+; the shader-faked bloom instead. Must be set at boot — a runtime toggle isn't enough.
+rendering/viewport/hdr_2d=true

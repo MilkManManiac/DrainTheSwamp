@@ -291,7 +291,7 @@ var helicopter_timer: float = 0.0
 var helicopter_active: Node2D = null
 # Second pass visuals
 var moon: Node2D = null
-var moon_glow: Polygon2D = null
+var moon_glow: Sprite2D = null
 var moon_body: Polygon2D = null
 var bubbles: Array[Dictionary] = []
 var bubble_timer: float = 0.0
@@ -546,9 +546,12 @@ const ROCK_DARK_COLOR := Color(0.32, 0.3, 0.28)
 
 var wave_time: float = 0.0
 
+var _hdr_glow: bool = false  # true on Forward+/Mobile (real HDR-2D glow); false on GL Compatibility (web)
+
 func _ready() -> void:
 	cycle_time = CYCLE_DURATION * GameManager.cycle_progress
 	_init_sway_materials()
+	_setup_hdr_glow()
 	_build_parallax()
 	_build_sky()
 	_build_sun()
@@ -747,10 +750,11 @@ func _build_sky() -> void:
 	horizon_glow.add_point(Vector2(world_w + 200, 86))
 	sky_layer.add_child(horizon_glow)
 
-func _make_octagon(radius: float) -> PackedVector2Array:
+func _make_disc(radius: float, segs: int = 32) -> PackedVector2Array:
+	# Smooth circle (was an 8-gon — looked basic, especially once bloom feathers it).
 	var pts := PackedVector2Array()
-	for i in range(8):
-		var angle: float = float(i) / 8.0 * TAU - PI / 8.0
+	for i in range(segs):
+		var angle: float = float(i) / float(segs) * TAU
 		pts.append(Vector2(cos(angle) * radius, sin(angle) * radius))
 	return pts
 
@@ -760,11 +764,10 @@ func _build_sun() -> void:
 	sun_node.visible = false
 	add_child(sun_node)
 
-	# Outer glow (large semi-transparent octagon)
-	var glow_poly := Polygon2D.new()
-	glow_poly.polygon = _make_octagon(24.0)
-	glow_poly.color = Color(1.0, 0.95, 0.6, 0.12)
-	sun_node.add_child(glow_poly)
+	# Soft glowing orb (no hard disc): a wide soft halo + a tight bright core,
+	# both additive + overbright so HDR glow feathers them into a real sun (~2x old size).
+	var sun_halo := _make_glow_orb(38.0, _emit(Color(1.0, 0.9, 0.55, 0.45), 1.3))
+	sun_node.add_child(sun_halo)
 
 	# PointLight2D for dynamic sun glow
 	var sun_light := PointLight2D.new()
@@ -775,28 +778,20 @@ func _build_sun() -> void:
 	sun_light.blend_mode = PointLight2D.BLEND_MODE_ADD
 	sun_node.add_child(sun_light)
 
-	# Sun body (octagon)
-	var body_poly := Polygon2D.new()
-	body_poly.polygon = _make_octagon(12.0)
-	body_poly.color = Color(1.0, 0.95, 0.55)
-	sun_node.add_child(body_poly)
+	var sun_core := _make_glow_orb(18.0, _emit(Color(1.0, 0.97, 0.8, 0.85), 1.9))
+	sun_node.add_child(sun_core)
 
-	# Sun core (smaller octagon)
-	var core_poly := Polygon2D.new()
-	core_poly.polygon = _make_octagon(7.0)
-	core_poly.color = Color(1.0, 1.0, 0.85)
-	sun_node.add_child(core_poly)
-
-	# Ray beams (6 Line2D rays radiating outward)
-	for ri in range(6):
-		var ray := Line2D.new()
-		ray.width = 2.0
-		var angle: float = float(ri) / 6.0 * TAU
-		ray.add_point(Vector2(cos(angle) * 14.0, sin(angle) * 14.0))
-		ray.add_point(Vector2(cos(angle) * 22.0, sin(angle) * 22.0))
-		ray.default_color = Color(1.0, 0.95, 0.6, 0.3)
-		ray.name = "SunRay%d" % ri
-		sun_node.add_child(ray)
+# A soft, edgeless glowing orb: a radial white→transparent sprite, additive, tinted
+# by `color` (push rgb >1.0 via _emit so HDR glow blooms it). `radius` is in world px.
+func _make_glow_orb(radius: float, color: Color) -> Sprite2D:
+	var s := Sprite2D.new()
+	s.texture = _make_light_texture()  # 64px radial gradient (~32px visible radius)
+	s.scale = Vector2(radius / 32.0, radius / 32.0)
+	s.modulate = color
+	var m := CanvasItemMaterial.new()
+	m.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
+	s.material = m
+	return s
 
 func _make_light_texture() -> GradientTexture2D:
 	var grad := Gradient.new()
@@ -1074,19 +1069,10 @@ func _build_terrain() -> void:
 			fr.z_index = 1
 			add_child(fr)
 
-	# Dithered transition at grass-to-dirt boundary (Phase 18a)
-	for pt_idx in range(0, terrain_points.size() - 1, 2):
-		var tp: Vector2 = terrain_points[pt_idx]
-		for dx in range(0, 4):
-			for dy in range(0, 3):
-				if (dx + dy) % 2 == 0:
-					var dither := ColorRect.new()
-					dither.size = Vector2(1, 1)
-					dither.position = Vector2(tp.x + dx, tp.y + 3 + dy)
-					dither.color = GRASS_COLOR.lerp(GROUND_COLOR, float(dy) / 3.0)
-					dither.color.a = 0.5
-					dither.z_index = 1
-					add_child(dither)
+	# Grass-to-dirt boundary dither is now handled in FRAGCOORD space by
+	# terrain.gdshader bayer4() (R0 high-res): it scales with physical resolution
+	# instead of spawning ~700 base-pixel ColorRects that became sub-pixel slivers
+	# at HD scale. (Removed Phase 18a per-pixel dither loop.)
 
 	# Collision: build segments between each pair of terrain points
 	terrain_body = StaticBody2D.new()
@@ -1696,7 +1682,7 @@ func _build_fireflies() -> void:
 		var glow := ColorRect.new()
 		glow.size = Vector2(8, 6)
 		glow.position = Vector2(-3, -2)
-		glow.color = Color(0.9, 1.0, 0.4, 0.0)
+		glow.color = _emit(Color(0.9, 1.0, 0.4, 0.0), 2.5)
 		glow.z_index = 5
 		var glow_mat := CanvasItemMaterial.new()
 		glow_mat.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
@@ -1997,10 +1983,8 @@ func _build_moon() -> void:
 	moon = Node2D.new()
 	moon.z_index = -11
 	add_child(moon)
-	# Moon glow (large semi-transparent octagon)
-	moon_glow = Polygon2D.new()
-	moon_glow.polygon = _make_octagon(20.0)
-	moon_glow.color = Color(0.7, 0.75, 0.9, 0.0)
+	# Soft outer halo (additive, overbright) → the HDR bloom.
+	moon_glow = _make_glow_orb(42.0, _emit(Color(0.72, 0.8, 0.96, 0.42), 1.75))
 	moon.add_child(moon_glow)
 	# PointLight2D for moonlight
 	var moon_light := PointLight2D.new()
@@ -2010,28 +1994,25 @@ func _build_moon() -> void:
 	moon_light.texture_scale = 2.5
 	moon_light.blend_mode = PointLight2D.BLEND_MODE_ADD
 	moon.add_child(moon_light)
-	# Moon body (octagon)
+	# Lunar surface disc: a smooth circle, gently overbright so it blooms at the rim
+	# (the halo hides the hard edge) — gives a real moon to hang craters on.
 	moon_body = Polygon2D.new()
-	moon_body.polygon = _make_octagon(8.0)
-	moon_body.color = Color(0.9, 0.92, 1.0, 0.0)
+	moon_body.polygon = _make_disc(14.0)
+	moon_body.color = _emit(Color(0.9, 0.93, 1.0), 1.25)
 	moon.add_child(moon_body)
-	# Moon highlight (smaller crescent octagon)
-	var moon_hl := Polygon2D.new()
-	moon_hl.polygon = _make_octagon(5.0)
-	moon_hl.position = Vector2(-2, -1)
-	moon_hl.color = Color(1.0, 1.0, 1.0, 0.0)
-	moon.add_child(moon_hl)
-	# Craters (2 tiny darker octagon dots)
-	var crater1 := Polygon2D.new()
-	crater1.polygon = _make_octagon(1.5)
-	crater1.position = Vector2(2, -1)
-	crater1.color = Color(0.75, 0.78, 0.88, 0.0)
-	moon.add_child(crater1)
-	var crater2 := Polygon2D.new()
-	crater2.polygon = _make_octagon(1.0)
-	crater2.position = Vector2(-2, 3)
-	crater2.color = Color(0.78, 0.80, 0.90, 0.0)
-	moon.add_child(crater2)
+	# Craters / maria for lunar detail (soft darker bluish spots on the disc).
+	var craters: Array = [
+		{"pos": Vector2(4.5, -2.0), "r": 3.2},
+		{"pos": Vector2(-3.5, 3.0), "r": 2.2},
+		{"pos": Vector2(1.0, 4.5), "r": 2.6},
+		{"pos": Vector2(-4.0, -3.5), "r": 1.6},
+	]
+	for cr in craters:
+		var crater := Polygon2D.new()
+		crater.polygon = _make_disc(cr["r"], 16)
+		crater.position = cr["pos"]
+		crater.color = Color(0.6, 0.64, 0.78, 0.5)
+		moon.add_child(crater)
 	moon.position = Vector2(1500, 30)
 
 # --- Foam Lines (Shore Froth) ---
@@ -2628,6 +2609,7 @@ func _build_glow_plants() -> void:
 				glow_color = Color(0.3, 0.6, 1.0, 0.0)   # Blue
 			else:
 				glow_color = Color(0.8, 0.4, 0.9, 0.0)    # Purple
+			glow_color = _emit(glow_color, 2.0)
 			bulb.color = glow_color
 			plant.add_child(bulb)
 			# Outer glow aura
@@ -5837,6 +5819,42 @@ func _spawn_drain_plant(sx: float, sy: float) -> void:
 	tw.tween_property(plant, "scale", Vector2(1.0, 1.0), 0.8)
 	grown_plants.append({"node": plant})
 
+# --- HDR-2D glow (R1, Forward+/Mobile desktop only) ---
+func _setup_hdr_glow() -> void:
+	# True HDR 2D glow/bloom only exists on renderers backed by a RenderingDevice
+	# (Forward+/Mobile). GL Compatibility (the web/mobile export preset) returns null
+	# here, so we leave _hdr_glow false and keep the shader-faked bloom in
+	# post_process.gdshader as the fallback.
+	if RenderingServer.get_rendering_device() == null:
+		return
+	_hdr_glow = true
+	get_viewport().use_hdr_2d = true
+	var env := Environment.new()
+	env.background_mode = Environment.BG_CANVAS
+	env.glow_enabled = true
+	env.glow_blend_mode = Environment.GLOW_BLEND_MODE_SCREEN
+	env.glow_intensity = 1.0
+	env.glow_strength = 1.15
+	env.glow_bloom = 0.1
+	# Only pixels brighter than 1.0 bloom, so just the hero elements we push overbright
+	# glow — not the whole bright sky (avoids the 4.x "everything glows" gotcha).
+	env.glow_hdr_threshold = 1.0
+	env.glow_hdr_scale = 2.0
+	# Soft, wide spread across a few mip levels.
+	env.set_glow_level(1, 0.8)
+	env.set_glow_level(2, 1.0)
+	env.set_glow_level(3, 0.8)
+	env.set_glow_level(4, 0.4)
+	var we := WorldEnvironment.new()
+	we.environment = env
+	add_child(we)
+
+# Push a color overbright (>1.0) so it blooms under HDR glow; pass-through on GL compat.
+func _emit(c: Color, boost: float) -> Color:
+	if not _hdr_glow:
+		return c
+	return Color(c.r * boost, c.g * boost, c.b * boost, c.a)
+
 # --- Post-Processing ---
 func _build_post_processing() -> void:
 	post_process_layer = CanvasLayer.new()
@@ -6066,16 +6084,9 @@ func _process(delta: float) -> void:
 	if post_process_rect and post_process_rect.material:
 		var pp_mat: ShaderMaterial = post_process_rect.material as ShaderMaterial
 		pp_mat.set_shader_parameter("time", wave_time)
-		# Heat shimmer: daytime only (disabled during rain)
-		var shimmer: float = 0.0
-		if weather_state != "rain":
-			if t > 0.25 and t < 0.55:
-				shimmer = 1.0
-			elif t >= 0.2 and t <= 0.25:
-				shimmer = (t - 0.2) / 0.05
-			elif t >= 0.55 and t <= 0.6:
-				shimmer = 1.0 - (t - 0.55) / 0.05
-		pp_mat.set_shader_parameter("heat_shimmer_strength", shimmer)
+		# Heat shimmer disabled: the full-screen UV warp during daytime caused motion
+		# sickness. (Could reintroduce later as a subtle effect localized over water only.)
+		pp_mat.set_shader_parameter("heat_shimmer_strength", 0.0)
 		# Warm/cool color shift
 		var warmth: float = 0.0
 		if t >= 0.2 and t <= 0.5:
@@ -6087,7 +6098,9 @@ func _process(delta: float) -> void:
 		pp_mat.set_shader_parameter("saturation", lerpf(0.75, 1.06, drain_progress))
 		# New R1 uniforms (constant defaults; bloom/dither not yet driven dynamically)
 		pp_mat.set_shader_parameter("bloom_threshold", 0.7)
-		pp_mat.set_shader_parameter("bloom_intensity", 0.6)
+		# On desktop (Forward+) real HDR-2D WorldEnvironment glow handles bloom, so
+		# switch off the shader-faked bloom to avoid doubling. Web/GL-compat keeps it.
+		pp_mat.set_shader_parameter("bloom_intensity", 0.0 if _hdr_glow else 0.6)
 		pp_mat.set_shader_parameter("bloom_radius", 3.0)
 		pp_mat.set_shader_parameter("dither_levels", 14.0)
 		pp_mat.set_shader_parameter("dither_strength", 0.5)
@@ -6478,16 +6491,15 @@ func _process(delta: float) -> void:
 			moon_alpha = moon_progress / 0.1
 		elif moon_progress > 0.9:
 			moon_alpha = (1.0 - moon_progress) / 0.1
+		# Soft-orb children fade via the parent modulate; the light energy separately.
+		moon.modulate.a = moon_alpha
 		for child in moon.get_children():
-			if child is Polygon2D:
-				child.color.a = moon_alpha * (0.6 if child == moon_glow else 0.9)
-			elif child is PointLight2D:
+			if child is PointLight2D:
 				child.energy = moon_alpha * 0.2
 	else:
+		moon.modulate.a = 0.0
 		for child in moon.get_children():
-			if child is Polygon2D:
-				child.color.a = 0.0
-			elif child is PointLight2D:
+			if child is PointLight2D:
 				child.energy = 0.0
 
 	# Swamp gas bubbles
