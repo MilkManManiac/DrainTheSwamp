@@ -254,6 +254,11 @@ var _sway_mat_grass: ShaderMaterial = null   # snappy, whippy blades
 var _sway_mat_frond: ShaderMaterial = null   # medium ferns/cattails
 var _sway_mat_canopy: ShaderMaterial = null  # gentle tree canopy
 var _sway_mat_moss: ShaderMaterial = null    # high strength / low stiffness drape
+# A 1x1 white texture MUST be attached to every swaying Polygon2D: Godot does not
+# pass a Polygon2D's uv array to a canvas_item shader unless a texture is set
+# (godot#81627). Without it UV.y is always 0, so the sway shader's pivot anchor
+# fails and the whole blade floats instead of bending from a planted base.
+var _sway_white_tex: Texture2D = null
 
 # Visual nodes created procedurally
 var water_polygons: Array[Polygon2D] = []
@@ -630,6 +635,11 @@ func _show_tutorial() -> void:
 
 # --- Shared foliage sway materials (R3) ---
 func _init_sway_materials() -> void:
+	# 1x1 white texture so Polygon2D uv reaches the sway shader (see _sway_white_tex note).
+	var wimg := Image.create(1, 1, false, Image.FORMAT_RGBA8)
+	wimg.set_pixel(0, 0, Color.WHITE)
+	_sway_white_tex = ImageTexture.create_from_image(wimg)
+
 	_sway_mat_grass = ShaderMaterial.new()
 	_sway_mat_grass.shader = FOLIAGE_SWAY_SHADER
 	_sway_mat_grass.set_shader_parameter("sway_strength", 1.9)
@@ -1569,6 +1579,7 @@ func _place_cattail(pos: Vector2) -> void:
 	var head_dark := Color(0.36, 0.22, 0.10)
 	var head_light := Color(0.52, 0.36, 0.18)
 	head.vertex_colors = PackedColorArray([head_dark, head_dark, head_light, head_light])
+	head.texture = _sway_white_tex
 	head.material = _sway_mat_frond
 	head.z_index = 3
 	cattail.add_child(head)
@@ -1604,6 +1615,7 @@ func _make_blade(parent: Node2D, base_local: Vector2, height: float, width: floa
 		Vector2(1.0, 0.5), Vector2(0.5, 0.0), Vector2(0.0, 0.5),
 	])
 	blade.vertex_colors = PackedColorArray([dark, dark, dark.lerp(light, 0.5), light, dark.lerp(light, 0.5)])
+	blade.texture = _sway_white_tex  # required so uv reaches the sway shader (godot#81627)
 	blade.material = mat
 	blade.z_index = zi
 	parent.add_child(blade)
@@ -3760,6 +3772,7 @@ func _place_tree(pos: Vector2, scale: float = 1.0, zi: int = 4) -> void:
 			uvs.append(cl_dark.lerp(cl_light, 1.0 - vy))
 		blob.uv = bptuv
 		blob.vertex_colors = uvs
+		blob.texture = _sway_white_tex
 		blob.material = _sway_mat_canopy
 		blob.z_index = zi + 1 + int(depth * 2.0)
 		add_child(blob)
@@ -3831,6 +3844,7 @@ func _place_cypress(pos: Vector2, scale: float = 1.0, zi: int = 4) -> void:
 			cb.append(cl_dark.lerp(cl_light, 1.0 - vy))
 		blob.uv = uvb
 		blob.vertex_colors = cb
+		blob.texture = _sway_white_tex
 		blob.material = _sway_mat_canopy
 		blob.z_index = zi + 1
 		add_child(blob)
@@ -3854,6 +3868,7 @@ func _place_cypress(pos: Vector2, scale: float = 1.0, zi: int = 4) -> void:
 		var moss_top := Color(0.42, 0.46, 0.34, 0.85)
 		var moss_tip := Color(0.55, 0.58, 0.46, 0.55)
 		strand.vertex_colors = PackedColorArray([moss_top, moss_top, moss_tip, moss_tip])
+		strand.texture = _sway_white_tex
 		strand.material = _sway_mat_moss
 		strand.z_index = zi + 2
 		add_child(strand)
