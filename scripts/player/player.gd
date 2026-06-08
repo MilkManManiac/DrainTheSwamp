@@ -65,10 +65,14 @@ var lantern_flicker_time: float = 0.0
 var tool_visuals: Array[ColorRect] = []
 
 var _hdr_glow: bool = false  # Forward+/Mobile: lantern emits overbright to bloom under HDR glow
+var _shot_camx: float = NAN  # debug: env DTS_CAMX parks the player at a world X for screenshots
 
 func _ready() -> void:
 	add_to_group("player")
 	_hdr_glow = RenderingServer.get_rendering_device() != null
+	var cx: String = OS.get_environment("DTS_CAMX")
+	if cx != "":
+		_shot_camx = cx.to_float()
 	GameManager.tool_changed.connect(func(_d: Dictionary) -> void: _update_tool_visual())
 	_update_tool_visual()
 	_setup_lantern()
@@ -102,6 +106,11 @@ func _physics_process(delta: float) -> void:
 		velocity = Vector2.ZERO
 		is_walking = false
 		return
+
+	# Debug screenshot: park the player at a fixed world X (gravity still settles Y).
+	if not is_nan(_shot_camx):
+		global_position.x = _shot_camx
+		velocity.x = 0.0
 
 	# Gravity
 	if not is_on_floor():
