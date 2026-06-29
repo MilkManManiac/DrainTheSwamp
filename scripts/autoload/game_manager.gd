@@ -22,6 +22,18 @@ signal loot_collected(cave_id: String, loot_id: String, reward_text: String)
 signal lore_read(cave_id: String, lore_id: String)
 signal cave_pool_level_changed(cave_id: String, pool_index: int, fill_fraction: float)
 signal cave_pool_completed(cave_id: String, pool_index: int)
+signal prestige_changed
+signal prestige_performed
+
+# --- Prestige Scaling ---
+# pending influence = floor(sqrt(lifetime_earnings / PRESTIGE_SCALE)).
+# Selling-money to complete each early swamp (gallons*money_per_gallon + reward):
+#   Puddle ~175, Pond ~3K, Marsh ~60K, Bog ~1.5M, Swamp ~30M.
+# Cumulative: through Bog (4 swamps) ~1.56M, through Swamp (5 swamps) ~31.5M.
+# With SCALE = 1,000,000: first influence (can_prestige) lands mid-Bog, and
+# finishing the Swamp yields floor(sqrt(31.5)) = 5 influence — a satisfying
+# first payout in the 3-5 target band.
+const PRESTIGE_SCALE: float = 1_000_000.0
 
 # --- Swamp Definitions ---
 var swamp_definitions: Array = [
@@ -172,6 +184,12 @@ var stat_definitions: Dictionary = {
 # --- Game State ---
 var money: float = 0.0
 var current_tool_id: String = "hands"
+
+# --- Prestige State ---
+var influence: float = 0.0           # prestige currency; persists through prestige
+var lifetime_earnings: float = 0.0   # money earned from SELLING since last prestige
+var prestige_count: int = 0
+var prestige_upgrades: Dictionary = {"kickback": 0, "muscle": 0, "cap_hike": 0, "war_chest": 0}
 
 var tools_owned: Dictionary = {
 	"hands": {"owned": true, "level": 0},
@@ -379,10 +397,19 @@ func get_tool_output(tool_id: String) -> float:
 	# Apply scoop power multiplier for manual tools
 	if tool_definitions[tool_id]["type"] == "manual":
 		raw *= get_stat_value("scoop_power")
+	# Prestige: Muscle boosts all scoop output globally
+	raw *= 1.0 + 0.08 * prestige_upgrades["muscle"]
 	return raw
 
 func get_effective_scoop(tool_id: String) -> float:
 	return get_tool_output(tool_id)
+
+# Effective cap for a stat — Prestige Cap Hike raises water_value/scoop_power ceilings
+func get_effective_stat_cap(stat_id: String, defn: Dictionary) -> float:
+	var base_max: float = defn["max_value"]
+	if stat_id == "water_value" or stat_id == "scoop_power":
+		return base_max * (1.0 + 0.25 * prestige_upgrades["cap_hike"])
+	return base_max
 
 func get_stat_value(stat_id: String) -> float:
 	var defn: Dictionary = stat_definitions[stat_id]
@@ -392,7 +419,7 @@ func get_stat_value(stat_id: String) -> float:
 	else:
 		value = defn["base_value"] + defn.get("per_level", 0.0) * stat_levels[stat_id]
 	if defn.has("max_value"):
-		value = minf(value, defn["max_value"])
+		value = minf(value, get_effective_stat_cap(stat_id, defn))
 	return value
 
 func get_stat_value_at_level(stat_id: String, level: int) -> float:
@@ -403,7 +430,7 @@ func get_stat_value_at_level(stat_id: String, level: int) -> float:
 	else:
 		value = defn["base_value"] + defn.get("per_level", 0.0) * level
 	if defn.has("max_value"):
-		value = minf(value, defn["max_value"])
+		value = minf(value, get_effective_stat_cap(stat_id, defn))
 	return value
 
 func get_carrying_capacity() -> float:
@@ -417,7 +444,8 @@ func get_carrying_capacity() -> float:
 	return base
 
 func get_money_multiplier() -> float:
-	return get_stat_value("water_value")
+	# Prestige: Kickback boosts all money earned globally
+	return get_stat_value("water_value") * (1.0 + 0.08 * prestige_upgrades["kickback"])
 
 func get_stamina_cost() -> float:
 	return 1.0
@@ -465,6 +493,7 @@ func _drain_swamp(swamp_index: int, gallons: float) -> float:
 		var reward: float = swamp_definitions[swamp_index]["reward"]
 		if reward > 0.0:
 			money += reward
+			lifetime_earnings += reward
 			money_changed.emit(money)
 		swamp_completed.emit(swamp_index, reward)
 
@@ -521,6 +550,7 @@ func sell_water() -> float:
 	var mpg: float = base_mpg * get_money_multiplier()
 	var earned: float = water_carried * mpg
 	money += earned
+	lifetime_earnings += earned
 	water_carried = 0.0
 	money_changed.emit(money)
 	water_carried_changed.emit(0.0, get_carrying_capacity())
@@ -582,10 +612,10 @@ func is_stat_maxed(stat_id: String) -> bool:
 	var ml: int = defn.get("max_level", -1)
 	if ml >= 0 and stat_levels[stat_id] >= ml:
 		return true
-	# Also maxed if at max_value cap
+	# Also maxed if at the (prestige-boosted) max_value cap
 	if defn.has("max_value"):
 		var cur: float = get_stat_value(stat_id)
-		if cur >= defn["max_value"] - 0.001:
+		if cur >= get_effective_stat_cap(stat_id, defn) - 0.001:
 			return true
 	return false
 
@@ -740,6 +770,7 @@ func camel_sell_water(index: int) -> float:
 	var mpg: float = base_mpg * get_money_multiplier()
 	var earned: float = carried * mpg
 	money += earned
+	lifetime_earnings += earned
 	camel_states[index]["water_carried"] = 0.0
 	money_changed.emit(money)
 	if earned > 0.0:
@@ -877,8 +908,50 @@ func try_scoop_cave_pool(cave_id: String, pool_index: int) -> bool:
 		scoop_performed.emit(swamp_index, actual, 0.0)
 	return actual > 0.0
 
-func reset_game() -> void:
-	money = 0.0
+# --- Prestige ---
+func get_pending_influence() -> int:
+	return int(floor(sqrt(lifetime_earnings / PRESTIGE_SCALE)))
+
+func can_prestige() -> bool:
+	return get_pending_influence() >= 1
+
+func get_war_chest_seed() -> float:
+	var level: int = prestige_upgrades["war_chest"]
+	if level == 0:
+		return 0.0
+	return 50.0 * pow(2.0, level - 1)
+
+func get_prestige_upgrade_cost(key: String) -> int:
+	var bases: Dictionary = {"kickback": 2, "muscle": 2, "cap_hike": 3, "war_chest": 2}
+	var level: int = prestige_upgrades[key]
+	return int(floor(bases[key] * pow(1.5, level)))
+
+func buy_prestige_upgrade(key: String) -> bool:
+	if not prestige_upgrades.has(key):
+		return false
+	var cost: int = get_prestige_upgrade_cost(key)
+	if influence < cost:
+		return false
+	influence -= cost
+	prestige_upgrades[key] += 1
+	prestige_changed.emit()
+	return true
+
+func prestige() -> void:
+	if not can_prestige():
+		return
+	influence += get_pending_influence()
+	prestige_count += 1
+	lifetime_earnings = 0.0
+	# Partial reset: keep influence, prestige_upgrades, prestige_count, touch_controls.
+	# Seed starting money from War Chest upgrade.
+	_reset_progression(get_war_chest_seed())
+	prestige_changed.emit()
+	prestige_performed.emit()
+
+# Shared progression reset used by both reset_game() and prestige().
+func _reset_progression(start_money: float) -> void:
+	money = start_money
 	current_tool_id = "hands"
 	tools_owned = {
 		"hands": {"owned": true, "level": 0},
@@ -945,6 +1018,15 @@ func reset_game() -> void:
 	upgrade_changed.emit()
 	day_changed.emit(current_day)
 
+# Full restart: wipe everything including prestige progress.
+func reset_game() -> void:
+	influence = 0.0
+	lifetime_earnings = 0.0
+	prestige_count = 0
+	prestige_upgrades = {"kickback": 0, "muscle": 0, "cap_hike": 0, "war_chest": 0}
+	_reset_progression(0.0)
+	prestige_changed.emit()
+
 func regen_stamina(delta: float) -> void:
 	var max_stam: float = get_max_stamina()
 	if current_stamina < max_stam:
@@ -997,8 +1079,12 @@ func get_save_data() -> Dictionary:
 		cave_pool_save[cave_id] = pools
 
 	return {
-		"version": 17,
+		"version": 18,
 		"money": money,
+		"influence": influence,
+		"lifetime_earnings": lifetime_earnings,
+		"prestige_count": prestige_count,
+		"prestige_upgrades": prestige_upgrades.duplicate(true),
 		"current_tool_id": current_tool_id,
 		"tools_owned": tools_owned.duplicate(true),
 		"stat_levels": stat_levels.duplicate(true),
@@ -1020,6 +1106,14 @@ func get_save_data() -> Dictionary:
 
 func load_save_data(data: Dictionary) -> void:
 	money = data.get("money", 0.0)
+	influence = data.get("influence", 0.0)
+	lifetime_earnings = data.get("lifetime_earnings", 0.0)
+	prestige_count = int(data.get("prestige_count", 0))
+	if data.has("prestige_upgrades"):
+		for key in data["prestige_upgrades"]:
+			var k: String = key
+			if prestige_upgrades.has(k):
+				prestige_upgrades[k] = int(data["prestige_upgrades"][k])
 	current_tool_id = data.get("current_tool_id", "hands")
 	if data.has("tools_owned"):
 		for key in data["tools_owned"]:

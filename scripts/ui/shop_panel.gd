@@ -8,8 +8,9 @@ var _dirty: bool = false
 var _refresh_cooldown: float = 0.0
 const REFRESH_INTERVAL: float = 0.3
 
-var current_tab: int = 0  # 0=Tools, 1=Stats
+var current_tab: int = 0  # 0=Tools, 1=Stats, 2=Influence
 var tab_buttons: Array[Button] = []
+var confirming_sellout: bool = false
 
 func _ready() -> void:
 	close_button.pressed.connect(func() -> void: close())
@@ -19,6 +20,7 @@ func _ready() -> void:
 	GameManager.camel_changed.connect(func() -> void: _dirty = true; _refresh_cooldown = REFRESH_INTERVAL)
 	GameManager.upgrade_changed.connect(func() -> void: _dirty = true; _refresh_cooldown = REFRESH_INTERVAL)
 	GameManager.stat_upgraded.connect(func(_s: String, _l: int) -> void: _dirty = true; _refresh_cooldown = REFRESH_INTERVAL)
+	GameManager.prestige_changed.connect(func() -> void: _dirty = true; _refresh_cooldown = REFRESH_INTERVAL)
 	visible = false
 
 func _process(delta: float) -> void:
@@ -31,6 +33,7 @@ func _process(delta: float) -> void:
 
 func open() -> void:
 	visible = true
+	confirming_sellout = false
 	_refresh_cooldown = 0.0
 	_refresh()
 	# Slide in from right
@@ -59,12 +62,13 @@ func _refresh() -> void:
 	tab_bar.add_theme_constant_override("separation", 4)
 	tab_buttons.clear()
 
-	var tab_names: Array[String] = ["Tools", "Stats"]
+	var tab_names: Array[String] = ["Tools", "Stats", "Influence"]
 	var tab_colors: Array[Color] = [
 		Color(0.55, 0.48, 0.2),   # Gold for tools
 		Color(0.3, 0.5, 0.8),     # Blue for stats
+		Color(0.6, 0.3, 0.7),     # Purple for influence
 	]
-	for i in range(2):
+	for i in range(3):
 		var tab_idx: int = i
 		var btn := Button.new()
 		btn.text = tab_names[i]
@@ -113,6 +117,8 @@ func _refresh() -> void:
 			_build_tools_tab()
 		1:
 			_build_stats_tab()
+		2:
+			_build_prestige_tab()
 
 # =============================================================================
 # TOOLS TAB
@@ -412,6 +418,180 @@ func _build_stats_tab() -> void:
 
 		u_panel.add_child(u_row)
 		tool_list.add_child(u_panel)
+
+# =============================================================================
+# INFLUENCE (PRESTIGE) TAB
+# =============================================================================
+func _build_prestige_tab() -> void:
+	# --- Balance header ---
+	var bal := Label.new()
+	bal.text = "Influence: %d" % int(GameManager.influence)
+	bal.add_theme_font_size_override("font_size", 16)
+	bal.add_theme_color_override("font_color", Color(0.85, 0.6, 1.0))
+	bal.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	tool_list.add_child(bal)
+
+	var sub := Label.new()
+	sub.text = "Times Sold Out: %d" % GameManager.prestige_count
+	sub.add_theme_font_size_override("font_size", 13)
+	sub.add_theme_color_override("font_color", Color(0.6, 0.55, 0.7))
+	sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	tool_list.add_child(sub)
+
+	# --- Sell Out panel ---
+	var pending: int = GameManager.get_pending_influence()
+	var sellout_panel := PanelContainer.new()
+	var sellout_style := StyleBoxFlat.new()
+	sellout_style.bg_color = Color(0.14, 0.08, 0.16, 0.6)
+	sellout_style.corner_radius_top_left = 4
+	sellout_style.corner_radius_top_right = 4
+	sellout_style.corner_radius_bottom_left = 4
+	sellout_style.corner_radius_bottom_right = 4
+	sellout_style.content_margin_left = 8
+	sellout_style.content_margin_right = 8
+	sellout_style.content_margin_top = 6
+	sellout_style.content_margin_bottom = 6
+	sellout_panel.add_theme_stylebox_override("panel", sellout_style)
+
+	var sellout_col := VBoxContainer.new()
+	sellout_col.add_theme_constant_override("separation", 6)
+
+	var pending_lbl := Label.new()
+	pending_lbl.text = "Pending payout: +%d Influence" % pending
+	pending_lbl.add_theme_font_size_override("font_size", 14)
+	pending_lbl.add_theme_color_override("font_color", Color(0.8, 0.7, 1.0))
+	pending_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	sellout_col.add_child(pending_lbl)
+
+	if not confirming_sellout:
+		var sellout_btn := Button.new()
+		sellout_btn.add_theme_font_size_override("font_size", 16)
+		sellout_btn.text = "SELL OUT"
+		sellout_btn.custom_minimum_size = Vector2(160, 30)
+		sellout_btn.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+		if not GameManager.can_prestige():
+			sellout_btn.disabled = true
+		else:
+			sellout_btn.add_theme_color_override("font_color", Color(1.0, 0.8, 0.4))
+			sellout_btn.pressed.connect(func() -> void:
+				confirming_sellout = true
+				_refresh()
+			)
+		_style_button(sellout_btn, Color(0.3, 0.12, 0.3))
+		sellout_col.add_child(sellout_btn)
+	else:
+		var warn := Label.new()
+		warn.add_theme_font_size_override("font_size", 13)
+		warn.add_theme_color_override("font_color", Color(1.0, 0.6, 0.5))
+		warn.text = "Resets money, tools, stats &\nswamp progress. You keep your Influence."
+		warn.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		sellout_col.add_child(warn)
+
+		var confirm_row := HBoxContainer.new()
+		confirm_row.alignment = BoxContainer.ALIGNMENT_CENTER
+		confirm_row.add_theme_constant_override("separation", 16)
+
+		var yes_btn := Button.new()
+		yes_btn.add_theme_font_size_override("font_size", 14)
+		yes_btn.text = "Yes, Sell Out"
+		yes_btn.add_theme_color_override("font_color", Color(1.0, 0.8, 0.4))
+		yes_btn.pressed.connect(func() -> void:
+			confirming_sellout = false
+			GameManager.prestige()
+		)
+		_style_button(yes_btn, Color(0.3, 0.12, 0.3))
+		confirm_row.add_child(yes_btn)
+
+		var no_btn := Button.new()
+		no_btn.add_theme_font_size_override("font_size", 14)
+		no_btn.text = "Cancel"
+		no_btn.add_theme_color_override("font_color", Color(0.8, 0.85, 0.9))
+		no_btn.pressed.connect(func() -> void:
+			confirming_sellout = false
+			_refresh()
+		)
+		_style_button(no_btn, Color(0.15, 0.18, 0.22))
+		confirm_row.add_child(no_btn)
+		sellout_col.add_child(confirm_row)
+
+	sellout_panel.add_child(sellout_col)
+	tool_list.add_child(sellout_panel)
+
+	# --- Upgrades header ---
+	var sep := HSeparator.new()
+	sep.add_theme_constant_override("separation", 6)
+	tool_list.add_child(sep)
+	var hdr := Label.new()
+	hdr.text = "-- Permanent Upgrades --"
+	hdr.add_theme_font_size_override("font_size", 14)
+	hdr.add_theme_color_override("font_color", Color(0.75, 0.55, 0.9))
+	hdr.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	tool_list.add_child(hdr)
+
+	_build_prestige_upgrade_row("kickback", "Kickback", "+8% money per level")
+	_build_prestige_upgrade_row("muscle", "Muscle", "+8% scoop output per level")
+	_build_prestige_upgrade_row("cap_hike", "Cap Hike", "+25% stat caps per level")
+	_build_prestige_upgrade_row("war_chest", "War Chest", "Start with seed money")
+
+func _build_prestige_upgrade_row(key: String, display_name: String, effect: String) -> void:
+	var level: int = GameManager.prestige_upgrades[key]
+	var cost: int = GameManager.get_prestige_upgrade_cost(key)
+
+	var row_panel := PanelContainer.new()
+	var row_style := StyleBoxFlat.new()
+	row_style.bg_color = Color(0.12, 0.09, 0.16, 0.6)
+	row_style.corner_radius_top_left = 4
+	row_style.corner_radius_top_right = 4
+	row_style.corner_radius_bottom_left = 4
+	row_style.corner_radius_bottom_right = 4
+	row_style.content_margin_left = 8
+	row_style.content_margin_right = 8
+	row_style.content_margin_top = 4
+	row_style.content_margin_bottom = 4
+	row_panel.add_theme_stylebox_override("panel", row_style)
+
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 8)
+
+	var info_label := Label.new()
+	info_label.add_theme_font_size_override("font_size", 14)
+	info_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	info_label.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.5))
+	info_label.add_theme_constant_override("shadow_offset_x", 2)
+	info_label.add_theme_constant_override("shadow_offset_y", 2)
+	if level > 0:
+		info_label.text = "%s Lv%d" % [display_name, level]
+		info_label.add_theme_color_override("font_color", Color(0.8, 0.7, 1.0))
+	else:
+		info_label.text = display_name
+		info_label.add_theme_color_override("font_color", Color(0.6, 0.55, 0.7))
+	row.add_child(info_label)
+
+	var buy_btn := Button.new()
+	buy_btn.add_theme_font_size_override("font_size", 14)
+	buy_btn.text = "Buy (%d Inf)" % cost
+	buy_btn.custom_minimum_size = Vector2(110, 0)
+	if GameManager.influence < cost:
+		buy_btn.disabled = true
+	else:
+		buy_btn.add_theme_color_override("font_color", Color(0.9, 0.7, 1.0))
+		var k: String = key
+		buy_btn.pressed.connect(func() -> void: GameManager.buy_prestige_upgrade(k))
+	_style_button(buy_btn, Color(0.2, 0.1, 0.25))
+	row.add_child(buy_btn)
+
+	var tip: String = "%s\n%s\nLevel: %d\nCost: %d Influence" % [display_name, effect, level, cost]
+	if key == "war_chest":
+		tip += "\nNext start money: %s" % Economy.format_money(_war_chest_seed_at(level + 1))
+	row_panel.tooltip_text = tip
+	row_panel.mouse_filter = Control.MOUSE_FILTER_PASS
+	row_panel.add_child(row)
+	tool_list.add_child(row_panel)
+
+func _war_chest_seed_at(level: int) -> float:
+	if level <= 0:
+		return 0.0
+	return 50.0 * pow(2.0, level - 1)
 
 func _format_stat_value(stat_id: String, defn: Dictionary, value: float) -> String:
 	var fmt: String = defn.get("format", "value")

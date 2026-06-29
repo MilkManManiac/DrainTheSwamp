@@ -11,6 +11,7 @@ func _ready() -> void:
 	player.cave_entrance_requested.connect(_on_cave_entrance_requested)
 	menu_panel.reset_confirmed.connect(_on_reset_confirmed)
 	GameManager.cave_unlocked.connect(_on_cave_unlocked)
+	GameManager.prestige_performed.connect(_on_prestige_performed)
 
 	# Clear ui_panel_open when any panel closes itself via its own X button
 	shop_panel.visibility_changed.connect(_on_panel_visibility_changed)
@@ -46,6 +47,13 @@ func _on_reset_confirmed() -> void:
 	GameManager.reset_game()
 	SaveManager.save_game()
 	# Full restart: reload the scene so the whole world rebuilds from fresh state.
+	get_tree().paused = false
+	get_tree().reload_current_scene()
+
+func _on_prestige_performed() -> void:
+	_close_all_panels()
+	SaveManager.save_game()
+	# Reload the scene so the whole world rebuilds from the post-prestige state.
 	get_tree().paused = false
 	get_tree().reload_current_scene()
 
