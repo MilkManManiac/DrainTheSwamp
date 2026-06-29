@@ -2,6 +2,7 @@ extends "res://scripts/caves/cave_base.gd"
 
 func _init() -> void:
 	cave_id = "sunken_grotto"
+	signature = "pump"
 	crystal_color = Color(0.2, 0.65, 0.6)  # Teal
 
 	# Theme colors: teal-grey

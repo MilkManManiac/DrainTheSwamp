@@ -2,6 +2,7 @@ extends "res://scripts/caves/cave_base.gd"
 
 func _init() -> void:
 	cave_id = "mariana_trench"
+	signature = "skeleton"
 	crystal_color = Color(0.2, 0.4, 0.9)  # Bioluminescent blue
 
 	# Theme colors: deep blue-black

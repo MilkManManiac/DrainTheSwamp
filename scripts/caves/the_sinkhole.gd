@@ -2,6 +2,7 @@ extends "res://scripts/caves/cave_base.gd"
 
 func _init() -> void:
 	cave_id = "the_sinkhole"
+	signature = "mine_cart"
 	crystal_color = Color(0.3, 0.6, 0.8)  # Blue-green
 
 	# Theme colors: grey-blue

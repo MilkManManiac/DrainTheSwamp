@@ -17,6 +17,9 @@ var rock_inner_ceil_color: Color = Color(0.24, 0.18, 0.12)
 # Leave as the (0,0,0,0) sentinel to auto-derive a biome-appropriate fog from the
 # rock/crystal colors; override in a subclass for a hand-tuned biome identity.
 var fog_color: Color = Color(0, 0, 0, 0)
+# Signature set-piece — one memorable themed vignette per cave. Override in subclass _init.
+# Supported: "crates", "mine_cart", "pump", "skeleton", "dead_tree", "pillars", "coral".
+var signature: String = ""
 
 # Cave pool definitions — set in subclass _init()
 # Each entry: {"x_range": [start_x, end_x], "pool_index": int, "loot_data": {...}}
@@ -76,6 +79,7 @@ func _setup_cave() -> void:
 	_build_stalagmites()
 	_build_crystals()
 	_build_midground_clutter()
+	_build_signature()
 	_build_moss_lichen()
 	_build_cave_pools()
 	_build_cracks()
@@ -1351,6 +1355,271 @@ func _make_hanging_vine(x: float, ceil_y: float) -> void:
 		pod.color = _emit(crystal_color.lightened(0.2), 1.6)
 		pod.z_index = 3
 		add_child(pod)
+
+# =====================================================================================
+# Signature set-piece — one memorable, themed focal vignette per cave (environmental
+# storytelling: object arrangement implies a history). Placed ~62% across, on the floor.
+# =====================================================================================
+func _build_signature() -> void:
+	if signature == "" or cave_terrain_points.size() < 2:
+		return
+	var left_x: float = cave_terrain_points[0].x
+	var right_x: float = cave_terrain_points[cave_terrain_points.size() - 1].x
+	var fx: float = lerpf(left_x, right_x, 0.62)
+	var base := Vector2(fx, _get_cave_terrain_y_at(fx))
+	match signature:
+		"crates": _sig_crates(base)
+		"mine_cart": _sig_mine_cart(base)
+		"pump": _sig_pump(base)
+		"skeleton": _sig_skeleton(base)
+		"dead_tree": _sig_dead_tree(base)
+		"pillars": _sig_pillars(base, left_x, right_x)
+		"coral": _sig_coral(base)
+
+# small filled-poly helper for set-pieces
+func _add_poly(pts: PackedVector2Array, col: Color, z: int, grad_to: Color = Color(0, 0, 0, 0), use_rock: bool = false) -> Polygon2D:
+	var p := Polygon2D.new()
+	p.polygon = pts
+	p.color = col
+	if grad_to.a > 0.0:
+		p.vertex_colors = _vertical_gradient_colors(pts, col, grad_to)
+	if use_rock:
+		p.material = rock_material
+	p.z_index = z
+	add_child(p)
+	return p
+
+func _circle_pts(c: Vector2, r: float, sides: int = 10) -> PackedVector2Array:
+	var pts := PackedVector2Array()
+	for s in range(sides):
+		var a: float = TAU * float(s) / float(sides)
+		pts.append(c + Vector2(cos(a) * r, sin(a) * r))
+	return pts
+
+func _add_point_glow(pos: Vector2, col: Color, energy: float, scale: float) -> void:
+	var l := PointLight2D.new()
+	l.position = pos
+	l.color = col
+	l.blend_mode = PointLight2D.BLEND_MODE_ADD
+	l.energy = energy
+	l.shadow_enabled = false
+	l.texture = _make_radial_light_texture()
+	l.texture_scale = scale
+	l.z_index = 2
+	add_child(l)
+
+# Stacked, redacted government crates + a leaning "PROPERTY OF" sign — bureaucratic satire.
+func _sig_crates(base: Vector2) -> void:
+	var wood := Color(0.34, 0.24, 0.13)
+	var boxes := [Vector2(-22, 0), Vector2(12, 0), Vector2(-6, -26), Vector2(20, -24)]
+	for b in boxes:
+		var c: Vector2 = base + b
+		var w: float = randf_range(13, 17)
+		var h: float = randf_range(15, 20)
+		_add_poly(PackedVector2Array([
+			c + Vector2(-w, 0), c + Vector2(w, 0), c + Vector2(w, -h), c + Vector2(-w, -h)
+		]), wood.lightened(randf_range(0.0, 0.12)), 4, wood.darkened(0.25))
+		# plank lines + a black redaction bar (stamped & classified)
+		_add_poly(PackedVector2Array([
+			c + Vector2(-w * 0.7, -h * 0.55), c + Vector2(w * 0.5, -h * 0.55),
+			c + Vector2(w * 0.5, -h * 0.4), c + Vector2(-w * 0.7, -h * 0.4)
+		]), Color(0.05, 0.05, 0.05, 0.9), 5)
+	# leaning signpost
+	var post := Line2D.new()
+	post.width = 2.5
+	post.default_color = Color(0.3, 0.22, 0.12)
+	post.add_point(base + Vector2(34, 2))
+	post.add_point(base + Vector2(40, -40))
+	post.z_index = 4
+	add_child(post)
+	_add_poly(PackedVector2Array([
+		base + Vector2(30, -34), base + Vector2(54, -38),
+		base + Vector2(55, -50), base + Vector2(31, -46)
+	]), Color(0.62, 0.58, 0.45), 5, Color(0.5, 0.46, 0.34))
+
+# Derailed mine cart spilling glowing ore + rail track + snapped support beam.
+func _sig_mine_cart(base: Vector2) -> void:
+	var iron := Color(0.22, 0.2, 0.22)
+	# rail ties + rails
+	for i in range(6):
+		var tx: float = base.x - 50 + i * 18
+		var ty: float = _get_cave_terrain_y_at(tx)
+		_add_poly(PackedVector2Array([
+			Vector2(tx - 2, ty), Vector2(tx + 2, ty), Vector2(tx + 2, ty + 4), Vector2(tx - 2, ty + 4)
+		]), Color(0.28, 0.2, 0.12), 2)
+	var rail1 := Line2D.new()
+	rail1.width = 1.6
+	rail1.default_color = Color(0.4, 0.36, 0.32)
+	rail1.add_point(base + Vector2(-52, 1))
+	rail1.add_point(base + Vector2(40, 1))
+	rail1.z_index = 2
+	add_child(rail1)
+	# tilted cart body
+	var c := base + Vector2(8, -10)
+	_add_poly(PackedVector2Array([
+		c + Vector2(-16, 8), c + Vector2(18, 4), c + Vector2(16, -10), c + Vector2(-14, -8)
+	]), iron, 4, iron.darkened(0.4))
+	_add_poly(_circle_pts(c + Vector2(-10, 10), 5, 8), Color(0.12, 0.11, 0.12), 5)
+	_add_poly(_circle_pts(c + Vector2(10, 9), 5, 8), Color(0.12, 0.11, 0.12), 5)
+	# spilled glowing ore
+	for i in range(5):
+		var op := base + Vector2(randf_range(-30, -8), randf_range(-2, 2))
+		_add_poly(_circle_pts(op, randf_range(2.5, 4.5), 7), _emit(Color(0.95, 0.7, 0.3), 1.7), 6)
+	_add_point_glow(base + Vector2(-18, -2), Color(0.95, 0.7, 0.3), 0.6, 0.5)
+	# snapped support beam (tilted)
+	_add_poly(PackedVector2Array([
+		base + Vector2(34, 4), base + Vector2(40, 4), base + Vector2(58, -54), base + Vector2(52, -54)
+	]), Color(0.26, 0.18, 0.1), 4, Color(0.16, 0.11, 0.06))
+
+# Rusted drainage pump, half-sunk, with a snapped pipe still gushing — on-theme.
+func _sig_pump(base: Vector2) -> void:
+	var rust := Color(0.34, 0.26, 0.18)
+	# machine housing
+	var c := base + Vector2(0, -14)
+	_add_poly(PackedVector2Array([
+		c + Vector2(-22, 14), c + Vector2(22, 14), c + Vector2(20, -16), c + Vector2(-20, -16)
+	]), rust, 4, rust.darkened(0.4))
+	# rivets
+	for rv in [Vector2(-16, -10), Vector2(14, -10), Vector2(-16, 8), Vector2(14, 8)]:
+		_add_poly(_circle_pts(c + rv, 1.8, 6), rust.lightened(0.25), 5)
+	# valve wheel
+	var vc := c + Vector2(0, -6)
+	_add_poly(_circle_pts(vc, 8, 12), Color(0.4, 0.3, 0.2), 5)
+	_add_poly(_circle_pts(vc, 3.5, 8), rust.darkened(0.3), 6)
+	for k in range(4):
+		var a: float = TAU * float(k) / 4.0
+		var spoke := Line2D.new()
+		spoke.width = 1.4
+		spoke.default_color = Color(0.45, 0.34, 0.22)
+		spoke.add_point(vc)
+		spoke.add_point(vc + Vector2(cos(a), sin(a)) * 8)
+		spoke.z_index = 6
+		add_child(spoke)
+	# snapped pipe + gushing water
+	var pipe := Line2D.new()
+	pipe.width = 6.0
+	pipe.default_color = Color(0.3, 0.24, 0.18)
+	pipe.add_point(c + Vector2(20, -8))
+	pipe.add_point(c + Vector2(40, -8))
+	pipe.add_point(c + Vector2(46, -2))
+	pipe.z_index = 4
+	add_child(pipe)
+	var gush := Line2D.new()
+	gush.width = 3.0
+	gush.default_color = _emit(Color(0.6, 0.8, 0.9, 0.7), 1.4)
+	gush.add_point(c + Vector2(47, 0))
+	gush.add_point(c + Vector2(52, 12))
+	gush.add_point(c + Vector2(50, 22))
+	gush.z_index = 4
+	add_child(gush)
+	_add_point_glow(c + Vector2(50, 16), Color(0.6, 0.8, 0.9), 0.4, 0.4)
+
+# A skeleton clutching a coin pouch — who came down here and didn't leave.
+func _sig_skeleton(base: Vector2) -> void:
+	var bone := Color(0.78, 0.76, 0.66)
+	var c := base + Vector2(0, -6)
+	# ribcage arcs
+	for i in range(4):
+		var rib := Line2D.new()
+		rib.width = 1.6
+		rib.default_color = bone
+		var ry: float = c.y - 4 - i * 3.5
+		rib.add_point(Vector2(c.x - 10, ry))
+		rib.add_point(Vector2(c.x, ry - 2))
+		rib.add_point(Vector2(c.x + 10, ry))
+		rib.z_index = 4
+		add_child(rib)
+	# spine + skull
+	_add_poly(PackedVector2Array([
+		c + Vector2(-1.5, -2), c + Vector2(1.5, -2), c + Vector2(1.5, -18), c + Vector2(-1.5, -18)
+	]), bone.darkened(0.1), 4)
+	_add_poly(_circle_pts(c + Vector2(0, -22), 6, 10), bone, 5)
+	_add_poly(_circle_pts(c + Vector2(-2, -22), 1.4, 6), Color(0.1, 0.1, 0.1), 6)
+	_add_poly(_circle_pts(c + Vector2(2, -22), 1.4, 6), Color(0.1, 0.1, 0.1), 6)
+	# scattered bones
+	for i in range(3):
+		var bp := base + Vector2(randf_range(14, 30), randf_range(-2, 2))
+		_add_poly(PackedVector2Array([bp, bp + Vector2(8, -2), bp + Vector2(9, 0), bp + Vector2(1, 2)]), bone.darkened(0.15), 4)
+	# coin pouch, still glinting gold
+	_add_poly(_circle_pts(c + Vector2(12, 4), 4, 8), Color(0.3, 0.22, 0.12), 4)
+	for i in range(3):
+		_add_poly(_circle_pts(c + Vector2(10 + i * 2, 2 - i), 1.6, 6), _emit(Color(1.0, 0.82, 0.3), 1.8), 6)
+	_add_point_glow(c + Vector2(12, 2), Color(1.0, 0.82, 0.3), 0.5, 0.45)
+
+# A gnarled dead tree with a will-o-wisp drifting at its roots — bog dread.
+func _sig_dead_tree(base: Vector2) -> void:
+	var bark := Color(0.16, 0.13, 0.1)
+	var c := base
+	# trunk, tapered
+	_add_poly(PackedVector2Array([
+		c + Vector2(-9, 2), c + Vector2(9, 2), c + Vector2(4, -64), c + Vector2(-4, -64)
+	]), bark, 4, bark.lightened(0.1))
+	# bare branches
+	for b in [[Vector2(0, -50), Vector2(-26, -78)], [Vector2(0, -56), Vector2(24, -82)], [Vector2(0, -44), Vector2(18, -58)]]:
+		var br := Line2D.new()
+		br.width = 2.4
+		br.default_color = bark.lightened(0.05)
+		br.add_point(c + b[0])
+		br.add_point(c + (b[0] + b[1]) * 0.5 + Vector2(randf_range(-4, 4), 0))
+		br.add_point(c + b[1])
+		br.z_index = 4
+		add_child(br)
+	# hanging moss
+	for i in range(4):
+		var mx: float = c.x + randf_range(-20, 20)
+		var moss := Line2D.new()
+		moss.width = 1.4
+		moss.default_color = Color(0.3, 0.36, 0.2, 0.7)
+		moss.add_point(Vector2(mx, c.y - 60 + randf_range(-6, 6)))
+		moss.add_point(Vector2(mx + randf_range(-3, 3), c.y - 40 + randf_range(-4, 4)))
+		moss.z_index = 4
+		add_child(moss)
+	# will-o-wisp
+	_add_poly(_circle_pts(c + Vector2(18, -10), 3, 8), _emit(Color(0.6, 0.95, 0.7), 1.9), 6)
+	_add_point_glow(c + Vector2(18, -10), Color(0.5, 0.95, 0.65), 0.8, 0.55)
+
+# Towering ancient runed pillars at varied depth — eerie grandeur.
+func _sig_pillars(base: Vector2, left_x: float, right_x: float) -> void:
+	var stone := Color(0.2, 0.18, 0.24)
+	var spots := [0.5, 0.62, 0.74]
+	for idx in range(spots.size()):
+		var px: float = lerpf(left_x, right_x, spots[idx])
+		var ceil_y: float = _get_cave_ceiling_y_at(px)
+		var floor_y: float = _get_cave_terrain_y_at(px)
+		var w: float = 9.0 - idx * 1.5
+		var sc: Color = stone.darkened(idx * 0.12)
+		_add_poly(PackedVector2Array([
+			Vector2(px - w, floor_y + 4), Vector2(px + w, floor_y + 4),
+			Vector2(px + w * 0.8, ceil_y), Vector2(px - w * 0.8, ceil_y)
+		]), sc, 3 - idx, sc.lightened(0.12), true)
+		# glowing runes up the shaft
+		for r in range(3):
+			var ry: float = lerpf(floor_y, ceil_y, 0.25 + r * 0.22)
+			_add_poly(_circle_pts(Vector2(px, ry), 2.0, 4), _emit(crystal_color.lightened(0.2), 1.6), 5)
+		if idx == 1:
+			_add_point_glow(Vector2(px, (ceil_y + floor_y) * 0.5), crystal_color, 0.5, 0.7)
+
+# A fan-coral cluster with bioluminescent pods — undersea bloom.
+func _sig_coral(base: Vector2) -> void:
+	var hues := [Color(0.9, 0.3, 0.6), Color(0.3, 0.7, 0.9), Color(0.7, 0.4, 0.9)]
+	for i in range(4):
+		var cx: float = base.x + randf_range(-30, 30)
+		var cy: float = _get_cave_terrain_y_at(cx)
+		var hue: Color = hues[i % hues.size()]
+		var h: float = randf_range(20, 40)
+		# fan: several radiating ribs
+		for k in range(5):
+			var a: float = lerpf(-0.7, 0.7, float(k) / 4.0) - PI * 0.5
+			var rib := Line2D.new()
+			rib.width = 1.8
+			rib.default_color = _emit(Color(hue.r, hue.g, hue.b, 0.85), 1.3)
+			rib.add_point(Vector2(cx, cy))
+			rib.add_point(Vector2(cx + cos(a) * h, cy + sin(a) * h))
+			rib.z_index = 4
+			add_child(rib)
+		# glowing pod at the crown
+		_add_poly(_circle_pts(Vector2(cx, cy - h), 3, 8), _emit(hue.lightened(0.3), 1.8), 6)
+	_add_point_glow(base + Vector2(0, -24), Color(0.6, 0.5, 0.9), 0.7, 0.7)
 
 # --- Fog backdrop: a full-bounds vertical gradient that fills the void behind
 # everything (z=-20). Brighter through the mid band so the wall behind the player

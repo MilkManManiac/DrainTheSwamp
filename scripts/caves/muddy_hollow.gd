@@ -2,6 +2,7 @@ extends "res://scripts/caves/cave_base.gd"
 
 func _init() -> void:
 	cave_id = "muddy_hollow"
+	signature = "crates"
 	crystal_color = Color(0.8, 0.6, 0.2)  # Warm amber
 
 	# Theme colors: warm brown

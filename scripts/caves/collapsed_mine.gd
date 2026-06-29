@@ -2,6 +2,7 @@ extends "res://scripts/caves/cave_base.gd"
 
 func _init() -> void:
 	cave_id = "collapsed_mine"
+	signature = "mine_cart"
 	crystal_color = Color(0.8, 0.5, 0.2)  # Orange
 
 	# Theme colors: rusty brown

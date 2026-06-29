@@ -2,6 +2,7 @@ extends "res://scripts/caves/cave_base.gd"
 
 func _init() -> void:
 	cave_id = "the_cistern"
+	signature = "pump"
 	crystal_color = Color(0.45, 0.55, 0.7)  # Steel blue
 
 	# Theme colors: slate grey

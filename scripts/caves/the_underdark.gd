@@ -2,6 +2,7 @@ extends "res://scripts/caves/cave_base.gd"
 
 func _init() -> void:
 	cave_id = "the_underdark"
+	signature = "pillars"
 	crystal_color = Color(0.5, 0.15, 0.65)  # Deep purple
 
 	# Theme colors: purple-black

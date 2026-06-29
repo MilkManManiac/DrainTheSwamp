@@ -2,6 +2,7 @@ extends "res://scripts/caves/cave_base.gd"
 
 func _init() -> void:
 	cave_id = "coral_cavern"
+	signature = "coral"
 	crystal_color = Color(0.85, 0.4, 0.5)  # Coral pink
 
 	# Theme colors: pinkish stone

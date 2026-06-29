@@ -2,6 +2,7 @@ extends "res://scripts/caves/cave_base.gd"
 
 func _init() -> void:
 	cave_id = "the_mire"
+	signature = "dead_tree"
 	crystal_color = Color(0.2, 0.5, 0.15)  # Dark green
 
 	# Theme colors: dark green-brown
