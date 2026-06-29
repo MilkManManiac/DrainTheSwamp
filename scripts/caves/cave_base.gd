@@ -13,6 +13,10 @@ var wall_color: Color = Color(0.18, 0.12, 0.08)
 var rock_mid_color: Color = Color(0.26, 0.18, 0.10)
 var rock_sub_color: Color = Color(0.20, 0.14, 0.08)
 var rock_inner_ceil_color: Color = Color(0.24, 0.18, 0.12)
+# Backdrop fog — the graded haze that fills the void behind everything.
+# Leave as the (0,0,0,0) sentinel to auto-derive a biome-appropriate fog from the
+# rock/crystal colors; override in a subclass for a hand-tuned biome identity.
+var fog_color: Color = Color(0, 0, 0, 0)
 
 # Cave pool definitions — set in subclass _init()
 # Each entry: {"x_range": [start_x, end_x], "pool_index": int, "loot_data": {...}}
@@ -24,6 +28,7 @@ var drip_timer: float = 0.0
 var wave_time: float = 0.0
 var crystal_lights: Array[PointLight2D] = []
 var crystal_phases: Array[float] = []
+var light_shafts: Array[Dictionary] = []  # animated god-ray cones {node, base_a, phase, speed}
 var dust_motes: Array[Dictionary] = []
 var moisture_gleams: Array[Dictionary] = []  # Phase 9B: shimmer pixels on wet walls
 
@@ -51,12 +56,14 @@ func _ready() -> void:
 	_setup_cave()
 
 func _setup_cave() -> void:
-	# CanvasModulate — moody but readable (lifted from near-black 0.05)
+	# CanvasModulate — moody but readable. Lifted further so the back wall + parallax
+	# layers read as lit rock instead of a flat dark void.
 	var modulate := CanvasModulate.new()
-	modulate.color = Color(0.30, 0.31, 0.39)
+	modulate.color = Color(0.54, 0.56, 0.63)
 	add_child(modulate)
 
 	_setup_cave_hdr()
+	_build_fog_backdrop()
 	_build_floor()
 	_build_ceiling()
 	_build_walls()
@@ -73,6 +80,7 @@ func _setup_cave() -> void:
 	_build_light_shafts()
 	_build_parallax_bg()
 	_build_ambient_fill_lights()
+	_build_foreground_silhouettes()
 	_build_exit_zone()
 	_build_exit_glow()
 	_spawn_player()
@@ -182,21 +190,22 @@ func _build_ambient_fill_lights() -> void:
 	var left_x: float = cave_terrain_points[0].x
 	var right_x: float = cave_terrain_points[cave_terrain_points.size() - 1].x
 	var span: float = right_x - left_x
-	var num_fills: int = clampi(int(span / 320.0) + 2, 2, 4)
+	var num_fills: int = clampi(int(span / 240.0) + 2, 3, 6)
+	var fog: Dictionary = _fog_palette()
 	for i in range(num_fills):
 		var t: float = (float(i) + 0.5) / float(num_fills)
 		var fx: float = lerpf(left_x + 40, right_x - 40, t)
 		var ceil_y: float = _get_cave_ceiling_y_at(fx)
 		var floor_y: float = _get_cave_terrain_y_at(fx)
 		var fill_light := PointLight2D.new()
-		fill_light.position = Vector2(fx, lerpf(ceil_y, floor_y, 0.45))
-		# Cool blue-teal fill
-		fill_light.color = Color(0.45, 0.62, 0.78)
+		fill_light.position = Vector2(fx, lerpf(ceil_y, floor_y, 0.5))
+		# Fill tinted toward the biome glow so the back wall reads as lit rock, not gray
+		fill_light.color = (fog["fill"] as Color)
 		fill_light.blend_mode = PointLight2D.BLEND_MODE_ADD
-		fill_light.energy = 0.42
+		fill_light.energy = 0.9
 		fill_light.shadow_enabled = false
 		fill_light.texture = _make_radial_light_texture()
-		fill_light.texture_scale = randf_range(1.6, 2.2)
+		fill_light.texture_scale = randf_range(2.2, 3.0)
 		fill_light.z_index = -2
 		add_child(fill_light)
 
@@ -211,7 +220,7 @@ func _build_cave_post_processing() -> void:
 	cave_post_process_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var mat := ShaderMaterial.new()
 	mat.shader = POST_PROCESS_SHADER
-	mat.set_shader_parameter("vignette_strength", 0.4)
+	mat.set_shader_parameter("vignette_strength", 0.22)
 	# Was "bloom_strength" (not a real uniform) — fixed. Real HDR glow handles bloom on
 	# desktop; fall back to the shader's single-pass bloom on GL Compatibility (web).
 	mat.set_shader_parameter("bloom_threshold", 0.6)
@@ -222,7 +231,7 @@ func _build_cave_post_processing() -> void:
 	mat.set_shader_parameter("film_grain_strength", 0.04)
 	mat.set_shader_parameter("dither_levels", 14.0)
 	mat.set_shader_parameter("dither_strength", 0.4)
-	mat.set_shader_parameter("night_factor", 0.12)
+	mat.set_shader_parameter("night_factor", 0.05)
 	mat.set_shader_parameter("warmth", -0.01)
 	mat.set_shader_parameter("time", 0.0)
 	cave_post_process_rect.material = mat
@@ -1051,6 +1060,7 @@ func _build_light_shafts() -> void:
 		cone.material = cone_mat
 		cone.z_index = 6
 		add_child(cone)
+		light_shafts.append({"node": cone, "phase": randf_range(0.0, TAU), "speed": randf_range(0.4, 0.8)})
 		# Light beam Line2D (bright core)
 		var beam := Line2D.new()
 		beam.width = randf_range(4, 8)
@@ -1082,29 +1092,197 @@ func _build_light_shafts() -> void:
 		shaft_light.texture_scale = 0.3
 		add_child(shaft_light)
 
-# --- Parallax background (distant rock silhouettes) ---
-func _build_parallax_bg() -> void:
+# --- Fog palette: derive a biome-appropriate haze from the rock/crystal colors ---
+# Returns {top, mid, bottom, fill, accent}. Override `fog_color` in a subclass to
+# pin the haze hue; otherwise it's mixed from ceiling/ground/crystal so each cave differs.
+func _fog_palette() -> Dictionary:
+	var base: Color = fog_color
+	if base.a <= 0.0:
+		# Auto: cool, desaturated blend of the ceiling rock pulled slightly toward crystal hue
+		base = ceiling_color.lerp(crystal_color, 0.18)
+		base = base.lerp(Color(0.16, 0.19, 0.27), 0.55)  # push toward a cool cavern blue-gray
+	var top: Color = base.darkened(0.35)            # deep haze up high
+	var mid: Color = base.lightened(0.55)           # lit band behind the player
+	mid = mid.lerp(crystal_color, 0.16)
+	var bottom: Color = base.darkened(0.30).lerp(ground_color.darkened(0.2), 0.4)
+	var fill: Color = base.lightened(0.35).lerp(crystal_color, 0.22)
+	var accent: Color = crystal_color.lightened(0.1)
+	return {"top": top, "mid": mid, "bottom": bottom, "fill": fill, "accent": accent}
+
+# --- Fog backdrop: a full-bounds vertical gradient that fills the void behind
+# everything (z=-20). Brighter through the mid band so the wall behind the player
+# reads as lit rock haze instead of black. This is the single biggest "not a void" fix.
+func _build_fog_backdrop() -> void:
+	if cave_terrain_points.size() < 2 or cave_ceiling_points.size() < 2:
+		return
+	var fog: Dictionary = _fog_palette()
 	var left_x: float = cave_terrain_points[0].x
 	var right_x: float = cave_terrain_points[cave_terrain_points.size() - 1].x
-	var mid_y: float = (cave_ceiling_points[0].y + cave_terrain_points[0].y) * 0.5
-	var bg_color: Color = ground_color.darkened(0.4)
-	bg_color.a = 0.3
-	# 3-4 distant rock silhouette shapes
-	for i in range(randi_range(3, 5)):
-		var bx: float = randf_range(left_x, right_x)
-		var by: float = mid_y + randf_range(-20, 20)
-		var bw: float = randf_range(30, 80)
-		var bh: float = randf_range(20, 50)
-		var bg_rock := Polygon2D.new()
-		bg_rock.polygon = PackedVector2Array([
-			Vector2(bx, by),
-			Vector2(bx + bw * 0.3, by - bh),
-			Vector2(bx + bw * 0.6, by - bh * 0.7),
-			Vector2(bx + bw, by),
+	# Vertical band roughly centered on the cave interior, generously oversized so the
+	# camera (clamped within the cave bounds) never sees an unpainted edge.
+	var ceil_y: float = cave_ceiling_points[0].y
+	var floor_y: float = cave_terrain_points[0].y
+	for pt in cave_ceiling_points:
+		ceil_y = minf(ceil_y, pt.y)
+	for pt in cave_terrain_points:
+		floor_y = maxf(floor_y, pt.y)
+	var top_y: float = ceil_y - 280.0
+	var bot_y: float = floor_y + 320.0
+	var x0: float = left_x - 360.0
+	var x1: float = right_x + 360.0
+
+	# Three stacked gradient bands (top->mid, mid->bottom) give a lit core with dark
+	# top and floor, reading as atmospheric depth.
+	var grad := Gradient.new()
+	grad.offsets = PackedFloat32Array([0.0, 0.42, 0.62, 1.0])
+	grad.colors = PackedColorArray([
+		fog["top"],
+		(fog["mid"] as Color),
+		(fog["mid"] as Color).lerp(fog["bottom"], 0.5),
+		fog["bottom"],
+	])
+	var gtex := GradientTexture2D.new()
+	gtex.width = 8
+	gtex.height = 256
+	gtex.fill = GradientTexture2D.FILL_LINEAR
+	gtex.fill_from = Vector2(0.0, 0.0)
+	gtex.fill_to = Vector2(0.0, 1.0)
+	gtex.gradient = grad
+
+	var bg := Sprite2D.new()
+	bg.texture = gtex
+	bg.centered = false
+	bg.position = Vector2(x0, top_y)
+	bg.scale = Vector2((x1 - x0) / 8.0, (bot_y - top_y) / 256.0)
+	bg.z_index = -20
+	add_child(bg)
+
+	# A far focal light deep in the haze — a "distant chamber" glow that gives the
+	# background a light source and somewhere for the eye to travel.
+	var far_light := PointLight2D.new()
+	far_light.position = Vector2(lerpf(left_x, right_x, randf_range(0.35, 0.65)), lerpf(ceil_y, floor_y, 0.4))
+	far_light.color = (fog["fill"] as Color)
+	far_light.blend_mode = PointLight2D.BLEND_MODE_ADD
+	far_light.energy = 0.55
+	far_light.shadow_enabled = false
+	far_light.texture = _make_radial_light_texture()
+	far_light.texture_scale = 5.0
+	far_light.z_index = -19
+	add_child(far_light)
+
+# --- Parallax background: real multi-plane depth (replaces the old flat triangles) ---
+# Three silhouette planes scroll at decreasing speed for genuine parallax; far planes
+# are hazed + desaturated (atmospheric perspective) so depth reads instantly.
+func _build_parallax_bg() -> void:
+	if cave_terrain_points.size() < 2 or cave_ceiling_points.size() < 2:
+		return
+	var fog: Dictionary = _fog_palette()
+	var left_x: float = cave_terrain_points[0].x
+	var right_x: float = cave_terrain_points[cave_terrain_points.size() - 1].x
+	var ceil_y: float = _get_cave_ceiling_y_at((left_x + right_x) * 0.5)
+	var floor_y: float = _get_cave_terrain_y_at((left_x + right_x) * 0.5)
+	var span: float = right_x - left_x
+
+	# plane defs: [scroll_scale, z, color toward fog["top"], base_y frac, height, count]
+	var planes := [
+		{"scroll": 0.25, "z": -16, "tint": 0.78, "yf": 0.62, "h": 70.0, "rough": 0.55},  # far hills
+		{"scroll": 0.45, "z": -13, "tint": 0.55, "yf": 0.74, "h": 95.0, "rough": 0.7},   # mid ridge
+		{"scroll": 0.65, "z": -10, "tint": 0.32, "yf": 0.9, "h": 120.0, "rough": 0.85},  # near formations
+	]
+	for pdef in planes:
+		var layer := Parallax2D.new()
+		layer.scroll_scale = Vector2(pdef["scroll"], pdef["scroll"])
+		layer.repeat_size = Vector2.ZERO
+		add_child(layer)
+		# Rolling silhouette ridge spanning the (parallax-stretched) width
+		var base_y: float = lerpf(ceil_y, floor_y + 60.0, pdef["yf"])
+		var col: Color = ground_color.lerp(fog["top"], pdef["tint"])
+		col = col.lerp(Color(col.v, col.v, col.v), 0.25 * pdef["tint"])  # desaturate with distance
+		var pts := PackedVector2Array()
+		var x0: float = left_x - span * 0.6
+		var x1: float = right_x + span * 0.6
+		pts.append(Vector2(x0, floor_y + 340.0))
+		var steps: int = 18
+		for s in range(steps + 1):
+			var fx: float = lerpf(x0, x1, float(s) / float(steps))
+			var n: float = sin(fx * 0.013 + pdef["z"]) * 0.5 + sin(fx * 0.031 + pdef["scroll"] * 7.0) * 0.5
+			var hy: float = base_y - (n * 0.5 + 0.5) * pdef["h"] * pdef["rough"]
+			pts.append(Vector2(fx, hy))
+		pts.append(Vector2(x1, floor_y + 340.0))
+		var ridge := Polygon2D.new()
+		ridge.polygon = pts
+		ridge.color = col
+		ridge.vertex_colors = _vertical_gradient_colors(pts, col.lightened(0.12), col.darkened(0.35))
+		ridge.z_index = int(pdef["z"])
+		layer.add_child(ridge)
+
+	# Mineral veins glinting on the back wall (emissive accent, blooms under HDR)
+	var vein_layer := Parallax2D.new()
+	vein_layer.scroll_scale = Vector2(0.55, 0.55)
+	vein_layer.repeat_size = Vector2.ZERO
+	add_child(vein_layer)
+	for i in range(randi_range(4, 7)):
+		var vx: float = randf_range(left_x, right_x)
+		var vy: float = lerpf(ceil_y, floor_y, randf_range(0.2, 0.7))
+		var vein := Line2D.new()
+		vein.width = randf_range(1.0, 2.0)
+		vein.default_color = _emit(Color((fog["accent"] as Color).r, (fog["accent"] as Color).g, (fog["accent"] as Color).b, 0.4), 1.6)
+		var vpx: float = vx
+		var vpy: float = vy
+		vein.add_point(Vector2(vpx, vpy))
+		for j in range(randi_range(2, 4)):
+			vpx += randf_range(-18, 18)
+			vpy += randf_range(-14, 14)
+			vein.add_point(Vector2(vpx, vpy))
+		vein.z_index = -12
+		vein_layer.add_child(vein)
+
+# --- Foreground silhouettes: near-black framing rock that fast-parallaxes past the
+# camera edges, adding the depth anchor INSIDE/Limbo use. ---
+func _build_foreground_silhouettes() -> void:
+	if cave_terrain_points.size() < 2 or cave_ceiling_points.size() < 2:
+		return
+	var left_x: float = cave_terrain_points[0].x
+	var right_x: float = cave_terrain_points[cave_terrain_points.size() - 1].x
+	var fg_layer := Parallax2D.new()
+	fg_layer.scroll_scale = Vector2(1.25, 1.25)
+	fg_layer.repeat_size = Vector2.ZERO
+	add_child(fg_layer)
+	var fg_col := Color(0.03, 0.03, 0.05, 0.96)
+	# Overhang jutting down from the top a couple places
+	for i in range(randi_range(2, 3)):
+		var ox: float = randf_range(left_x + 80, right_x - 80)
+		var ceil_y: float = _get_cave_ceiling_y_at(ox)
+		var ow: float = randf_range(70, 140)
+		var oh: float = randf_range(30, 70)
+		var over := Polygon2D.new()
+		over.polygon = PackedVector2Array([
+			Vector2(ox - ow * 0.5, ceil_y - 60),
+			Vector2(ox + ow * 0.5, ceil_y - 60),
+			Vector2(ox + ow * 0.3, ceil_y + oh),
+			Vector2(ox, ceil_y + oh * 0.5),
+			Vector2(ox - ow * 0.3, ceil_y + oh),
 		])
-		bg_rock.color = bg_color
-		bg_rock.z_index = -5
-		add_child(bg_rock)
+		over.color = fg_col
+		over.z_index = 11
+		fg_layer.add_child(over)
+	# Big out-of-focus stalagmite/boulder crossing the bottom edge
+	for i in range(randi_range(1, 2)):
+		var bx: float = randf_range(left_x + 60, right_x - 60)
+		var floor_y: float = _get_cave_terrain_y_at(bx)
+		var bw: float = randf_range(50, 90)
+		var bh: float = randf_range(60, 110)
+		var boulder := Polygon2D.new()
+		boulder.polygon = PackedVector2Array([
+			Vector2(bx - bw * 0.5, floor_y + 80),
+			Vector2(bx - bw * 0.3, floor_y - bh * 0.5),
+			Vector2(bx, floor_y - bh),
+			Vector2(bx + bw * 0.35, floor_y - bh * 0.4),
+			Vector2(bx + bw * 0.5, floor_y + 80),
+		])
+		boulder.color = fg_col
+		boulder.z_index = 11
+		fg_layer.add_child(boulder)
 
 # --- Exit Zone ---
 func _build_exit_zone() -> void:
@@ -1367,6 +1545,12 @@ func _process(delta: float) -> void:
 	if drip_timer >= 1.5:
 		drip_timer -= 1.5
 		_spawn_drip()
+
+	# God-ray shaft shimmer (drifting dust-in-sunbeam feel)
+	for sh in light_shafts:
+		var sn = sh["node"]
+		if is_instance_valid(sn):
+			sn.modulate.a = lerpf(0.5, 1.0, (sin(wave_time * sh["speed"] + sh["phase"]) + 1.0) * 0.5)
 
 	# Crystal light pulse
 	for i in range(crystal_lights.size()):
