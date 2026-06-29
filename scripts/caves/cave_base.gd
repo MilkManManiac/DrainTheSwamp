@@ -41,10 +41,12 @@ const SHOP_SCENE = preload("res://scenes/ui/shop_panel.tscn")
 const MENU_SCENE = preload("res://scenes/ui/menu_panel.tscn")
 const WATER_SHADER = preload("res://shaders/water.gdshader")
 const POST_PROCESS_SHADER = preload("res://shaders/post_process.gdshader")
+const ROCK_SHADER = preload("res://shaders/cave_rock.gdshader")
 
 # Post-processing
 var cave_post_process_rect: ColorRect = null
 var _hdr: bool = false  # Forward+/Mobile: overbright cave elements bloom via HDR glow
+var rock_material: ShaderMaterial = null  # shared procedural rock-surface shader
 var cave_post_time: float = 0.0
 
 # Cave UI refs
@@ -63,7 +65,9 @@ func _setup_cave() -> void:
 	add_child(modulate)
 
 	_setup_cave_hdr()
+	_build_rock_material()
 	_build_fog_backdrop()
+	_build_back_wall()
 	_build_floor()
 	_build_ceiling()
 	_build_walls()
@@ -71,6 +75,7 @@ func _setup_cave() -> void:
 	_build_stalactites()
 	_build_stalagmites()
 	_build_crystals()
+	_build_midground_clutter()
 	_build_moss_lichen()
 	_build_cave_pools()
 	_build_cracks()
@@ -146,6 +151,19 @@ func _setup_cave_hdr() -> void:
 	add_child(we)
 
 # Push a color overbright (>1.0) so it blooms; pass-through on GL compat.
+# Shared procedural rock-surface material — gives every big polygon real relief,
+# strata, and crack seams instead of a flat 2-stop gradient.
+func _build_rock_material() -> void:
+	rock_material = ShaderMaterial.new()
+	rock_material.shader = ROCK_SHADER
+	rock_material.set_shader_parameter("surf_scale", 2.4)
+	rock_material.set_shader_parameter("relief_strength", 0.6)
+	rock_material.set_shader_parameter("crack_strength", 0.42)
+	rock_material.set_shader_parameter("crack_scale", 1.8)
+	rock_material.set_shader_parameter("strata_strength", 0.12)
+	rock_material.set_shader_parameter("mottle_strength", 0.10)
+	rock_material.set_shader_parameter("emit_boost", 2.0 if _hdr else 1.0)
+
 func _emit(c: Color, boost: float) -> Color:
 	if not _hdr:
 		return c
@@ -254,6 +272,7 @@ func _build_floor() -> void:
 	floor_poly.color = ground_color
 	# Vertical depth gradient: lighter near floor surface, darker deeper
 	floor_poly.vertex_colors = _vertical_gradient_colors(floor_points, ground_color.lightened(0.18), ground_color.darkened(0.45))
+	floor_poly.material = rock_material
 	floor_poly.z_index = 1
 	add_child(floor_poly)
 
@@ -286,6 +305,7 @@ func _build_ceiling() -> void:
 	ceil_poly.color = ceiling_color
 	# Gradient: darker up high, slightly lighter near the cave-facing contour
 	ceil_poly.vertex_colors = _vertical_gradient_colors(ceil_points, ceiling_color.darkened(0.4), ceiling_color.lightened(0.12))
+	ceil_poly.material = rock_material
 	ceil_poly.z_index = 5
 	add_child(ceil_poly)
 
@@ -318,6 +338,7 @@ func _build_walls() -> void:
 	left_wall.polygon = left_wall_pts
 	left_wall.color = wall_color
 	left_wall.vertex_colors = _vertical_gradient_colors(left_wall_pts, wall_color.lightened(0.15), wall_color.darkened(0.35))
+	left_wall.material = rock_material
 	left_wall.z_index = 4
 	add_child(left_wall)
 
@@ -332,6 +353,7 @@ func _build_walls() -> void:
 	right_wall.polygon = right_wall_pts
 	right_wall.color = wall_color
 	right_wall.vertex_colors = _vertical_gradient_colors(right_wall_pts, wall_color.lightened(0.15), wall_color.darkened(0.35))
+	right_wall.material = rock_material
 	right_wall.z_index = 4
 	add_child(right_wall)
 
@@ -371,6 +393,7 @@ func _build_rock_layers() -> void:
 	mid_poly.polygon = mid_pts
 	mid_poly.color = rock_mid_color
 	mid_poly.vertex_colors = _vertical_gradient_colors(mid_pts, rock_mid_color.lightened(0.12), rock_mid_color.darkened(0.4))
+	mid_poly.material = rock_material
 	mid_poly.z_index = 0
 	add_child(mid_poly)
 
@@ -411,6 +434,7 @@ func _build_rock_layers() -> void:
 	ceil_inner.polygon = ceil_inner_pts
 	ceil_inner.color = rock_inner_ceil_color
 	ceil_inner.vertex_colors = _vertical_gradient_colors(ceil_inner_pts, rock_inner_ceil_color.darkened(0.35), rock_inner_ceil_color.lightened(0.1))
+	ceil_inner.material = rock_material
 	ceil_inner.z_index = 4
 	add_child(ceil_inner)
 
@@ -1109,6 +1133,225 @@ func _fog_palette() -> Dictionary:
 	var accent: Color = crystal_color.lightened(0.1)
 	return {"top": top, "mid": mid, "bottom": bottom, "fill": fill, "accent": accent}
 
+# --- Back wall: the textured rock face the player stands AGAINST. Fills the interior
+# air column (ceiling contour -> floor contour) that was previously unpainted void.
+# This is what makes the space behind the player read as solid rock, not open haze.
+func _build_back_wall() -> void:
+	if cave_terrain_points.size() < 2 or cave_ceiling_points.size() < 2:
+		return
+	# Top edge follows the ceiling contour (dropped slightly so a sliver of fog/parallax
+	# shows above it for depth); bottom edge follows the floor contour (reversed).
+	var pts := PackedVector2Array()
+	for p in cave_ceiling_points:
+		pts.append(Vector2(p.x, p.y + 18.0))
+	for i in range(cave_terrain_points.size() - 1, -1, -1):
+		pts.append(Vector2(cave_terrain_points[i].x, cave_terrain_points[i].y + 4.0))
+	var wall := Polygon2D.new()
+	wall.polygon = pts
+	# Lit rock tone (pulled toward the biome fog so it reads as illuminated, not a
+	# black slab) — the relief shader supplies the texture, lighting supplies the mood.
+	var fog: Dictionary = _fog_palette()
+	var wcol: Color = rock_mid_color.lightened(0.3).lerp(fog["mid"], 0.45)
+	wall.color = wcol
+	wall.vertex_colors = _vertical_gradient_colors(pts, wcol.darkened(0.22), wcol.lightened(0.2))
+	wall.material = rock_material
+	wall.z_index = -8
+	add_child(wall)
+
+# =====================================================================================
+# Midground clutter — real-scale, clustered objects placed at EYE LEVEL so the playable
+# space reads as full and lived-in (not an empty floor + wall). Clusters > even scatter;
+# density gradient leaves deliberate calm gaps; one glowing focal point per area.
+# =====================================================================================
+func _build_midground_clutter() -> void:
+	if cave_terrain_points.size() < 2 or cave_ceiling_points.size() < 2:
+		return
+	var left_x: float = cave_terrain_points[0].x
+	var right_x: float = cave_terrain_points[cave_terrain_points.size() - 1].x
+	var span: float = right_x - left_x
+
+	# 1) Rock columns/pillars that cross the empty midground — give vertical scale + depth.
+	var n_col: int = clampi(int(span / 460.0) + 1, 1, 5)
+	for i in range(n_col):
+		var cx: float = lerpf(left_x + 70, right_x - 70, (float(i) + randf_range(0.25, 0.75)) / float(n_col))
+		_make_rock_column(cx)
+
+	# 2) Boulder clusters hugging the floor (fractal: anchor + shrinking children).
+	var n_clust: int = clampi(int(span / 280.0) + 1, 2, 8)
+	for i in range(n_clust):
+		# Density gradient: skip ~1 in 4 anchors to keep calm negative space.
+		if randf() < 0.25:
+			continue
+		var ax: float = randf_range(left_x + 40, right_x - 40)
+		var children: int = randi_range(2, 4)
+		for j in range(children):
+			var bx: float = ax + randf_range(-46, 46)
+			bx = clampf(bx, left_x + 16, right_x - 16)
+			var by: float = _get_cave_terrain_y_at(bx)
+			var r: float = randf_range(16.0, 46.0) * (1.0 - 0.18 * float(j))
+			_make_boulder(Vector2(bx, by + r * 0.35), r)
+
+	# 3) Rubble / scree scatter (smaller second pass for grain).
+	for i in range(randi_range(6, 12)):
+		var rx: float = randf_range(left_x + 24, right_x - 24)
+		_make_rubble(Vector2(rx, _get_cave_terrain_y_at(rx)))
+
+	# 4) Glowing mushroom clusters — cheap HDR focal points on rule-of-thirds-ish spots.
+	var n_mush: int = clampi(int(span / 520.0) + 1, 1, 4)
+	for i in range(n_mush):
+		var mx: float = lerpf(left_x + 90, right_x - 90, (float(i) + 0.5) / float(n_mush) + randf_range(-0.12, 0.12))
+		mx = clampf(mx, left_x + 40, right_x - 40)
+		_make_mushroom_cluster(Vector2(mx, _get_cave_terrain_y_at(mx)))
+
+	# 5) Hanging roots/vines from the ceiling — break the bare ceiling, add overlap depth.
+	for i in range(randi_range(4, 8)):
+		var vx: float = randf_range(left_x + 30, right_x - 30)
+		_make_hanging_vine(vx, _get_cave_ceiling_y_at(vx))
+
+# A rounded irregular rock blob (textured via the rock shader).
+func _make_boulder(center: Vector2, radius: float, base: Color = Color(0, 0, 0, 0)) -> void:
+	var col: Color = base if base.a > 0.0 else rock_mid_color.lightened(0.05)
+	var pts := PackedVector2Array()
+	var sides: int = 9
+	for s in range(sides):
+		var a: float = TAU * float(s) / float(sides)
+		var rr: float = radius * randf_range(0.78, 1.12)
+		pts.append(center + Vector2(cos(a) * rr, sin(a) * rr * 0.78))
+	var poly := Polygon2D.new()
+	poly.polygon = pts
+	poly.color = col
+	poly.vertex_colors = _vertical_gradient_colors(pts, col.lightened(0.18), col.darkened(0.4))
+	poly.material = rock_material
+	poly.z_index = 2
+	add_child(poly)
+
+# Small scree rocks (no shader needed — they're tiny accents).
+func _make_rubble(center: Vector2) -> void:
+	for i in range(randi_range(2, 4)):
+		var r: float = randf_range(3.0, 7.0)
+		var p := center + Vector2(randf_range(-14, 14), randf_range(-2, 4))
+		var poly := Polygon2D.new()
+		poly.polygon = PackedVector2Array([
+			p + Vector2(-r, r * 0.5), p + Vector2(-r * 0.4, -r), p + Vector2(r * 0.7, -r * 0.5), p + Vector2(r, r * 0.5),
+		])
+		var c: Color = rock_sub_color.lightened(randf_range(0.0, 0.18))
+		poly.color = c
+		poly.z_index = 2
+		add_child(poly)
+
+# A stalagmite/stalactite pair that may join into a full pillar crossing the midground.
+func _make_rock_column(x: float) -> void:
+	var ceil_y: float = _get_cave_ceiling_y_at(x)
+	var floor_y: float = _get_cave_terrain_y_at(x)
+	var gap: float = floor_y - ceil_y
+	var join: bool = randf() < 0.35 and gap < 170.0
+	var w: float = randf_range(10.0, 22.0)
+	var col: Color = rock_mid_color.lightened(0.02)
+	if join:
+		# Full pillar, slightly waisted in the middle.
+		var poly := Polygon2D.new()
+		poly.polygon = PackedVector2Array([
+			Vector2(x - w, ceil_y), Vector2(x + w, ceil_y),
+			Vector2(x + w * 0.55, (ceil_y + floor_y) * 0.5),
+			Vector2(x + w, floor_y), Vector2(x - w, floor_y),
+			Vector2(x - w * 0.55, (ceil_y + floor_y) * 0.5),
+		])
+		poly.color = col
+		poly.vertex_colors = _vertical_gradient_colors(poly.polygon, col.lightened(0.16), col.darkened(0.34))
+		poly.material = rock_material
+		poly.z_index = 3
+		add_child(poly)
+	else:
+		# Tall stalagmite from the floor.
+		var sh: float = gap * randf_range(0.4, 0.72)
+		var poly := Polygon2D.new()
+		poly.polygon = PackedVector2Array([
+			Vector2(x - w, floor_y + 6), Vector2(x - w * 0.3, floor_y - sh * 0.7),
+			Vector2(x, floor_y - sh), Vector2(x + w * 0.3, floor_y - sh * 0.65), Vector2(x + w, floor_y + 6),
+		])
+		poly.color = col
+		poly.vertex_colors = _vertical_gradient_colors(poly.polygon, col.darkened(0.3), col.lightened(0.14))
+		poly.material = rock_material
+		poly.z_index = 3
+		add_child(poly)
+		# A matching stalactite above it.
+		var th: float = gap * randf_range(0.25, 0.5)
+		var tw: float = w * 0.8
+		var top := Polygon2D.new()
+		top.polygon = PackedVector2Array([
+			Vector2(x - tw, ceil_y - 6), Vector2(x + tw, ceil_y - 6),
+			Vector2(x + tw * 0.3, ceil_y + th * 0.6), Vector2(x, ceil_y + th), Vector2(x - tw * 0.3, ceil_y + th * 0.6),
+		])
+		top.color = col
+		top.vertex_colors = _vertical_gradient_colors(top.polygon, col.lightened(0.12), col.darkened(0.34))
+		top.material = rock_material
+		top.z_index = 3
+		add_child(top)
+
+# A cluster of glowing mushrooms — a bright HDR focal point in the play space.
+func _make_mushroom_cluster(base: Vector2) -> void:
+	var glow: Color = crystal_color.lerp(Color(0.5, 0.9, 0.6), 0.35)
+	var n: int = randi_range(3, 6)
+	for i in range(n):
+		var off: float = randf_range(-26, 26)
+		var bx: float = base.x + off
+		var by: float = _get_cave_terrain_y_at(bx)
+		var sh: float = randf_range(8.0, 20.0) * (1.0 - 0.06 * float(i))
+		var capw: float = sh * randf_range(0.5, 0.8)
+		# Stalk
+		var stalk := Polygon2D.new()
+		stalk.polygon = PackedVector2Array([
+			Vector2(bx - 2, by), Vector2(bx + 2, by), Vector2(bx + 1.4, by - sh), Vector2(bx - 1.4, by - sh),
+		])
+		stalk.color = Color(0.82, 0.86, 0.8, 0.9)
+		stalk.z_index = 3
+		add_child(stalk)
+		# Glowing cap (overbright so it blooms under HDR)
+		var cap := Polygon2D.new()
+		cap.polygon = PackedVector2Array([
+			Vector2(bx - capw, by - sh), Vector2(bx + capw, by - sh),
+			Vector2(bx + capw * 0.6, by - sh - capw * 0.9), Vector2(bx - capw * 0.6, by - sh - capw * 0.9),
+		])
+		cap.color = _emit(glow, 1.8)
+		cap.z_index = 3
+		add_child(cap)
+	# One soft light for the whole cluster
+	var ml := PointLight2D.new()
+	ml.position = Vector2(base.x, _get_cave_terrain_y_at(base.x) - 14)
+	ml.color = glow
+	ml.blend_mode = PointLight2D.BLEND_MODE_ADD
+	ml.energy = 0.8
+	ml.shadow_enabled = false
+	ml.texture = _make_radial_light_texture()
+	ml.texture_scale = 0.9
+	ml.z_index = 2
+	add_child(ml)
+
+# A drooping root/vine hanging from the ceiling (Line2D with a slight curve).
+func _make_hanging_vine(x: float, ceil_y: float) -> void:
+	var vine := Line2D.new()
+	vine.width = randf_range(1.5, 3.0)
+	var len: float = randf_range(18.0, 54.0)
+	var sway: float = randf_range(-10, 10)
+	vine.add_point(Vector2(x, ceil_y))
+	vine.add_point(Vector2(x + sway * 0.4, ceil_y + len * 0.5))
+	vine.add_point(Vector2(x + sway, ceil_y + len))
+	var c: Color = ground_color.darkened(0.2)
+	c = c.lerp(Color(0.25, 0.32, 0.18), 0.4)  # mossy green-brown
+	vine.default_color = c
+	vine.z_index = 3
+	add_child(vine)
+	# Occasional glowing tip pod
+	if randf() < 0.4:
+		var pod := Polygon2D.new()
+		var tip := Vector2(x + sway, ceil_y + len)
+		pod.polygon = PackedVector2Array([
+			tip + Vector2(-2, 0), tip + Vector2(0, -3), tip + Vector2(2, 0), tip + Vector2(0, 4),
+		])
+		pod.color = _emit(crystal_color.lightened(0.2), 1.6)
+		pod.z_index = 3
+		add_child(pod)
+
 # --- Fog backdrop: a full-bounds vertical gradient that fills the void behind
 # everything (z=-20). Brighter through the mid band so the wall behind the player
 # reads as lit rock haze instead of black. This is the single biggest "not a void" fix.
@@ -1248,13 +1491,13 @@ func _build_foreground_silhouettes() -> void:
 	fg_layer.scroll_scale = Vector2(1.25, 1.25)
 	fg_layer.repeat_size = Vector2.ZERO
 	add_child(fg_layer)
-	var fg_col := Color(0.03, 0.03, 0.05, 0.96)
+	var fg_col := Color(0.04, 0.04, 0.06, 0.92)
 	# Overhang jutting down from the top a couple places
-	for i in range(randi_range(2, 3)):
+	for i in range(randi_range(1, 2)):
 		var ox: float = randf_range(left_x + 80, right_x - 80)
 		var ceil_y: float = _get_cave_ceiling_y_at(ox)
-		var ow: float = randf_range(70, 140)
-		var oh: float = randf_range(30, 70)
+		var ow: float = randf_range(50, 90)
+		var oh: float = randf_range(20, 44)
 		var over := Polygon2D.new()
 		over.polygon = PackedVector2Array([
 			Vector2(ox - ow * 0.5, ceil_y - 60),
@@ -1266,12 +1509,13 @@ func _build_foreground_silhouettes() -> void:
 		over.color = fg_col
 		over.z_index = 11
 		fg_layer.add_child(over)
-	# Big out-of-focus stalagmite/boulder crossing the bottom edge
-	for i in range(randi_range(1, 2)):
-		var bx: float = randf_range(left_x + 60, right_x - 60)
+	# Big out-of-focus stalagmite/boulder crossing the bottom edge (one, near an edge,
+	# so it frames without dominating the play space).
+	for i in range(1):
+		var bx: float = (left_x + 70) if randf() < 0.5 else (right_x - 70)
 		var floor_y: float = _get_cave_terrain_y_at(bx)
-		var bw: float = randf_range(50, 90)
-		var bh: float = randf_range(60, 110)
+		var bw: float = randf_range(40, 64)
+		var bh: float = randf_range(46, 78)
 		var boulder := Polygon2D.new()
 		boulder.polygon = PackedVector2Array([
 			Vector2(bx - bw * 0.5, floor_y + 80),
@@ -1310,6 +1554,47 @@ func _build_exit_glow() -> void:
 	var left_x: float = cave_terrain_points[0].x
 	var mid_y: float = (cave_ceiling_points[0].y + cave_terrain_points[0].y) * 0.5
 	var opening_h: float = cave_terrain_points[0].y - cave_ceiling_points[0].y
+
+	# Dark rock cover over the exit void (everything left of the cave mouth) so it reads
+	# as a solid wall with a lit doorway — NOT a flat bright fog panel. Covers from far
+	# off-screen up to the opening, textured with the rock shader.
+	var ceil0: float = cave_ceiling_points[0].y
+	var floor0: float = cave_terrain_points[0].y
+	var cover := Polygon2D.new()
+	cover.polygon = PackedVector2Array([
+		Vector2(left_x - 520, ceil0 - 320), Vector2(left_x + 6, ceil0 - 320),
+		Vector2(left_x + 6, floor0 + 360), Vector2(left_x - 520, floor0 + 360),
+	])
+	var cov_col: Color = wall_color.darkened(0.12)
+	cover.color = cov_col
+	cover.vertex_colors = _vertical_gradient_colors(cover.polygon, cov_col.darkened(0.25), cov_col.lightened(0.08))
+	cover.material = rock_material
+	cover.z_index = -9
+	add_child(cover)
+
+	# Warm "daylight from the surface" gradient filling the opening itself.
+	var door := Sprite2D.new()
+	var dtex := GradientTexture2D.new()
+	dtex.width = 64
+	dtex.height = 8
+	dtex.fill = GradientTexture2D.FILL_LINEAR
+	dtex.fill_from = Vector2(0.0, 0.0)
+	dtex.fill_to = Vector2(1.0, 0.0)
+	var dgrad := Gradient.new()
+	dgrad.offsets = PackedFloat32Array([0.0, 0.55, 1.0])
+	dgrad.colors = PackedColorArray([
+		_emit(Color(0.95, 0.85, 0.62, 0.9), 1.6),
+		Color(0.7, 0.62, 0.45, 0.5),
+		Color(0.5, 0.45, 0.35, 0.0),
+	])
+	dtex.gradient = dgrad
+	door.texture = dtex
+	door.centered = false
+	door.position = Vector2(left_x - 14, ceil0 - 4)
+	door.scale = Vector2(70.0 / 64.0, (opening_h + 12) / 8.0)
+	door.z_index = -7
+	add_child(door)
+
 	var glow := ColorRect.new()
 	glow.size = Vector2(16, opening_h + 10)
 	glow.position = Vector2(left_x - 4, cave_ceiling_points[0].y - 5)
