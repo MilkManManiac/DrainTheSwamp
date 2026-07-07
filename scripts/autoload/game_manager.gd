@@ -33,7 +33,10 @@ signal prestige_performed
 # With SCALE = 1,000,000: first influence (can_prestige) lands mid-Bog, and
 # finishing the Swamp yields floor(sqrt(31.5)) = 5 influence — a satisfying
 # first payout in the 3-5 target band.
-const PRESTIGE_SCALE: float = 1_000_000.0
+# 250K => first prestige around mid-Bog yields ~2 Influence, enough to actually
+# buy a first upgrade (at 1M the intended first prestige earned 1 while the
+# cheapest upgrade cost 2 — the system was dead on arrival).
+const PRESTIGE_SCALE: float = 250_000.0
 
 # --- Swamp Definitions ---
 var swamp_definitions: Array = [
@@ -131,7 +134,7 @@ var stat_definitions: Dictionary = {
 		"growth_rate": 1.18,
 		"scale": "exponential",
 		"base_cost": 10.0,
-		"cost_exponent": 1.16,
+		"cost_exponent": 1.22,
 		"format": "gal"
 	},
 	"movement_speed": {
@@ -141,7 +144,7 @@ var stat_definitions: Dictionary = {
 		"scale": "exponential",
 		"base_cost": 12.0,
 		"cost_exponent": 1.12,
-		"max_level": 5,
+		"max_level": 8,
 		"format": "multiplier"
 	},
 	"stamina": {
@@ -150,7 +153,7 @@ var stat_definitions: Dictionary = {
 		"growth_rate": 1.15,
 		"scale": "exponential",
 		"base_cost": 10.0,
-		"cost_exponent": 1.14,
+		"cost_exponent": 1.17,
 		"format": "value"
 	},
 	"stamina_regen": {
@@ -159,7 +162,7 @@ var stat_definitions: Dictionary = {
 		"growth_rate": 1.15,
 		"scale": "exponential",
 		"base_cost": 12.0,
-		"cost_exponent": 1.14,
+		"cost_exponent": 1.17,
 		"format": "per_sec"
 	},
 	# --- Global Power Stats (slightly pricier, scales faster) ---
@@ -250,7 +253,7 @@ var upgrade_definitions: Dictionary = {
 	"auto_scooper": {
 		"name": "Auto-Scooper",
 		"description": "Auto scoop near water",
-		"cost": 500.0,
+		"cost": 150.0,
 		"cost_exponent": 1.25,
 		"max_level": -1,
 		"order": 0
@@ -394,15 +397,23 @@ func get_total_water_percent() -> float:
 		return 0.0
 	return clampf((total_gal - total_drained) / total_gal * 100.0, 0.0, 100.0)
 
-func get_tool_output(tool_id: String) -> float:
+# Raw tool curve (no global multipliers), the single source of truth for shop
+# previews too. Gentle 1.15 growth with a x2 milestone every 10 levels: costs
+# grow 1.28/level so payback time lengthens within a tier (soft wall) and the
+# L10/L20 milestones give "push to the badge" goals. The old 1.20/1.20 pair
+# meant constant payback forever — zero decisions (see full-audit-2026-07).
+func get_tool_raw_output_at_level(tool_id: String, level: int) -> float:
 	var base: float = tool_definitions[tool_id]["base_output"]
+	return base * pow(1.15, level) * pow(2.0, level / 10)
+
+func get_tool_output(tool_id: String) -> float:
 	var level: int = tools_owned[tool_id]["level"]
-	var raw: float = base * pow(1.20, level)
+	var raw: float = get_tool_raw_output_at_level(tool_id, level)
 	# Apply scoop power multiplier for manual tools
 	if tool_definitions[tool_id]["type"] == "manual":
 		raw *= get_stat_value("scoop_power")
-	# Prestige: Muscle boosts all scoop output globally
-	raw *= 1.0 + 0.08 * prestige_upgrades["muscle"]
+	# Prestige: Muscle boosts all scoop output globally (multiplicative, see Kickback)
+	raw *= pow(1.25, prestige_upgrades["muscle"])
 	return raw
 
 func get_effective_scoop(tool_id: String) -> float:
@@ -448,8 +459,9 @@ func get_carrying_capacity() -> float:
 	return base
 
 func get_money_multiplier() -> float:
-	# Prestige: Kickback boosts all money earned globally
-	return get_stat_value("water_value") * (1.0 + 0.08 * prestige_upgrades["kickback"])
+	# Prestige: Kickback boosts all money earned globally. Multiplicative x1.25 per
+	# level — additive +8% was noise against the x10-per-pool content scaling.
+	return get_stat_value("water_value") * pow(1.25, prestige_upgrades["kickback"])
 
 func get_stamina_cost() -> float:
 	return 1.0
@@ -468,7 +480,7 @@ func get_tool_upgrade_cost(tool_id: String) -> float:
 	if base_cost == 0.0:
 		base_cost = 10.0
 	var level: int = tools_owned[tool_id]["level"]
-	return base_cost * pow(1.20, level)
+	return base_cost * pow(1.28, level)
 
 func get_stat_upgrade_cost(stat_id: String) -> float:
 	var defn: Dictionary = stat_definitions[stat_id]
@@ -923,10 +935,12 @@ func get_war_chest_seed() -> float:
 	var level: int = prestige_upgrades["war_chest"]
 	if level == 0:
 		return 0.0
-	return 50.0 * pow(2.0, level - 1)
+	# $500 doubling per level ($50 bought less than one drained Puddle) — plus
+	# starter tools granted in prestige() so a new run skips the worst grind.
+	return 500.0 * pow(2.0, level - 1)
 
 func get_prestige_upgrade_cost(key: String) -> int:
-	var bases: Dictionary = {"kickback": 2, "muscle": 2, "cap_hike": 3, "war_chest": 2}
+	var bases: Dictionary = {"kickback": 1, "muscle": 1, "cap_hike": 2, "war_chest": 1}
 	var level: int = prestige_upgrades[key]
 	return int(floor(bases[key] * pow(1.5, level)))
 
@@ -950,6 +964,11 @@ func prestige() -> void:
 	# Partial reset: keep influence, prestige_upgrades, prestige_count, touch_controls.
 	# Seed starting money from War Chest upgrade.
 	_reset_progression(get_war_chest_seed())
+	# War Chest also fronts starter tools: L1+ Spoon, L2+ Cup, L3+ Bucket.
+	var wc: int = prestige_upgrades["war_chest"]
+	var starter_tools: Array = ["spoon", "cup", "bucket"]
+	for i in range(mini(wc, starter_tools.size())):
+		tools_owned[starter_tools[i]]["owned"] = true
 	prestige_changed.emit()
 	prestige_performed.emit()
 

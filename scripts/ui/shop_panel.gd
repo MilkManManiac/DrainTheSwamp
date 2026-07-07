@@ -528,10 +528,10 @@ func _build_prestige_tab() -> void:
 	hdr.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	tool_list.add_child(hdr)
 
-	_build_prestige_upgrade_row("kickback", "Kickback", "+8% money per level")
-	_build_prestige_upgrade_row("muscle", "Muscle", "+8% scoop output per level")
+	_build_prestige_upgrade_row("kickback", "Kickback", "x1.25 money per level")
+	_build_prestige_upgrade_row("muscle", "Muscle", "x1.25 scoop output per level")
 	_build_prestige_upgrade_row("cap_hike", "Cap Hike", "+25% stat caps per level")
-	_build_prestige_upgrade_row("war_chest", "War Chest", "Start with seed money")
+	_build_prestige_upgrade_row("war_chest", "War Chest", "Start with seed money + tools")
 
 func _build_prestige_upgrade_row(key: String, display_name: String, effect: String) -> void:
 	var level: int = GameManager.prestige_upgrades[key]
@@ -583,6 +583,9 @@ func _build_prestige_upgrade_row(key: String, display_name: String, effect: Stri
 	var tip: String = "%s\n%s\nLevel: %d\nCost: %d Influence" % [display_name, effect, level, cost]
 	if key == "war_chest":
 		tip += "\nNext start money: %s" % Economy.format_money(_war_chest_seed_at(level + 1))
+		var starter_names: Array = ["Spoon", "Cup", "Bucket"]
+		if level < starter_names.size():
+			tip += "\nAlso starts owned: %s" % ", ".join(starter_names.slice(0, level + 1))
 	row_panel.tooltip_text = tip
 	row_panel.mouse_filter = Control.MOUSE_FILTER_PASS
 	row_panel.add_child(row)
@@ -591,7 +594,7 @@ func _build_prestige_upgrade_row(key: String, display_name: String, effect: Stri
 func _war_chest_seed_at(level: int) -> float:
 	if level <= 0:
 		return 0.0
-	return 50.0 * pow(2.0, level - 1)
+	return 500.0 * pow(2.0, level - 1)
 
 func _format_stat_value(stat_id: String, defn: Dictionary, value: float) -> String:
 	var fmt: String = defn.get("format", "value")
@@ -673,14 +676,18 @@ func _get_tool_tooltip(tid: String, defn: Dictionary, owned_data: Dictionary) ->
 		else:
 			tip += "\nOutput: %.4f gal/scoop" % cur_output
 
-		var next_output: float = defn["base_output"] * pow(1.20, level + 1)
+		var next_output: float = GameManager.get_tool_raw_output_at_level(tid, level + 1)
+		var cur_cmp: float = GameManager.get_tool_raw_output_at_level(tid, level)
 		if defn["type"] == "manual":
 			next_output *= GameManager.get_stat_value("scoop_power")
-		var gain_pct: float = (next_output / cur_output - 1.0) * 100.0
+			cur_cmp *= GameManager.get_stat_value("scoop_power")
+		var gain_pct: float = (next_output / maxf(cur_cmp, 0.000001) - 1.0) * 100.0
 		if defn["type"] == "semi_auto":
 			tip += "\nNext Lv%d: %.4f gal/s (+%.0f%%)" % [level + 1, next_output, gain_pct]
 		else:
 			tip += "\nNext Lv%d: %.4f gal (+%.0f%%)" % [level + 1, next_output, gain_pct]
+		if (level + 1) % 10 == 0:
+			tip += "\nMILESTONE: Lv%d doubles output!" % (level + 1)
 
 		var cost: float = GameManager.get_tool_upgrade_cost(tid)
 		tip += "\nUpgrade: %s" % Economy.format_money(cost)
