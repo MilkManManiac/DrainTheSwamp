@@ -1,6 +1,7 @@
-[gd_scene load_steps=3 format=3 uid="uid://bshoppanel01"]
+[gd_scene load_steps=4 format=3 uid="uid://bshoppanel01"]
 
 [ext_resource type="Script" path="res://scripts/ui/shop_panel.gd" id="1_script"]
+[ext_resource type="Theme" path="res://assets/ui_theme.tres" id="2_theme"]
 
 [sub_resource type="StyleBoxFlat" id="panel_style"]
 bg_color = Color(0.08, 0.08, 0.12, 0.96)
@@ -15,6 +16,7 @@ corner_radius_bottom_left = 8
 corner_radius_bottom_right = 8
 
 [node name="ShopPanel" type="PanelContainer"]
+theme = ExtResource("2_theme")
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0

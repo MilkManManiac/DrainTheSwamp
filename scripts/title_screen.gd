@@ -205,6 +205,7 @@ func _build_title(vp_size: Vector2) -> void:
 # --- Menu ---
 func _build_menu(vp_size: Vector2) -> void:
 	menu_vbox = VBoxContainer.new()
+	menu_vbox.theme = load("res://assets/ui_theme.tres")
 	menu_vbox.alignment = BoxContainer.ALIGNMENT_CENTER
 	menu_vbox.size = Vector2(140, 100)
 	menu_vbox.position = Vector2((vp_size.x - 140) * 0.5, 190)

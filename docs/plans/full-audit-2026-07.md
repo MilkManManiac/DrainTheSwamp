@@ -1,5 +1,16 @@
 # Full Project Audit & Improvement Plan — 2026-07-06
 
+> **Progress log**
+> - 2026-07-06: Phase 0 complete (commit `fe34eb9`) — saves hardened, dev button gated,
+>   hold-to-scoop, stamina wall, Windows preset (first desktop export verified), CI bump.
+> - 2026-07-07: Phase 1 items 1–6 complete (commits `e668f28`…) — murk grade rebalanced,
+>   sky/night lifted, sky artifacts killed (framing fronds, band edges), camera framing raised,
+>   soil strata, cave exposure + entry framing (root cause: cave camera never `make_current()`),
+>   town day/night light gating + wall repaint + billboard fit, UI theme + Silkscreen pixel font.
+>   NOTE: all captures before 2026-07-07 are gamma-dark (linear-vs-sRGB hook bug, now fixed) —
+>   brightness in the appendix screenshots overstates the problem. Item 7 (ArtGen pilot) pending —
+>   needs ComfyUI running + user taste picks on generated candidates.
+
 Produced from five parallel audit tracks on branch `v2-2d-polish` (37 commits ahead of master):
 four specialist code audits (gameplay/economy, story/writing, UX/UI, architecture) plus a
 screenshot-based visual audit using fresh `DTS_SHOT` captures of the town (day/night), pool

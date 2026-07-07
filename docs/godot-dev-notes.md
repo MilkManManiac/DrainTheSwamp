@@ -19,6 +19,13 @@ The game is 100% procedural, so the only way to judge a change is to *see* it. W
 
 These live in both `game_world.gd` (`_setup_debug_shot`, the `_process` overrides) and `cave_base.gd` (`_setup_debug_shot`). All are no-ops unless the env var is set.
 
+**HDR-2D capture gotcha (found 2026-07-07):** `get_viewport().get_texture().get_image()` on an
+HDR-2D viewport returns **linear** color data; saved straight to PNG every capture looks
+gamma-darkened (~×0.5 at midtones) versus what the player sees on screen. The hooks now call
+`img.linear_to_srgb()` when `use_hdr_2d` is on. All captures taken before 2026-07-07 (including
+the whole `_screenshots/` history) are darker than the real game — don't judge absolute
+brightness from them.
+
 **Hard-won rule:** keep gameplay-affecting debug behavior on a SEPARATE flag from the screenshot flag. We originally gated cave-exit/transition blocking on `DTS_SHOT`, then handed the user a `DTS_SHOT` build to *play* — which trapped them in caves. Split it: `DTS_SHOT` = capture only; `DTS_FREEZE` = the scene-hold guard. **Hand the user flag-free builds to play.**
 
 ### Verify-before-show loop
