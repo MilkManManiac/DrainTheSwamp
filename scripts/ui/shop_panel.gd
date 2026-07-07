@@ -465,6 +465,17 @@ func _build_prestige_tab() -> void:
 	pending_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	sellout_col.add_child(pending_lbl)
 
+	# Progress toward the NEXT influence point (sqrt curve -> next threshold)
+	var next_thresh: float = GameManager.PRESTIGE_SCALE * pow(float(pending + 1), 2.0)
+	var prev_thresh: float = GameManager.PRESTIGE_SCALE * pow(float(pending), 2.0)
+	var frac: float = clampf((GameManager.lifetime_earnings - prev_thresh) / maxf(next_thresh - prev_thresh, 1.0), 0.0, 1.0)
+	var next_lbl := Label.new()
+	next_lbl.text = "Next +1 at %s lifetime (%d%%)" % [Economy.format_money(next_thresh), int(frac * 100.0)]
+	next_lbl.add_theme_font_size_override("font_size", 10)
+	next_lbl.add_theme_color_override("font_color", Color(0.62, 0.55, 0.78))
+	next_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	sellout_col.add_child(next_lbl)
+
 	if not confirming_sellout:
 		var sellout_btn := Button.new()
 		sellout_btn.add_theme_font_size_override("font_size", 16)

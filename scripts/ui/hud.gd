@@ -22,6 +22,15 @@ var stamina_fill_style: StyleBoxFlat = null
 var air_bar: ProgressBar = null
 var air_fill_style: StyleBoxFlat = null
 
+# Earn/drain rate readout (bottom bar): EMA over 1s samples of lifetime
+# earnings + total gallons drained (both monotonic, so purchases don't spike it)
+var rate_label: Label = null
+var _rate_timer: float = 0.0
+var _rate_last_money: float = -1.0
+var _rate_last_drained: float = -1.0
+var _money_rate: float = 0.0
+var _gal_rate: float = 0.0
+
 func _ready() -> void:
 	_build_hud_icons()
 	_setup_news_ticker()
@@ -38,6 +47,7 @@ func _ready() -> void:
 	GameManager.day_changed.connect(_on_day_changed)
 	_setup_air_bar()
 	GameManager.cave_air_changed.connect(_on_cave_air_changed)
+	_setup_rate_label()
 
 	menu_button.pressed.connect(func() -> void: menu_pressed.emit())
 
@@ -53,6 +63,41 @@ func _ready() -> void:
 
 func _process(_delta: float) -> void:
 	_update_day_label()
+	_update_rates(_delta)
+
+func _setup_rate_label() -> void:
+	rate_label = Label.new()
+	rate_label.add_theme_font_size_override("font_size", 8)
+	rate_label.add_theme_color_override("font_color", Color(0.75, 0.72, 0.55))
+	rate_label.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.7))
+	rate_label.add_theme_constant_override("shadow_offset_x", 1)
+	rate_label.add_theme_constant_override("shadow_offset_y", 1)
+	rate_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	rate_label.tooltip_text = "Earning rate / draining rate (last minute)"
+	rate_label.visible = false
+	var hbox: HBoxContainer = stamina_bar.get_parent()
+	hbox.add_child(rate_label)
+	hbox.move_child(rate_label, air_bar.get_index() + 1)
+
+func _update_rates(delta: float) -> void:
+	_rate_timer += delta
+	if _rate_timer < 1.0:
+		return
+	var lifetime: float = GameManager.lifetime_earnings
+	var drained: float = 0.0
+	for st in GameManager.swamp_states:
+		drained += st["gallons_drained"]
+	if _rate_last_money >= 0.0:
+		var dm: float = maxf(lifetime - _rate_last_money, 0.0) / _rate_timer
+		var dg: float = maxf(drained - _rate_last_drained, 0.0) / _rate_timer
+		_money_rate = lerpf(_money_rate, dm, 0.3)
+		_gal_rate = lerpf(_gal_rate, dg, 0.3)
+		if _money_rate > 0.01 or _gal_rate > 0.0001:
+			rate_label.visible = true
+			rate_label.text = "%s/s  %s/s" % [Economy.format_money(_money_rate), Economy.format_gallons(_gal_rate)]
+	_rate_last_money = lifetime
+	_rate_last_drained = drained
+	_rate_timer = 0.0
 
 func _setup_air_bar() -> void:
 	air_bar = ProgressBar.new()

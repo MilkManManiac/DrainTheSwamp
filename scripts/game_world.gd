@@ -311,6 +311,11 @@ const EAST_TOWER_X: float = 2800.0
 var east_tower_built: bool = false
 var player_in_tower_area: bool = false
 var tower_player_ref: CharacterBody2D = null
+
+# One-shot onboarding hints for the first minutes of a fresh game
+var _hint_scoop_shown: bool = false
+var _hint_sell_shown: bool = false
+var _hint_shop_shown: bool = false
 # Second pass visuals
 var moon: Node2D = null
 var moon_glow: Sprite2D = null
@@ -660,12 +665,33 @@ func _ready() -> void:
 			Economy.format_gallons(osum["gallons"]),
 			Economy.format_money(osum["money"])], 6.0)
 
+	# Contextual onboarding hints (fresh games only)
+	GameManager.water_carried_changed.connect(_on_hint_water_carried)
+	GameManager.money_changed.connect(_on_hint_money)
+
 	# Show tutorial on first play
 	if GameManager.swamp_states[0]["gallons_drained"] <= 0.001:
 		call_deferred("_show_tutorial")
 
+# First approach to water on a fresh save -> teach the primary verb.
+func _on_hint_water_carried(current: float, capacity: float) -> void:
+	if _hint_sell_shown:
+		return
+	if current >= capacity - 0.0001 and GameManager.lifetime_earnings <= 0.0 \
+			and GameManager.upgrades_owned.get("overflow_valve", 0) == 0:
+		_hint_sell_shown = true
+		SceneManager.show_popup("BAG FULL!\nSell it at the HARDWARE store in town (to the WEST <-)", 4.5)
+
+func _on_hint_money(new_money: float) -> void:
+	if _hint_shop_shown:
+		return
+	if new_money >= 15.0 and not GameManager.tools_owned["spoon"]["owned"] \
+			and GameManager.prestige_count == 0:
+		_hint_shop_shown = true
+		SceneManager.show_popup("You can afford the SPOON!\nPress SPACE at the HARDWARE store to shop.", 4.5)
+
 func _show_tutorial() -> void:
-	var text := "ARROW KEYS — Move\nSPACE near water — Scoop\nSPACE at shop — Open shop\nSPACE near cave — Enter cave\nESC — Menu\n\nScoop water, sell it at the shop, buy upgrades, and drain the swamp!"
+	var text := "WASD / ARROWS — Move\nHOLD SPACE near water — Scoop\nSPACE at shop — Open shop\nSPACE near cave — Enter cave\nESC — Menu\n\nScoop water, sell it at the shop, buy upgrades, and drain the swamp!"
 	SceneManager.show_document_popup(text, "HOW TO PLAY")
 
 # --- Shared foliage sway materials (R3) ---
@@ -6676,6 +6702,14 @@ func _process(delta: float) -> void:
 	GameManager.cycle_progress = t
 	var tint: Color = _get_cycle_color(t)
 	canvas_modulate.color = tint
+
+	# First-minutes hint: teach the scoop verb at the water's edge (fresh saves)
+	if not _hint_scoop_shown and GameManager.lifetime_earnings <= 0.0 \
+			and GameManager.swamp_states[0]["gallons_drained"] <= 0.0001:
+		var hint_players: Array[Node] = get_tree().get_nodes_in_group("player")
+		if hint_players.size() > 0 and is_instance_valid(hint_players[0]) and hint_players[0].get("near_water"):
+			_hint_scoop_shown = true
+			SceneManager.show_popup("HOLD SPACE to scoop water", 3.5)
 
 	# Town lights: off in daylight, warm from dusk through dawn.
 	var glow_t: float = 0.0
