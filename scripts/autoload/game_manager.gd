@@ -24,6 +24,7 @@ signal cave_pool_level_changed(cave_id: String, pool_index: int, fill_fraction: 
 signal cave_pool_completed(cave_id: String, pool_index: int)
 signal prestige_changed
 signal prestige_performed
+signal pump_changed(swamp_index: int, level: int)
 
 # --- Prestige Scaling ---
 # pending influence = floor(sqrt(lifetime_earnings / PRESTIGE_SCALE)).
@@ -123,7 +124,8 @@ var tool_definitions: Dictionary = {
 
 # Current save-format version. Bump when the save structure changes; SaveManager
 # uses this to detect saves written by a NEWER build (Steam Cloud downgrade case).
-const SAVE_VERSION: int = 18
+# v19: pump_levels + saved_at (offline progress).
+const SAVE_VERSION: int = 19
 
 # --- Stat Definitions ---
 var stat_definitions: Dictionary = {
@@ -273,6 +275,20 @@ var upgrades_owned: Dictionary = {
 	"auto_scooper": 0,
 	"lantern": 0
 }
+
+# --- Pumps (the passive/idle tier) ---
+# swamp_index -> pump level (absent = no pump). Pumps drain their pool slowly and
+# bank money at wholesale rate; deliberately 5-10x below active play.
+var pump_levels: Dictionary = {}
+const PUMP_MAX_LEVEL: int = 10
+const PUMP_WHOLESALE: float = 0.6            # pumps sell at 60% of manual value
+const PUMP_BASE_DRAIN_SECONDS: float = 9000.0  # L1 drains its whole pool in ~2.5h
+const PUMP_OFFLINE_CAP_HOURS: float = 8.0
+const PUMP_OFFLINE_EFFICIENCY: float = 0.5
+# Set by load_save_data when offline pump earnings were granted; consumed by the
+# world scene to show a "while you were gone" summary. {seconds, gallons, money}
+var offline_summary: Dictionary = {}
+var _pump_accum: float = 0.0
 
 # Device preference (not reset with game)
 var touch_controls_enabled: bool = false
@@ -514,6 +530,68 @@ func _drain_swamp(swamp_index: int, gallons: float) -> float:
 		swamp_completed.emit(swamp_index, reward)
 
 	return actual
+
+# --- Pumps ---
+func get_pump_level(swamp_index: int) -> int:
+	return pump_levels.get(swamp_index, 0)
+
+func is_pump_available(swamp_index: int) -> bool:
+	# Same progression rule as the pools themselves: first pool always, later
+	# pools once the previous one is drained.
+	if swamp_index <= 0:
+		return true
+	return is_swamp_completed(swamp_index - 1)
+
+func get_pump_cost(swamp_index: int) -> float:
+	# L1 costs ~10% of the pool's total water value; each level x1.5.
+	var d: Dictionary = swamp_definitions[swamp_index]
+	var base: float = d["total_gallons"] * d["money_per_gallon"] * 0.10
+	if prestige_count >= 1:
+		base *= 0.5  # "Federal Infrastructure Grant" — prestige perk
+	return base * pow(1.5, get_pump_level(swamp_index))
+
+func get_pump_rate(swamp_index: int) -> float:
+	var level: int = get_pump_level(swamp_index)
+	if level <= 0:
+		return 0.0
+	return swamp_definitions[swamp_index]["total_gallons"] / PUMP_BASE_DRAIN_SECONDS \
+		* pow(1.25, level - 1)
+
+func buy_pump(swamp_index: int) -> bool:
+	if not is_pump_available(swamp_index):
+		return false
+	if get_pump_level(swamp_index) >= PUMP_MAX_LEVEL:
+		return false
+	if is_swamp_completed(swamp_index):
+		return false
+	var cost: float = get_pump_cost(swamp_index)
+	if money < cost:
+		return false
+	money -= cost
+	pump_levels[swamp_index] = get_pump_level(swamp_index) + 1
+	money_changed.emit(money)
+	pump_changed.emit(swamp_index, pump_levels[swamp_index])
+	return true
+
+# Run all pumps for `seconds` of game time (efficiency < 1 for offline catch-up).
+# Returns {gallons, money}. _drain_swamp handles level signals + completion.
+func _run_pumps(seconds: float, efficiency: float = 1.0) -> Dictionary:
+	var total_g: float = 0.0
+	var total_m: float = 0.0
+	for idx in pump_levels.keys():
+		if swamp_states[idx]["completed"]:
+			continue
+		var actual: float = _drain_swamp(idx, get_pump_rate(idx) * seconds * efficiency)
+		if actual > 0.0:
+			var earned: float = actual * swamp_definitions[idx]["money_per_gallon"] \
+				* get_money_multiplier() * PUMP_WHOLESALE
+			money += earned
+			lifetime_earnings += earned
+			total_g += actual
+			total_m += earned
+	if total_m > 0.0:
+		money_changed.emit(money)
+	return {"gallons": total_g, "money": total_m}
 
 # --- Actions ---
 # drain_water: used by hose and pump (earns money directly)
@@ -998,6 +1076,7 @@ func _reset_progression(start_money: float) -> void:
 	current_stamina = get_max_stamina()
 	water_carried = 0.0
 	last_scoop_swamp = 0
+	pump_levels.clear()
 	hose_active = false
 	hose_timer = 0.0
 	hose_swamp_index = -1
@@ -1058,6 +1137,14 @@ func regen_stamina(delta: float) -> void:
 		stamina_changed.emit(current_stamina, max_stam)
 
 func _process(delta: float) -> void:
+	# Pumps tick in 1s batches to keep water_level_changed signal traffic low
+	# (each emission reshapes pool polygons in the world).
+	if not pump_levels.is_empty():
+		_pump_accum += delta
+		if _pump_accum >= 1.0:
+			_run_pumps(_pump_accum)
+			_pump_accum = 0.0
+
 	# Hose fills water_carried (like manual scooping, player must sell at shop)
 	if hose_active:
 		hose_timer -= delta
@@ -1101,8 +1188,14 @@ func get_save_data() -> Dictionary:
 			pools.append({"gallons_drained": state["gallons_drained"], "completed": state["completed"]})
 		cave_pool_save[cave_id] = pools
 
+	var pump_save: Dictionary = {}
+	for pk in pump_levels.keys():
+		pump_save[str(pk)] = pump_levels[pk]
+
 	return {
 		"version": SAVE_VERSION,
+		"saved_at": Time.get_unix_time_from_system(),
+		"pump_levels": pump_save,
 		"money": money,
 		"influence": influence,
 		"lifetime_earnings": lifetime_earnings,
@@ -1207,6 +1300,25 @@ func load_save_data(data: Dictionary) -> void:
 
 	# Device preference
 	touch_controls_enabled = data.get("touch_controls_enabled", false)
+
+	# Pumps (JSON stringifies int keys — convert back)
+	pump_levels.clear()
+	var pump_save: Dictionary = data.get("pump_levels", {})
+	for pk in pump_save.keys():
+		var idx: int = int(pk)
+		if idx >= 0 and idx < swamp_definitions.size():
+			pump_levels[idx] = int(pump_save[pk])
+
+	# Offline pump progress: capped hours at reduced efficiency, summarized for
+	# the world scene to announce.
+	var saved_at: float = float(data.get("saved_at", 0.0))
+	if saved_at > 0.0 and not pump_levels.is_empty():
+		var away: float = clampf(Time.get_unix_time_from_system() - saved_at,
+			0.0, PUMP_OFFLINE_CAP_HOURS * 3600.0)
+		if away > 60.0:
+			var res: Dictionary = _run_pumps(away, PUMP_OFFLINE_EFFICIENCY)
+			if res["money"] > 0.0:
+				offline_summary = {"seconds": away, "gallons": res["gallons"], "money": res["money"]}
 
 	# Version migration
 	var save_version: int = int(data.get("version", 1))

@@ -21,6 +21,7 @@ func _ready() -> void:
 	GameManager.upgrade_changed.connect(func() -> void: _dirty = true; _refresh_cooldown = REFRESH_INTERVAL)
 	GameManager.stat_upgraded.connect(func(_s: String, _l: int) -> void: _dirty = true; _refresh_cooldown = REFRESH_INTERVAL)
 	GameManager.prestige_changed.connect(func() -> void: _dirty = true; _refresh_cooldown = REFRESH_INTERVAL)
+	GameManager.pump_changed.connect(func(_i: int, _l: int) -> void: _dirty = true; _refresh_cooldown = REFRESH_INTERVAL)
 	visible = false
 
 func _process(delta: float) -> void:
@@ -130,6 +131,7 @@ func _build_tools_tab() -> void:
 		var tool_sep := HSeparator.new()
 		tool_sep.add_theme_constant_override("separation", 8)
 		tool_list.add_child(tool_sep)
+	_build_pump_section()
 
 	var sorted_tools: Array = GameManager.tool_definitions.keys()
 	sorted_tools.sort_custom(func(a: Variant, b: Variant) -> bool: return GameManager.tool_definitions[a]["cost"] < GameManager.tool_definitions[b]["cost"])
@@ -701,6 +703,98 @@ func _get_tool_tooltip(tid: String, defn: Dictionary, owned_data: Dictionary) ->
 			tip += "\nBase output: %.4f gal/scoop" % base_out
 		tip += "\nCost: %s" % Economy.format_money(defn["cost"])
 	return tip
+
+# =============================================================================
+# PUMP SECTION — the passive/idle tier: one purchasable pump per unlocked pool.
+# =============================================================================
+func _build_pump_section() -> void:
+	# Rows for every pool that's reachable and not finished, plus owned pumps.
+	var rows: Array = []
+	for idx in range(GameManager.swamp_definitions.size()):
+		var owned: int = GameManager.get_pump_level(idx)
+		if GameManager.is_swamp_completed(idx):
+			continue
+		if owned > 0 or GameManager.is_pump_available(idx):
+			rows.append(idx)
+	if rows.is_empty():
+		return
+
+	var header := Label.new()
+	header.text = "-- Pumps (earn while away) --"
+	header.add_theme_font_size_override("font_size", 14)
+	header.add_theme_color_override("font_color", Color(0.5, 0.8, 0.9))
+	header.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	tool_list.add_child(header)
+
+	for idx in rows:
+		var d: Dictionary = GameManager.swamp_definitions[idx]
+		var level: int = GameManager.get_pump_level(idx)
+		var cost: float = GameManager.get_pump_cost(idx)
+
+		var row_panel := PanelContainer.new()
+		var style := StyleBoxFlat.new()
+		style.bg_color = Color(0.07, 0.12, 0.15, 0.6)
+		style.corner_radius_top_left = 4
+		style.corner_radius_top_right = 4
+		style.corner_radius_bottom_left = 4
+		style.corner_radius_bottom_right = 4
+		style.content_margin_left = 8
+		style.content_margin_right = 8
+		style.content_margin_top = 4
+		style.content_margin_bottom = 4
+		row_panel.add_theme_stylebox_override("panel", style)
+
+		var row := HBoxContainer.new()
+		row.add_theme_constant_override("separation", 8)
+
+		var info := Label.new()
+		info.add_theme_font_size_override("font_size", 14)
+		info.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		info.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.5))
+		info.add_theme_constant_override("shadow_offset_x", 2)
+		info.add_theme_constant_override("shadow_offset_y", 2)
+		if level > 0:
+			info.text = "%s Pump Lv%d (%s/s)" % [d["name"], level, Economy.format_gallons(GameManager.get_pump_rate(idx))]
+			info.add_theme_color_override("font_color", Color(0.55, 0.85, 0.95))
+		else:
+			info.text = "%s Pump" % d["name"]
+			info.add_theme_color_override("font_color", Color(0.45, 0.6, 0.68))
+		row.add_child(info)
+
+		if level >= GameManager.PUMP_MAX_LEVEL:
+			var max_label := Label.new()
+			max_label.text = "[MAX]"
+			max_label.add_theme_font_size_override("font_size", 14)
+			max_label.add_theme_color_override("font_color", Color(0.3, 1.0, 0.4))
+			row.add_child(max_label)
+		else:
+			var btn := Button.new()
+			btn.add_theme_font_size_override("font_size", 14)
+			if level == 0:
+				btn.text = "Buy %s" % Economy.format_money(cost)
+			else:
+				btn.text = "Lv%d %s" % [level + 1, Economy.format_money(cost)]
+			btn.custom_minimum_size = Vector2(130, 0)
+			if GameManager.money < cost:
+				btn.disabled = true
+			else:
+				btn.add_theme_color_override("font_color", Color(0.55, 0.85, 0.95))
+				var pump_idx: int = idx
+				btn.pressed.connect(func() -> void: GameManager.buy_pump(pump_idx))
+			_style_button(btn, Color(0.06, 0.14, 0.18))
+			row.add_child(btn)
+
+		var rate_next: float = d["total_gallons"] / GameManager.PUMP_BASE_DRAIN_SECONDS * pow(1.25, level)
+		var wholesale: float = d["money_per_gallon"] * GameManager.get_money_multiplier() * GameManager.PUMP_WHOLESALE
+		var tip: String = "%s Pump — drains this pool passively\n" % d["name"]
+		tip += "Pays wholesale (%.0f%% of manual value), even while the game is closed (up to %d h at half rate).\n" % [GameManager.PUMP_WHOLESALE * 100.0, int(GameManager.PUMP_OFFLINE_CAP_HOURS)]
+		if level > 0:
+			tip += "Current: %s/s (%s/s)\n" % [Economy.format_gallons(GameManager.get_pump_rate(idx)), Economy.format_money(GameManager.get_pump_rate(idx) * wholesale)]
+		tip += "Next Lv%d: %s/s (%s/s)\nCost: %s" % [level + 1, Economy.format_gallons(rate_next), Economy.format_money(rate_next * wholesale), Economy.format_money(cost)]
+		row_panel.tooltip_text = tip
+		row_panel.mouse_filter = Control.MOUSE_FILTER_PASS
+		row_panel.add_child(row)
+		tool_list.add_child(row_panel)
 
 # =============================================================================
 # CAMEL SECTION

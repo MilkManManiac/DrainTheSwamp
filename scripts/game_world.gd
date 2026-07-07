@@ -301,6 +301,9 @@ var helicopter_active: Node2D = null
 var town_glow_rects: Array = []          # [{node: ColorRect, day: Color, night: Color}]
 var town_glow_point_lights: Array = []   # [{node: PointLight2D, energy: float}]
 var _town_glow_last: float = -1.0
+
+# Pump props: swamp_index -> root Node2D (rebuilt on level-up)
+var pump_props: Dictionary = {}
 # Second pass visuals
 var moon: Node2D = null
 var moon_glow: Sprite2D = null
@@ -634,7 +637,19 @@ func _ready() -> void:
 	GameManager.swamp_completed.connect(_on_swamp_completed)
 	GameManager.scoop_performed.connect(_on_scoop_performed)
 	GameManager.camel_changed.connect(_on_camel_changed)
+	GameManager.pump_changed.connect(_on_pump_changed)
 	_build_camels()
+	for pidx in GameManager.pump_levels.keys():
+		_build_pump_prop(pidx)
+
+	# Offline pump earnings summary (set by the save load, shown once)
+	if not GameManager.offline_summary.is_empty():
+		var osum: Dictionary = GameManager.offline_summary
+		GameManager.offline_summary = {}
+		SceneManager.show_popup("WHILE YOU WERE GONE (%.1f h):\nPumps drained %s  ->  +%s" % [
+			osum["seconds"] / 3600.0,
+			Economy.format_gallons(osum["gallons"]),
+			Economy.format_money(osum["money"])], 6.0)
 
 	# Show tutorial on first play
 	if GameManager.swamp_states[0]["gallons_drained"] <= 0.001:
@@ -5620,6 +5635,65 @@ func _town_string_lights(x0: float, x1: float, y: float) -> void:
 		bulb.z_index = 7
 		add_child(bulb)
 		town_glow_rects.append({"node": bulb, "day": bulb_day, "night": _emit(wcol, 2.0)})
+
+# --- Pump props (passive drain stations at pool rims) ---
+func _on_pump_changed(swamp_index: int, _level: int) -> void:
+	_build_pump_prop(swamp_index)
+
+func _build_pump_prop(swamp_index: int) -> void:
+	if pump_props.has(swamp_index):
+		var old: Node2D = pump_props[swamp_index]
+		if is_instance_valid(old):
+			old.queue_free()
+	var level: int = GameManager.get_pump_level(swamp_index)
+	if level <= 0:
+		return
+	var geo: Dictionary = _get_swamp_geometry(swamp_index)
+	var rim: Vector2 = geo["entry_top"]
+	var root := Node2D.new()
+	root.position = Vector2(rim.x + 6.0, rim.y)
+	root.z_index = 3
+	add_child(root)
+	pump_props[swamp_index] = root
+	# Housing box (grows slightly with level)
+	var hw: float = 12.0 + minf(level, 5) * 0.8
+	var hh: float = 9.0 + minf(level, 5) * 0.6
+	var box := Polygon2D.new()
+	box.polygon = PackedVector2Array([
+		Vector2(-hw * 0.5, 0), Vector2(hw * 0.5, 0),
+		Vector2(hw * 0.5, -hh), Vector2(-hw * 0.5, -hh)])
+	var mc := Color(0.36, 0.38, 0.40)
+	box.vertex_colors = PackedColorArray([mc.darkened(0.25), mc.darkened(0.15), mc.lightened(0.12), mc.darkened(0.02)])
+	root.add_child(box)
+	# Rivets + hazard stripe (it IS government-adjacent equipment)
+	var stripe := ColorRect.new()
+	stripe.position = Vector2(-hw * 0.5, -hh * 0.45)
+	stripe.size = Vector2(hw, 2)
+	stripe.color = Color(0.75, 0.62, 0.15)
+	root.add_child(stripe)
+	# Intake pipe arcing into the pool basin
+	var pipe := Line2D.new()
+	pipe.width = 2.5
+	pipe.default_color = Color(0.30, 0.32, 0.34)
+	pipe.add_point(Vector2(hw * 0.3, -hh * 0.6))
+	pipe.add_point(Vector2(hw * 0.3 + 10.0, -hh * 0.6 - 4.0))
+	pipe.add_point(Vector2(hw * 0.3 + 18.0, 6.0))
+	root.add_child(pipe)
+	# Status lamp (blinks via tween) + level pips
+	var lamp := ColorRect.new()
+	lamp.position = Vector2(-hw * 0.5 + 1.5, -hh + 1.5)
+	lamp.size = Vector2(2, 2)
+	lamp.color = _emit(Color(0.3, 1.0, 0.45), 1.6)
+	root.add_child(lamp)
+	var tw := create_tween().set_loops()
+	tw.tween_property(lamp, "modulate:a", 0.25, 0.8)
+	tw.tween_property(lamp, "modulate:a", 1.0, 0.8)
+	for i in range(mini(level, 10)):
+		var pip := ColorRect.new()
+		pip.position = Vector2(-hw * 0.5 + 1.0 + float(i) * 1.4, -1.5)
+		pip.size = Vector2(1, 1)
+		pip.color = Color(0.55, 0.85, 0.95)
+		root.add_child(pip)
 
 # --- Weather System ---
 func _build_weather() -> void:

@@ -7,6 +7,9 @@ extends SceneTree
 func _init() -> void:
 	var failures: Array = []
 	var gm: Node = load("res://scripts/autoload/game_manager.gd").new()
+	# _ready never runs off-tree; init the per-pool state manually.
+	gm._init_swamp_states()
+	gm._init_cave_pool_states()
 
 	# 1. Tool payback must LENGTHEN across every 10-level window (cost growth must
 	#    outpace output growth including the x2 milestone), for every tool.
@@ -49,6 +52,24 @@ func _init() -> void:
 		if d["cost_exponent"] < d["growth_rate"]:
 			failures.append("%s: cost_exponent %.2f < growth_rate %.2f (always-buy)"
 				% [stat_id, d["cost_exponent"], d["growth_rate"]])
+
+	# 5. Pumps: purchasable, survives save/load, offline catch-up grants money.
+	gm.money = 1e12
+	if not gm.buy_pump(0):
+		failures.append("buy_pump(0) failed despite ample money")
+	var sd: Dictionary = gm.get_save_data()
+	sd["saved_at"] = Time.get_unix_time_from_system() - 3600.0  # left 1h ago
+	var gm2: Node = load("res://scripts/autoload/game_manager.gd").new()
+	gm2._init_swamp_states()
+	gm2._init_cave_pool_states()
+	gm2.load_save_data(sd)
+	if gm2.get_pump_level(0) != 1:
+		failures.append("pump level lost in save/load roundtrip")
+	if gm2.offline_summary.is_empty():
+		failures.append("no offline summary after 1h away with a pump")
+	elif gm2.offline_summary["money"] <= 0.0:
+		failures.append("offline pumps earned $0 over 1h")
+	gm2.free()
 
 	gm.free()
 	if failures.is_empty():
