@@ -304,6 +304,13 @@ var _town_glow_last: float = -1.0
 
 # Pump props: swamp_index -> root Node2D (rebuilt on level-up)
 var pump_props: Dictionary = {}
+
+# East water-tower sell point (unlocked once Bog is drained) — cuts the
+# late-game walk-back tax to the town shop.
+const EAST_TOWER_X: float = 2800.0
+var east_tower_built: bool = false
+var player_in_tower_area: bool = false
+var tower_player_ref: CharacterBody2D = null
 # Second pass visuals
 var moon: Node2D = null
 var moon_glow: Sprite2D = null
@@ -641,6 +648,8 @@ func _ready() -> void:
 	_build_camels()
 	for pidx in GameManager.pump_levels.keys():
 		_build_pump_prop(pidx)
+	if GameManager.is_swamp_completed(3):
+		_build_east_tower()
 
 	# Offline pump earnings summary (set by the save load, shown once)
 	if not GameManager.offline_summary.is_empty():
@@ -4941,6 +4950,10 @@ func _on_swamp_completed(swamp_index: int, reward: float) -> void:
 	# Show wanted poster after pool 4
 	if swamp_index == 4 and wanted_poster:
 		wanted_poster.visible = true
+	# Bog drained -> the east water tower comes online (remote sell point)
+	if swamp_index == 3 and not east_tower_built:
+		_build_east_tower()
+		SceneManager.show_popup("WATER TOWER ONLINE\nA remote sell point now stands east of the Bog.", 4.5)
 	# Government sabotage — pools 3, 5, 7 trigger water add-back to next pool
 	if swamp_index in [3, 5, 7]:
 		var next_pool: int = swamp_index + 1
@@ -5126,6 +5139,51 @@ func _on_shop_body_exited(body: Node2D) -> void:
 		body.set_near_shop(false)
 		player_in_shop_area = false
 		shop_player_ref = null
+
+# --- East water tower: remote sell point, appears once Bog (pool 3) is drained ---
+func _build_east_tower() -> void:
+	if east_tower_built:
+		return
+	east_tower_built = true
+	var gy: float = _grnd(EAST_TOWER_X, 136.0)
+	_town_water_tower(EAST_TOWER_X, gy)
+	var sell_lbl := Label.new()
+	sell_lbl.text = "SELL"
+	sell_lbl.add_theme_font_size_override("font_size", 9)
+	sell_lbl.add_theme_color_override("font_color", Color(1.0, 0.85, 0.3))
+	sell_lbl.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.7))
+	sell_lbl.add_theme_constant_override("shadow_offset_x", 1)
+	sell_lbl.add_theme_constant_override("shadow_offset_y", 1)
+	sell_lbl.position = Vector2(EAST_TOWER_X - 12, gy - 104)
+	sell_lbl.size = Vector2(26, 10)
+	sell_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	add_child(sell_lbl)
+	var area := Area2D.new()
+	area.position = Vector2(EAST_TOWER_X, gy - 20)
+	area.collision_layer = 0
+	area.collision_mask = 1
+	var coll := CollisionShape2D.new()
+	var shape := RectangleShape2D.new()
+	shape.size = Vector2(56, 60)
+	coll.shape = shape
+	area.add_child(coll)
+	add_child(area)
+	area.body_entered.connect(_on_tower_body_entered)
+	area.body_exited.connect(_on_tower_body_exited)
+
+func _on_tower_body_entered(body: Node2D) -> void:
+	if body is CharacterBody2D:
+		player_in_tower_area = true
+		tower_player_ref = body
+		var earned: float = GameManager.sell_water()
+		if earned > 0.01 and body.has_method("show_floating_text"):
+			body.show_floating_text("+%s" % Economy.format_money(earned), Color(1.0, 0.85, 0.2))
+			_spawn_coin_fly(body.global_position, _coin_count_for(earned))
+
+func _on_tower_body_exited(body: Node2D) -> void:
+	if body is CharacterBody2D:
+		player_in_tower_area = false
+		tower_player_ref = null
 
 # --- Town (Drainsville): storefronts around the Hardware shop + water tower + NA drop ---
 func _build_town() -> void:
@@ -6580,6 +6638,13 @@ func _process(delta: float) -> void:
 		if earned > 0.01 and shop_player_ref.has_method("show_floating_text"):
 			shop_player_ref.show_floating_text("+%s" % Economy.format_money(earned), Color(1.0, 0.85, 0.2))
 			_spawn_coin_fly(shop_player_ref.global_position, _coin_count_for(earned))
+
+	# Continuous sell at the east water tower
+	if player_in_tower_area and is_instance_valid(tower_player_ref):
+		var tower_earned: float = GameManager.sell_water()
+		if tower_earned > 0.01 and tower_player_ref.has_method("show_floating_text"):
+			tower_player_ref.show_floating_text("+%s" % Economy.format_money(tower_earned), Color(1.0, 0.85, 0.2))
+			_spawn_coin_fly(tower_player_ref.global_position, _coin_count_for(tower_earned))
 
 	# Update camels
 	if GameManager.camel_count > 0:

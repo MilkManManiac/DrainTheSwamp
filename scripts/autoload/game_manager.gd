@@ -276,13 +276,22 @@ var upgrade_definitions: Dictionary = {
 		"cost_exponent": 1.30,
 		"max_level": 1,
 		"order": 1
+	},
+	"overflow_valve": {
+		"name": "Overflow Valve",
+		"description": "Bag full? Scoops auto-sell at 60%",
+		"cost": 75000.0,
+		"cost_exponent": 1.0,
+		"max_level": 1,
+		"order": 2
 	}
 }
 
 # Upgrade state
 var upgrades_owned: Dictionary = {
 	"auto_scooper": 0,
-	"lantern": 0
+	"lantern": 0,
+	"overflow_valve": 0
 }
 
 # --- Pumps (the passive/idle tier) ---
@@ -632,6 +641,23 @@ func try_scoop(swamp_index: int) -> bool:
 	var capacity: float = get_carrying_capacity()
 	var remaining_space: float = capacity - water_carried
 	if remaining_space <= 0.001:
+		# Overflow Valve: a full bag vents incoming scoops as instant 60% sales
+		# instead of hard-stopping play. Walking it to a sell point stays optimal.
+		if upgrades_owned.get("overflow_valve", 0) > 0:
+			var vent_amount: float = get_tool_output(current_tool_id)
+			current_stamina -= stamina_cost
+			stamina_changed.emit(current_stamina, get_max_stamina())
+			var vented: float = _drain_swamp(swamp_index, vent_amount)
+			if vented > 0.0:
+				var earned: float = vented * swamp_definitions[swamp_index]["money_per_gallon"] \
+					* get_money_multiplier() * 0.6
+				money += earned
+				lifetime_earnings += earned
+				last_scoop_swamp = swamp_index
+				last_scoop_gallons = vented
+				money_changed.emit(money)
+				scoop_performed.emit(swamp_index, vented, earned)
+			return vented > 0.0
 		return false
 
 	var tool_output: float = get_tool_output(current_tool_id)
@@ -1121,7 +1147,8 @@ func _reset_progression(start_money: float) -> void:
 	camel_states.clear()
 	upgrades_owned = {
 		"auto_scooper": 0,
-		"lantern": 0
+		"lantern": 0,
+		"overflow_valve": 0
 	}
 	current_day = 1
 	cycle_progress = 0.2
