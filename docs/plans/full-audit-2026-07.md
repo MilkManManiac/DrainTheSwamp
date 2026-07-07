@@ -10,6 +10,14 @@
 >   NOTE: all captures before 2026-07-07 are gamma-dark (linear-vs-sRGB hook bug, now fixed) —
 >   brightness in the appendix screenshots overstates the problem. Item 7 (ArtGen pilot) pending —
 >   needs ComfyUI running + user taste picks on generated candidates.
+> - 2026-07-07: Phase 2 items 1-8, 10 complete (commits `cd25b6b`..`a1074d3`) — curve fix
+>   (1.15/1.28 + x2 milestones, invariant tests in tests/economy_invariants.gd), pumps +
+>   offline progress (save v19), prestige numbers rework (250K scale, multiplicative,
+>   War Chest tools), cave air meter + Daring Bonus + drain thresholds restored, camel/hose
+>   un-trapped, east tower sell point + Overflow Valve, HUD rates + influence progress,
+>   contextual onboarding hints. REMAINING in Phase 2: item 9 (music/ambient — needs a
+>   listening session, not automatable headless) and the fuller prestige mechanic-unlock
+>   ladder (P1 pump discount shipped; P2-P4 pending design with story tie-in).
 
 Produced from five parallel audit tracks on branch `v2-2d-polish` (37 commits ahead of master):
 four specialist code audits (gameplay/economy, story/writing, UX/UI, architecture) plus a
