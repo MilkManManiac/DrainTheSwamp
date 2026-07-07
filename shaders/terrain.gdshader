@@ -6,8 +6,8 @@ uniform float striation_strength : hint_range(0.0, 0.1) = 0.03;
 
 // --- Ground detail (R3) ---
 uniform float fbm_strength : hint_range(0.0, 0.2) = 0.08; // multi-octave mottling
-uniform float depth_darken : hint_range(0.0, 1.0) = 0.45; // darken deeper soil
-uniform float depth_range : hint_range(20.0, 400.0) = 160.0; // world-Y over which it darkens
+uniform float depth_darken : hint_range(0.0, 1.0) = 0.28; // darken deeper soil
+uniform float depth_range : hint_range(20.0, 400.0) = 280.0; // world-Y over which it darkens
 uniform float surface_y = -100000.0; // world-Y of nearest surface band (set per-frame, optional)
 
 // --- Receding waterline (R2) ---

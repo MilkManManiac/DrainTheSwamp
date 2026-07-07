@@ -420,7 +420,7 @@ var horizon_glow: Line2D = null
 const SKY_COLOR_TOP := Color(0.22, 0.38, 0.72)
 const SKY_COLOR_MID := Color(0.45, 0.62, 0.88)
 const SKY_COLOR_BOTTOM := Color(0.62, 0.78, 0.92)
-const GROUND_COLOR := Color(0.45, 0.32, 0.16)
+const GROUND_COLOR := Color(0.52, 0.38, 0.21)
 const GROUND_MID_COLOR := Color(0.38, 0.25, 0.12)
 const GROUND_DARK_COLOR := Color(0.28, 0.18, 0.08)
 const WATER_COLOR := Color(0.18, 0.32, 0.22, 0.92)
@@ -608,7 +608,10 @@ func _ready() -> void:
 	_build_distance_fog()
 	_build_god_rays()
 	_build_fbm_fog()
-	_build_foreground_silhouette()
+	# Foreground silhouette fronds disabled: anchored to 640x360 viewport coords on a
+	# 1.1 motion-scale parallax layer, they drift into mid-sky as giant dark blades
+	# (see docs/plans/full-audit-2026-07.md, sky artifacts). Redo with the art pass.
+	#_build_foreground_silhouette()
 	_build_weather()
 	_build_drain_reveals()
 	_build_drained_pool_beds()
@@ -709,14 +712,14 @@ func _build_parallax() -> void:
 # --- Sky & Atmosphere ---
 # Sky gradient presets: [top, mid, bottom] for each time of day
 const SKY_DAWN: Array[Color] = [Color(0.35, 0.25, 0.50), Color(0.72, 0.45, 0.38), Color(0.90, 0.65, 0.45)]
-const SKY_DAY: Array[Color] = [Color(0.22, 0.38, 0.72), Color(0.45, 0.62, 0.88), Color(0.62, 0.78, 0.92)]
+const SKY_DAY: Array[Color] = [Color(0.32, 0.52, 0.86), Color(0.55, 0.73, 0.94), Color(0.74, 0.87, 0.97)]
 const SKY_DUSK: Array[Color] = [Color(0.28, 0.18, 0.42), Color(0.75, 0.38, 0.28), Color(0.88, 0.55, 0.35)]
-const SKY_NIGHT: Array[Color] = [Color(0.04, 0.05, 0.12), Color(0.06, 0.08, 0.18), Color(0.08, 0.10, 0.22)]
+const SKY_NIGHT: Array[Color] = [Color(0.07, 0.09, 0.18), Color(0.10, 0.13, 0.26), Color(0.13, 0.16, 0.32)]
 
 # Heal master-lerp endpoints (murky -> healed), applied on top of the time-of-day sky.
 # Murky overlay = sickly grey-green; healed = clean. Subtle (weighted below).
-const HEAL_SKY_MURKY := Color(0.40, 0.44, 0.34)   # tint the whole sky pushes toward when murky
-const HEAL_FOG_MURKY := Color(0.50, 0.55, 0.42)   # ground/haze fog color when murky
+const HEAL_SKY_MURKY := Color(0.55, 0.58, 0.44)   # sickly olive, but bright — hue shift, not darkening
+const HEAL_FOG_MURKY := Color(0.58, 0.62, 0.47)   # ground/haze fog color when murky
 const HEAL_FOG_HEALED := Color(0.66, 0.72, 0.70)  # clean cool haze when drained
 const HEAL_RAY_MURKY := Color(0.78, 0.82, 0.55)   # sickly shaft color when murky
 const HEAL_RAY_HEALED := Color(1.0, 0.90, 0.62)   # warm golden shaft when drained
@@ -894,14 +897,16 @@ func _make_cloud_shape(w: float, h: float) -> PackedVector2Array:
 func _build_distant_hills() -> void:
 	var world_w: float = terrain_points[terrain_points.size() - 1].x + 100.0
 	# Far hills silhouette — procedural across world width
+	# Bands start far west of the town (world spans to ~-465; parallax shifts them
+	# further) so their left edge can never float into view as a hard slab line.
 	var far_pts := PackedVector2Array()
-	var fx: float = -100.0
+	var fx: float = -800.0
 	while fx < world_w:
 		far_pts.append(Vector2(fx, randf_range(84, 124)))
 		fx += randf_range(180, 300)
 	far_pts.append(Vector2(world_w, 116))
 	far_pts.append(Vector2(world_w, 150))
-	far_pts.append(Vector2(-100, 150))
+	far_pts.append(Vector2(-800, 150))
 	var atmo: Color = SKY_DAY[2]  # sky-bottom color drives the haze
 	var hills := Polygon2D.new()
 	hills.polygon = far_pts
@@ -912,13 +917,13 @@ func _build_distant_hills() -> void:
 
 	# Mid hills
 	var mid_pts := PackedVector2Array()
-	var mx: float = -100.0
+	var mx: float = -800.0
 	while mx < world_w:
 		mid_pts.append(Vector2(mx, randf_range(104, 130)))
 		mx += randf_range(160, 280)
 	mid_pts.append(Vector2(world_w, 124))
 	mid_pts.append(Vector2(world_w, 156))
-	mid_pts.append(Vector2(-100, 156))
+	mid_pts.append(Vector2(-800, 156))
 	var hills2 := Polygon2D.new()
 	hills2.polygon = mid_pts
 	var mid_tint: Color = _atmospheric_tint(Color(0.08, 0.22, 0.08), 0.65, atmo)
@@ -930,7 +935,7 @@ func _build_treeline() -> void:
 	var world_w: float = terrain_points[terrain_points.size() - 1].x + 100.0
 	# Dense treeline - jagged top edge for tree canopy look
 	var tree_points := PackedVector2Array()
-	var x: float = -100.0
+	var x: float = -800.0
 	while x < world_w:
 		var tree_h: float = randf_range(12, 28)
 		tree_points.append(Vector2(x, 136 - tree_h))
@@ -938,7 +943,7 @@ func _build_treeline() -> void:
 		x += randf_range(10, 24)
 	tree_points.append(Vector2(world_w, 136))
 	tree_points.append(Vector2(world_w, 164))
-	tree_points.append(Vector2(-100, 164))
+	tree_points.append(Vector2(-800, 164))
 
 	var atmo: Color = SKY_DAY[2]
 	var treeline := Polygon2D.new()
@@ -960,7 +965,7 @@ func _build_treeline() -> void:
 
 	# Lighter highlight trees in front
 	var tree_points2 := PackedVector2Array()
-	x = -100.0
+	x = -800.0
 	while x < world_w:
 		var tree_h: float = randf_range(8, 20)
 		tree_points2.append(Vector2(x, 140 - tree_h))
@@ -968,7 +973,7 @@ func _build_treeline() -> void:
 		x += randf_range(12, 28)
 	tree_points2.append(Vector2(world_w, 140))
 	tree_points2.append(Vector2(world_w, 164))
-	tree_points2.append(Vector2(-100, 164))
+	tree_points2.append(Vector2(-800, 164))
 
 	var treeline2 := Polygon2D.new()
 	treeline2.polygon = tree_points2
@@ -6564,8 +6569,11 @@ func _process(delta: float) -> void:
 		# R2 heal: widen the safe (smooth desaturate + small additive warm) channels so the
 		# murky→golden transformation actually reads. Murky = desaturated & cool; healed =
 		# vibrant & warm. These don't amplify the posterize banding like a tint-multiply did.
-		pp_mat.set_shader_parameter("warmth", warmth + lerpf(-0.028, 0.035, drain_progress))
-		pp_mat.set_shader_parameter("saturation", lerpf(0.62, 1.15, drain_progress))
+		# Murk = hue/saturation shift only, never a luminance crush: the undrained
+		# world is what players see ~all game, and at 0.62 saturation + heavy fog
+		# a forced-midday capture read as night (see docs/plans/full-audit-2026-07.md).
+		pp_mat.set_shader_parameter("warmth", warmth + lerpf(-0.012, 0.035, drain_progress))
+		pp_mat.set_shader_parameter("saturation", lerpf(0.85, 1.15, drain_progress))
 		# New R1 uniforms (constant defaults; bloom/dither not yet driven dynamically)
 		pp_mat.set_shader_parameter("bloom_threshold", 0.7)
 		# On desktop (Forward+) real HDR-2D WorldEnvironment glow handles bloom, so
@@ -6616,12 +6624,12 @@ func _process(delta: float) -> void:
 		var hm: ShaderMaterial = haze_fog_rect.material as ShaderMaterial
 		hm.set_shader_parameter("time", wave_time)
 		hm.set_shader_parameter("fog_color", fog_col_v)
-		hm.set_shader_parameter("density", lerpf(0.30, 0.14, drain_progress))
+		hm.set_shader_parameter("density", lerpf(0.22, 0.14, drain_progress))
 	if ground_fog_rect and ground_fog_rect.material:
 		var gm: ShaderMaterial = ground_fog_rect.material as ShaderMaterial
 		gm.set_shader_parameter("time", wave_time)
 		gm.set_shader_parameter("fog_color", fog_col_v)
-		gm.set_shader_parameter("density", lerpf(0.26, 0.10, drain_progress))
+		gm.set_shader_parameter("density", lerpf(0.17, 0.10, drain_progress))
 
 	# Environmental storytelling: ground color shifts with drain progress
 	if terrain_polygon:
@@ -6656,7 +6664,7 @@ func _process(delta: float) -> void:
 			sky_a = SKY_NIGHT; sky_b = SKY_NIGHT; sky_blend = 0.0
 		# Heal master-lerp: when murky, push the whole sky subtly toward sickly grey-green.
 		# Weight is small and fades fully to the clean time-of-day sky as drain completes.
-		var murk_sky: float = (1.0 - drain_progress) * 0.28
+		var murk_sky: float = (1.0 - drain_progress) * 0.15
 		var c0: Color = sky_a[0].lerp(sky_b[0], sky_blend).lerp(HEAL_SKY_MURKY, murk_sky)
 		var c1: Color = sky_a[1].lerp(sky_b[1], sky_blend).lerp(HEAL_SKY_MURKY, murk_sky)
 		var c2: Color = sky_a[2].lerp(sky_b[2], sky_blend).lerp(HEAL_SKY_MURKY, murk_sky)
@@ -7461,7 +7469,7 @@ func _get_cycle_color(t: float) -> Color:
 	var golden_hour := Color(1.0, 0.85, 0.6)
 	var sunset := Color(0.95, 0.55, 0.4)
 	var dusk := Color(0.65, 0.35, 0.5)
-	var night := Color(0.28, 0.32, 0.58)
+	var night := Color(0.38, 0.42, 0.66)
 
 	if t < 0.1:
 		return night.lerp(pre_dawn, t / 0.1)
