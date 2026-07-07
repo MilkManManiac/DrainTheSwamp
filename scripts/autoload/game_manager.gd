@@ -25,6 +25,8 @@ signal cave_pool_completed(cave_id: String, pool_index: int)
 signal prestige_changed
 signal prestige_performed
 signal pump_changed(swamp_index: int, level: int)
+signal cave_air_changed(current: float, maximum: float)
+signal cave_air_depleted
 
 # --- Prestige Scaling ---
 # pending influence = floor(sqrt(lifetime_earnings / PRESTIGE_SCALE)).
@@ -232,6 +234,15 @@ var hose_timer: float = 0.0
 var hose_swamp_index: int = -1
 const HOSE_DURATION: float = 20.0
 
+# Cave air ("swamp gas"): the risk/reward clock inside caves. Runs out -> you're
+# ejected losing carried water. Each cave pool drained buys more time; collecting
+# loot with >50% air left pays a x1.5 Daring Bonus.
+const CAVE_AIR_BASE: float = 90.0
+const CAVE_AIR_POOL_BONUS: float = 30.0
+const CAVE_AIR_LANTERN_BONUS: float = 30.0
+var cave_air: float = 0.0
+var cave_air_max: float = 0.0
+
 # Camel constants
 const CAMEL_BASE_COST: float = 500.0
 const CAMEL_COST_EXPONENT: float = 10.0   # 500 / 5K / 50K for camels 1/2/3
@@ -260,7 +271,7 @@ var upgrade_definitions: Dictionary = {
 	},
 	"lantern": {
 		"name": "Lantern",
-		"description": "Light in the dark",
+		"description": "Light in the dark, +30s cave air",
 		"cost": 50.0,
 		"cost_exponent": 1.30,
 		"max_level": 1,
@@ -902,6 +913,9 @@ func enter_cave(cave_id: String) -> void:
 	in_cave = true
 	current_cave = cave_id
 	cave_data[cave_id]["entered"] = true
+	cave_air_max = CAVE_AIR_BASE + (CAVE_AIR_LANTERN_BONUS if upgrades_owned["lantern"] > 0 else 0.0)
+	cave_air = cave_air_max
+	cave_air_changed.emit(cave_air, cave_air_max)
 	cave_entered.emit(cave_id)
 
 func exit_cave() -> void:
@@ -915,6 +929,16 @@ func collect_loot(cave_id: String, loot_id: String, reward_text: String) -> void
 		return
 	cave_data[cave_id]["loot_collected"][loot_id] = true
 	loot_collected.emit(cave_id, loot_id, reward_text)
+
+# All loot money flows through here so the Daring Bonus applies and loot counts
+# toward lifetime earnings (it previously bypassed prestige entirely).
+func grant_loot_money(amount: float) -> Dictionary:
+	var daring: bool = in_cave and cave_air_max > 0.0 and cave_air > cave_air_max * 0.5
+	var final: float = amount * (1.5 if daring else 1.0)
+	money += final
+	lifetime_earnings += final
+	money_changed.emit(money)
+	return {"amount": final, "daring": daring}
 
 func is_loot_collected(cave_id: String, loot_id: String) -> bool:
 	if not cave_data.has(cave_id):
@@ -968,6 +992,11 @@ func _drain_cave_pool(cave_id: String, pool_index: int, gallons: float) -> float
 	cave_pool_level_changed.emit(cave_id, pool_index, fill)
 	if cave_pool_states[cave_id][pool_index]["gallons_drained"] >= total:
 		cave_pool_states[cave_id][pool_index]["completed"] = true
+		# Draining a cave pool releases trapped air pockets — buys more gas time.
+		if in_cave:
+			cave_air += CAVE_AIR_POOL_BONUS
+			cave_air_max = maxf(cave_air_max, cave_air)
+			cave_air_changed.emit(cave_air, cave_air_max)
 		cave_pool_completed.emit(cave_id, pool_index)
 	return actual
 
@@ -1142,6 +1171,14 @@ func regen_stamina(delta: float) -> void:
 		stamina_changed.emit(current_stamina, max_stam)
 
 func _process(delta: float) -> void:
+	# Cave air drains while inside a cave; depletion ejects the player (handled
+	# by the cave scene via cave_air_depleted).
+	if in_cave and cave_air > 0.0:
+		cave_air = maxf(cave_air - delta, 0.0)
+		cave_air_changed.emit(cave_air, cave_air_max)
+		if cave_air <= 0.0:
+			cave_air_depleted.emit()
+
 	# Pumps tick in 1s batches to keep water_level_changed signal traffic low
 	# (each emission reshapes pool polygons in the world).
 	if not pump_levels.is_empty():

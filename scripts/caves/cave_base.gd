@@ -101,6 +101,8 @@ func _setup_cave() -> void:
 	# Connect cave pool signals
 	GameManager.cave_pool_level_changed.connect(_on_cave_pool_level_changed)
 	GameManager.cave_pool_completed.connect(_on_cave_pool_completed)
+	GameManager.cave_air_changed.connect(_on_cave_air_changed)
+	GameManager.cave_air_depleted.connect(_on_cave_air_depleted)
 
 	_setup_debug_shot()
 
@@ -1822,6 +1824,27 @@ func _on_exit_body_entered(body: Node2D) -> void:
 		return  # debug-only: stay in the cave for screenshots (never set in real builds)
 	if body is CharacterBody2D:
 		SceneManager.transition_to_return()
+
+# --- Cave air (swamp gas) ---
+var _air_warned: bool = false
+
+func _on_cave_air_changed(current: float, maximum: float) -> void:
+	if current <= 15.0 and current > 0.0 and not _air_warned:
+		_air_warned = true
+		SceneManager.show_popup("THE GAS IS RISING — GET OUT!", 3.0)
+		AudioManager.play_error()
+	elif current > 15.0 and _air_warned and current >= maximum * 0.5:
+		_air_warned = false  # re-arm after a pool refill buys real time back
+
+func _on_cave_air_depleted() -> void:
+	if SceneManager.is_transitioning:
+		return
+	# Gas overwhelms you: dropped haul, stumble out.
+	if GameManager.water_carried > 0.0:
+		GameManager.water_carried = 0.0
+		GameManager.water_carried_changed.emit(0.0, GameManager.get_carrying_capacity())
+	SceneManager.show_popup("SWAMP GAS! You black out and stumble to the surface,\ndropping everything you carried...", 5.0)
+	SceneManager.transition_to_return()
 
 # --- Exit Glow (Enhanced) ---
 func _build_exit_glow() -> void:

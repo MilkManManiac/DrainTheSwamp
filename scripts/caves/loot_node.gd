@@ -110,10 +110,11 @@ func _collect() -> void:
 	collected = true
 	hint_label.visible = false
 
-	# Apply rewards
+	# Apply rewards (via GameManager so the Daring Bonus + lifetime earnings apply)
 	if reward_money > 0.0:
-		GameManager.money += reward_money
-		GameManager.money_changed.emit(GameManager.money)
+		var grant: Dictionary = GameManager.grant_loot_money(reward_money)
+		if grant["daring"]:
+			SceneManager.show_popup("DARING BONUS x1.5 — grabbed with air to spare!\n+%s" % Economy.format_money(grant["amount"]), 3.5)
 	# Grant tool ownership — or level up if already owned
 	if reward_tool_unlock != "" and GameManager.tools_owned.has(reward_tool_unlock):
 		if GameManager.tools_owned[reward_tool_unlock]["owned"]:

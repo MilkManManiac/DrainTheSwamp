@@ -18,6 +18,10 @@ var money_tween: Tween = null
 # Phase 6A: Stamina gradient fill style
 var stamina_fill_style: StyleBoxFlat = null
 
+# Cave air (swamp gas) bar — only visible inside caves
+var air_bar: ProgressBar = null
+var air_fill_style: StyleBoxFlat = null
+
 func _ready() -> void:
 	_build_hud_icons()
 	_setup_news_ticker()
@@ -32,6 +36,8 @@ func _ready() -> void:
 	GameManager.swamp_completed.connect(_on_swamp_completed)
 	GameManager.water_carried_changed.connect(_on_water_carried_changed)
 	GameManager.day_changed.connect(_on_day_changed)
+	_setup_air_bar()
+	GameManager.cave_air_changed.connect(_on_cave_air_changed)
 
 	menu_button.pressed.connect(func() -> void: menu_pressed.emit())
 
@@ -47,6 +53,48 @@ func _ready() -> void:
 
 func _process(_delta: float) -> void:
 	_update_day_label()
+
+func _setup_air_bar() -> void:
+	air_bar = ProgressBar.new()
+	air_bar.custom_minimum_size = Vector2(90, 16)
+	air_bar.show_percentage = false
+	air_bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	air_bar.tooltip_text = "Swamp gas: air remaining before you're forced out"
+	air_fill_style = StyleBoxFlat.new()
+	air_fill_style.bg_color = Color(0.35, 0.8, 0.85)
+	air_fill_style.corner_radius_top_left = 2
+	air_fill_style.corner_radius_top_right = 2
+	air_fill_style.corner_radius_bottom_left = 2
+	air_fill_style.corner_radius_bottom_right = 2
+	var bg := StyleBoxFlat.new()
+	bg.bg_color = Color(0.10, 0.14, 0.16, 0.85)
+	bg.corner_radius_top_left = 2
+	bg.corner_radius_top_right = 2
+	bg.corner_radius_bottom_left = 2
+	bg.corner_radius_bottom_right = 2
+	air_bar.add_theme_stylebox_override("fill", air_fill_style)
+	air_bar.add_theme_stylebox_override("background", bg)
+	var hbox: HBoxContainer = stamina_bar.get_parent()
+	hbox.add_child(air_bar)
+	hbox.move_child(air_bar, stamina_bar.get_index() + 1)
+	air_bar.visible = GameManager.in_cave
+	if GameManager.in_cave:
+		_on_cave_air_changed(GameManager.cave_air, GameManager.cave_air_max)
+
+func _on_cave_air_changed(current: float, maximum: float) -> void:
+	if not GameManager.in_cave or maximum <= 0.0:
+		air_bar.visible = false
+		return
+	air_bar.visible = true
+	air_bar.max_value = maximum
+	air_bar.value = current
+	var ratio: float = current / maximum
+	if ratio < 0.2:
+		air_fill_style.bg_color = Color(0.95, 0.30, 0.25)
+	elif ratio < 0.45:
+		air_fill_style.bg_color = Color(0.95, 0.72, 0.25)
+	else:
+		air_fill_style.bg_color = Color(0.35, 0.8, 0.85)
 
 func _update_day_label() -> void:
 	var t: float = GameManager.cycle_progress
