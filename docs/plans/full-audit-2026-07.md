@@ -18,6 +18,41 @@
 >   contextual onboarding hints. REMAINING in Phase 2: item 9 (music/ambient — needs a
 >   listening session, not automatable headless) and the fuller prestige mechanic-unlock
 >   ladder (P1 pump discount shipped; P2-P4 pending design with story tie-in).
+>
+> **NEXT SESSION — start here**
+> 1. **Playtest feedback first.** Phase 2 shipped unplayed (curves, pumps, air meter,
+>    Overflow Valve, east tower). Get the user's read on: hold-to-scoop feel, stamina,
+>    murk-grade brightness in real play, pump pacing/cost, cave air timing (90s+30s),
+>    Daring Bonus clarity. Tune numbers from specific moments, not vibes.
+>    Also do one windowed sanity pass: pump prop renders at a pool rim, air bar shows in
+>    caves, tower spawns after Bog (all verified headless only so far).
+> 2. **Music/ambient** (Phase 2 item 9, the last CRITICAL silence). Music bus exists
+>    (audio_manager.gd:78). Decide procedural vs licensed loops WITH the user listening.
+>    Minimum: overworld day / night / cave ambient beds + one melodic loop.
+> 3. **Phase 3 (story week)** — all prerequisites in place:
+>    a. Walk-to-the-island ending: stop `_trigger_endgame()` firing on pool-9 completion;
+>       release the player onto the seabed; trigger at the existing `jeff_area`
+>       (`player_near_jeff` game_world.gd — currently dead code); binary choice
+>       ("Hand over the List / Swing") branching the final newspapers (CIA set exists,
+>       write ~2 NA papers).
+>    b. Minimum-viable NA phone: reuse `SceneManager.show_lore_popup` as
+>       "MESSAGE RECEIVED — a Friend"; ~12 texts from story-rework.md on existing
+>       triggers (first sell, pools 1/3/5/7, first prestige, first lore read).
+>    c. Fuse NA into prestige fiction: SELL OUT confirm = NA text; one handler line per
+>       prestige upgrade tooltip; make the town dropbox interactable (lore_wall Area2D
+>       pattern) — teaser pre-reveal, NA dispensary post-prestige.
+>    d. Feed high-frequency surfaces: ticker mix 2 generic/4 stage (news_ticker.gd:93),
+>       milestone-popup one-liners, Guest List rewrite (mariana_trench.gd:104),
+>       prestige-aware newspaper variant. Re-enable the ticker throttled (hud.gd:201).
+>    e. Update story-rework.md: Goodwell kept-but-demoted; agency name is
+>       Northwind Analytics everywhere.
+> 4. **Phase 4 quick wins when touching those files anyway**: town.gd extraction +
+>    shared VisualFX helper (2-4h, pixel-diff with DTS_SHOT); verify touch input
+>    (`emulate_mouse_from_touch=false` likely breaks all Control taps,
+>    touch_controls.gd:176); shop in-place refresh instead of 0.3s rebuild.
+> 5. **Deferred**: ArtGen hero-prop pilot (needs ComfyUI + user seed picks); controller
+>    support; achievements/stats screen; god-file split; web perf pass; merge to master +
+>    web deploy when the user calls the build good.
 
 Produced from five parallel audit tracks on branch `v2-2d-polish` (37 commits ahead of master):
 four specialist code audits (gameplay/economy, story/writing, UX/UI, architecture) plus a
