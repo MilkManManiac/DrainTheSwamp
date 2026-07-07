@@ -64,7 +64,7 @@ func _setup_cave() -> void:
 	# CanvasModulate — moody but readable. Lifted further so the back wall + parallax
 	# layers read as lit rock instead of a flat dark void.
 	var modulate := CanvasModulate.new()
-	modulate.color = Color(0.54, 0.56, 0.63)
+	modulate.color = Color(0.66, 0.68, 0.75)
 	add_child(modulate)
 
 	_setup_cave_hdr()
@@ -224,10 +224,10 @@ func _build_ambient_fill_lights() -> void:
 		# Fill tinted toward the biome glow so the back wall reads as lit rock, not gray
 		fill_light.color = (fog["fill"] as Color)
 		fill_light.blend_mode = PointLight2D.BLEND_MODE_ADD
-		fill_light.energy = 0.9
+		fill_light.energy = 1.2
 		fill_light.shadow_enabled = false
 		fill_light.texture = _make_radial_light_texture()
-		fill_light.texture_scale = randf_range(2.2, 3.0)
+		fill_light.texture_scale = randf_range(2.6, 3.4)
 		fill_light.z_index = -2
 		add_child(fill_light)
 
@@ -242,7 +242,7 @@ func _build_cave_post_processing() -> void:
 	cave_post_process_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var mat := ShaderMaterial.new()
 	mat.shader = POST_PROCESS_SHADER
-	mat.set_shader_parameter("vignette_strength", 0.22)
+	mat.set_shader_parameter("vignette_strength", 0.14)
 	# Was "bloom_strength" (not a real uniform) — fixed. Real HDR glow handles bloom on
 	# desktop; fall back to the shader's single-pass bloom on GL Compatibility (web).
 	mat.set_shader_parameter("bloom_threshold", 0.6)
@@ -253,7 +253,7 @@ func _build_cave_post_processing() -> void:
 	mat.set_shader_parameter("film_grain_strength", 0.04)
 	mat.set_shader_parameter("dither_levels", 14.0)
 	mat.set_shader_parameter("dither_strength", 0.4)
-	mat.set_shader_parameter("night_factor", 0.05)
+	mat.set_shader_parameter("night_factor", 0.0)
 	mat.set_shader_parameter("warmth", -0.01)
 	mat.set_shader_parameter("time", 0.0)
 	cave_post_process_rect.material = mat
@@ -331,12 +331,14 @@ func _build_walls() -> void:
 	if cave_terrain_points.size() < 2 or cave_ceiling_points.size() < 2:
 		return
 
+	# Walls are 420px thick so any camera position (or overshoot) sees solid rock
+	# beyond the cave mouth, never unpainted void.
 	var left_x: float = cave_terrain_points[0].x
 	var left_wall_pts: PackedVector2Array = PackedVector2Array([
-		Vector2(left_x - 20, cave_ceiling_points[0].y - 10),
+		Vector2(left_x - 420, cave_ceiling_points[0].y - 240),
 		Vector2(left_x, cave_ceiling_points[0].y),
 		Vector2(left_x, cave_terrain_points[0].y),
-		Vector2(left_x - 20, cave_terrain_points[0].y + 10),
+		Vector2(left_x - 420, cave_terrain_points[0].y + 240),
 	])
 	var left_wall := Polygon2D.new()
 	left_wall.polygon = left_wall_pts
@@ -349,8 +351,8 @@ func _build_walls() -> void:
 	var right_x: float = cave_terrain_points[cave_terrain_points.size() - 1].x
 	var right_wall_pts: PackedVector2Array = PackedVector2Array([
 		Vector2(right_x, cave_ceiling_points[cave_ceiling_points.size() - 1].y),
-		Vector2(right_x + 20, cave_ceiling_points[cave_ceiling_points.size() - 1].y - 10),
-		Vector2(right_x + 20, cave_terrain_points[cave_terrain_points.size() - 1].y + 10),
+		Vector2(right_x + 420, cave_ceiling_points[cave_ceiling_points.size() - 1].y - 240),
+		Vector2(right_x + 420, cave_terrain_points[cave_terrain_points.size() - 1].y + 240),
 		Vector2(right_x, cave_terrain_points[cave_terrain_points.size() - 1].y),
 	])
 	var right_wall := Polygon2D.new()
@@ -1910,7 +1912,9 @@ func _spawn_player() -> void:
 	player_ref = PLAYER_SCENE.instantiate()
 	var left_x: float = cave_terrain_points[0].x
 	var floor_y: float = cave_terrain_points[0].y
-	player_ref.position = Vector2(left_x + 24, floor_y - 20)
+	# Spawn deep enough that the entry wall sits at the screen edge instead of
+	# mid-frame (at +24 the clamped camera showed a half-screen of black void).
+	player_ref.position = Vector2(left_x + 90, floor_y - 20)
 	add_child(player_ref)
 
 # --- Camera ---
@@ -1936,6 +1940,11 @@ func _setup_camera() -> void:
 	cam.position_smoothing_speed = 5.0
 	if player_ref:
 		player_ref.add_child(cam)
+		# The player scene ships its own Camera2D (overworld limits) which entered
+		# the tree first and stays current — without this, THIS camera never
+		# activates and the cave view is clamped by overworld limits (black void
+		# past the entrance wall at spawn).
+		cam.make_current()
 
 # --- Virtual: override in subclass ---
 func _setup_loot_and_lore() -> void:
