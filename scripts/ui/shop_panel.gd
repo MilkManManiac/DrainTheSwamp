@@ -683,6 +683,9 @@ func _get_tool_tooltip(tid: String, defn: Dictionary, owned_data: Dictionary) ->
 		if defn["type"] == "manual":
 			next_output *= GameManager.get_stat_value("scoop_power")
 			cur_cmp *= GameManager.get_stat_value("scoop_power")
+		elif defn["type"] == "semi_auto":
+			next_output *= sqrt(GameManager.get_stat_value("scoop_power"))
+			cur_cmp *= sqrt(GameManager.get_stat_value("scoop_power"))
 		var gain_pct: float = (next_output / maxf(cur_cmp, 0.000001) - 1.0) * 100.0
 		if defn["type"] == "semi_auto":
 			tip += "\nNext Lv%d: %.4f gal/s (+%.0f%%)" % [level + 1, next_output, gain_pct]
@@ -830,14 +833,14 @@ func _build_camel_section() -> void:
 	camel_info.add_theme_constant_override("shadow_offset_x", 2)
 	camel_info.add_theme_constant_override("shadow_offset_y", 2)
 	if GameManager.camel_count > 0:
-		camel_info.text = "Camel (Cap: %.1fg, Spd: %.0f)" % [GameManager.get_camel_capacity(), GameManager.get_camel_speed()]
+		camel_info.text = "Camels x%d (Cap: %.1fg, Spd: %.0f)" % [GameManager.camel_count, GameManager.get_camel_capacity(), GameManager.get_camel_speed()]
 		camel_info.add_theme_color_override("font_color", Color(0.85, 0.7, 0.4))
 	else:
 		camel_info.text = "Camel (auto-sell carrier)"
 		camel_info.add_theme_color_override("font_color", Color(0.6, 0.5, 0.35))
 	camel_buy_row.add_child(camel_info)
 
-	if GameManager.camel_count >= 1:
+	if GameManager.camel_count >= GameManager.CAMEL_MAX_COUNT:
 		var max_label := Label.new()
 		max_label.text = "[MAX]"
 		max_label.add_theme_font_size_override("font_size", 14)
@@ -862,8 +865,8 @@ func _build_camel_section() -> void:
 		camel_tip += "Walks to you, picks up water,\ncarries it to the shop and sells.\n"
 		camel_tip += "Cost: %s" % Economy.format_money(GameManager.get_camel_cost())
 	else:
-		camel_tip += "Capacity: %.1f gal | Speed: %.0f px/s\n" % [GameManager.get_camel_capacity(), GameManager.get_camel_speed()]
-		camel_tip += "Max 1 camel."
+		camel_tip += "Capacity: %.1f gal (25%% of yours) | Speed: %.0f px/s\n" % [GameManager.get_camel_capacity(), GameManager.get_camel_speed()]
+		camel_tip += "Max %d camels." % GameManager.CAMEL_MAX_COUNT
 	camel_buy_panel.tooltip_text = camel_tip
 	camel_buy_panel.mouse_filter = Control.MOUSE_FILTER_PASS
 	camel_buy_panel.add_child(camel_buy_row)
@@ -897,7 +900,7 @@ func _build_camel_section() -> void:
 		cap_btn.text = "Cap Lv%d %s" % [GameManager.camel_capacity_level + 1, Economy.format_money(cap_cost)]
 		cap_btn.custom_minimum_size = Vector2(130, 0)
 		var cur_cap: float = GameManager.get_camel_capacity()
-		var next_cap: float = 1.0 * pow(1.25, GameManager.camel_capacity_level + 1)
+		var next_cap: float = cur_cap * 1.25
 		cap_btn.tooltip_text = "Camel Capacity Lv%d\nCurrent: %.1f gal\nNext: %.1f gal (+25%%)\nCost: %s" % [GameManager.camel_capacity_level, cur_cap, next_cap, Economy.format_money(cap_cost)]
 		if GameManager.money < cap_cost:
 			cap_btn.disabled = true

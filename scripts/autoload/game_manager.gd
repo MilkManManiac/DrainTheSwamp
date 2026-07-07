@@ -30,13 +30,10 @@ signal pump_changed(swamp_index: int, level: int)
 # pending influence = floor(sqrt(lifetime_earnings / PRESTIGE_SCALE)).
 # Selling-money to complete each early swamp (gallons*money_per_gallon + reward):
 #   Puddle ~175, Pond ~3K, Marsh ~60K, Bog ~1.5M, Swamp ~30M.
-# Cumulative: through Bog (4 swamps) ~1.56M, through Swamp (5 swamps) ~31.5M.
-# With SCALE = 1,000,000: first influence (can_prestige) lands mid-Bog, and
-# finishing the Swamp yields floor(sqrt(31.5)) = 5 influence — a satisfying
-# first payout in the 3-5 target band.
-# 250K => first prestige around mid-Bog yields ~2 Influence, enough to actually
-# buy a first upgrade (at 1M the intended first prestige earned 1 while the
-# cheapest upgrade cost 2 — the system was dead on arrival).
+# With SCALE = 250K: first prestige lands mid-Bog at ~2 Influence — enough to
+# buy a first upgrade (at the old 1M scale the first payout was 1 while the
+# cheapest upgrade cost 2, so the system was dead on arrival). Finishing the
+# Swamp yields ~11.
 const PRESTIGE_SCALE: float = 250_000.0
 
 # --- Swamp Definitions ---
@@ -237,10 +234,11 @@ const HOSE_DURATION: float = 20.0
 
 # Camel constants
 const CAMEL_BASE_COST: float = 500.0
-const CAMEL_COST_EXPONENT: float = 1.5
+const CAMEL_COST_EXPONENT: float = 10.0   # 500 / 5K / 50K for camels 1/2/3
+const CAMEL_MAX_COUNT: int = 3
 const CAMEL_CAPACITY_UPGRADE_BASE: float = 50.0
 const CAMEL_SPEED_UPGRADE_BASE: float = 200.0
-const CAMEL_UPGRADE_EXPONENT: float = 1.35
+const CAMEL_UPGRADE_EXPONENT: float = 1.25  # was 1.35 (> value growth = worsening deal)
 const CAMEL_SPEED_MAX_LEVEL: int = 8
 
 # Camel state
@@ -295,16 +293,16 @@ var touch_controls_enabled: bool = false
 
 # --- Cave Definitions ---
 const CAVE_DEFINITIONS: Dictionary = {
-	"muddy_hollow": {"name": "Muddy Hollow", "swamp_index": 0, "drain_threshold": 0.0, "scene_path": "res://scenes/caves/muddy_hollow.tscn", "order": 0},
-	"gator_den": {"name": "Gator Den", "swamp_index": 1, "drain_threshold": 0.0, "scene_path": "res://scenes/caves/gator_den.tscn", "order": 1},
-	"the_sinkhole": {"name": "The Sinkhole", "swamp_index": 2, "drain_threshold": 0.0, "scene_path": "res://scenes/caves/the_sinkhole.tscn", "order": 2},
-	"collapsed_mine": {"name": "Collapsed Mine", "swamp_index": 3, "drain_threshold": 0.0, "scene_path": "res://scenes/caves/collapsed_mine.tscn", "order": 3},
-	"the_mire": {"name": "The Mire", "swamp_index": 4, "drain_threshold": 0.0, "scene_path": "res://scenes/caves/the_mire.tscn", "order": 4},
-	"sunken_grotto": {"name": "Sunken Grotto", "swamp_index": 5, "drain_threshold": 0.0, "scene_path": "res://scenes/caves/sunken_grotto.tscn", "order": 5},
-	"the_cistern": {"name": "The Cistern", "swamp_index": 6, "drain_threshold": 0.0, "scene_path": "res://scenes/caves/the_cistern.tscn", "order": 6},
-	"coral_cavern": {"name": "Coral Cavern", "swamp_index": 7, "drain_threshold": 0.0, "scene_path": "res://scenes/caves/coral_cavern.tscn", "order": 7},
-	"the_underdark": {"name": "The Underdark", "swamp_index": 8, "drain_threshold": 0.0, "scene_path": "res://scenes/caves/the_underdark.tscn", "order": 8},
-	"mariana_trench": {"name": "Mariana Trench", "swamp_index": 9, "drain_threshold": 0.0, "scene_path": "res://scenes/caves/mariana_trench.tscn", "order": 9},
+	"muddy_hollow": {"name": "Muddy Hollow", "swamp_index": 0, "drain_threshold": 0.5, "scene_path": "res://scenes/caves/muddy_hollow.tscn", "order": 0},
+	"gator_den": {"name": "Gator Den", "swamp_index": 1, "drain_threshold": 0.5, "scene_path": "res://scenes/caves/gator_den.tscn", "order": 1},
+	"the_sinkhole": {"name": "The Sinkhole", "swamp_index": 2, "drain_threshold": 0.5, "scene_path": "res://scenes/caves/the_sinkhole.tscn", "order": 2},
+	"collapsed_mine": {"name": "Collapsed Mine", "swamp_index": 3, "drain_threshold": 0.5, "scene_path": "res://scenes/caves/collapsed_mine.tscn", "order": 3},
+	"the_mire": {"name": "The Mire", "swamp_index": 4, "drain_threshold": 0.5, "scene_path": "res://scenes/caves/the_mire.tscn", "order": 4},
+	"sunken_grotto": {"name": "Sunken Grotto", "swamp_index": 5, "drain_threshold": 0.5, "scene_path": "res://scenes/caves/sunken_grotto.tscn", "order": 5},
+	"the_cistern": {"name": "The Cistern", "swamp_index": 6, "drain_threshold": 0.5, "scene_path": "res://scenes/caves/the_cistern.tscn", "order": 6},
+	"coral_cavern": {"name": "Coral Cavern", "swamp_index": 7, "drain_threshold": 0.5, "scene_path": "res://scenes/caves/coral_cavern.tscn", "order": 7},
+	"the_underdark": {"name": "The Underdark", "swamp_index": 8, "drain_threshold": 0.5, "scene_path": "res://scenes/caves/the_underdark.tscn", "order": 8},
+	"mariana_trench": {"name": "Mariana Trench", "swamp_index": 9, "drain_threshold": 0.5, "scene_path": "res://scenes/caves/mariana_trench.tscn", "order": 9},
 }
 
 # Cave state
@@ -425,9 +423,13 @@ func get_tool_raw_output_at_level(tool_id: String, level: int) -> float:
 func get_tool_output(tool_id: String) -> float:
 	var level: int = tools_owned[tool_id]["level"]
 	var raw: float = get_tool_raw_output_at_level(tool_id, level)
-	# Apply scoop power multiplier for manual tools
+	# Apply scoop power multiplier for manual tools; semi-auto (hose) gets the
+	# square root so automation benefits from stats without beating manual play
+	# (fully excluded, the hose was strictly worse than a mid-tier shovel).
 	if tool_definitions[tool_id]["type"] == "manual":
 		raw *= get_stat_value("scoop_power")
+	elif tool_definitions[tool_id]["type"] == "semi_auto":
+		raw *= sqrt(get_stat_value("scoop_power"))
 	# Prestige: Muscle boosts all scoop output globally (multiplicative, see Kickback)
 	raw *= pow(1.25, prestige_upgrades["muscle"])
 	return raw
@@ -733,7 +735,10 @@ func get_camel_cost() -> float:
 	return CAMEL_BASE_COST * pow(CAMEL_COST_EXPONENT, camel_count)
 
 func get_camel_capacity() -> float:
-	return 1.0 * pow(1.25, camel_capacity_level)
+	# Scales with the player's own capacity (25% of it) so camels never become
+	# obsolete relics (a fixed 1 gal base was dead on arrival by mid-game).
+	var base: float = maxf(get_stat_value("carrying_capacity") * 0.25, 1.0)
+	return base * pow(1.25, camel_capacity_level)
 
 func get_camel_speed() -> float:
 	return 35.0 * pow(1.20, camel_speed_level)
@@ -803,7 +808,7 @@ func buy_upgrade(upgrade_id: String) -> bool:
 
 # --- Camel actions ---
 func buy_camel() -> bool:
-	if not camel_unlocked or camel_count >= 1:
+	if not camel_unlocked or camel_count >= CAMEL_MAX_COUNT:
 		return false
 	var cost: float = get_camel_cost()
 	if money < cost:
