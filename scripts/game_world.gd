@@ -695,14 +695,20 @@ func _build_parallax() -> void:
 	sky_layer = ParallaxLayer.new()
 	sky_layer.motion_scale = Vector2(0, 0)
 	parallax_bg.add_child(sky_layer)
+	# Band layers are Y-pinned (motion_scale.y ~= 0) and authored for the original
+	# camera offset (0,-20); the +35 motion_offset re-seats them for the raised
+	# framing (camera offset 0,-55) so their bottom edge stays below the ground line.
 	far_hills_layer = ParallaxLayer.new()
 	far_hills_layer.motion_scale = Vector2(0.1, 0.03)
+	far_hills_layer.motion_offset = Vector2(0, 35)
 	parallax_bg.add_child(far_hills_layer)
 	near_hills_layer = ParallaxLayer.new()
 	near_hills_layer.motion_scale = Vector2(0.3, 0.05)
+	near_hills_layer.motion_offset = Vector2(0, 35)
 	parallax_bg.add_child(near_hills_layer)
 	treeline_layer = ParallaxLayer.new()
 	treeline_layer.motion_scale = Vector2(0.6, 0)
+	treeline_layer.motion_offset = Vector2(0, 35)
 	parallax_bg.add_child(treeline_layer)
 	# Foreground silhouette layer — passes faster than the world to frame the shot.
 	foreground_layer = ParallaxLayer.new()
@@ -747,8 +753,8 @@ func _build_sky() -> void:
 
 	sky_texture_rect = TextureRect.new()
 	sky_texture_rect.texture = sky_gradient
-	sky_texture_rect.position = Vector2(-100, -80)
-	sky_texture_rect.size = Vector2(world_w + 200, sky_bottom + 80)
+	sky_texture_rect.position = Vector2(-900, -160)
+	sky_texture_rect.size = Vector2(world_w + 1100, sky_bottom + 160)
 	sky_texture_rect.stretch_mode = TextureRect.STRETCH_SCALE
 	sky_texture_rect.z_index = -12
 	sky_layer.add_child(sky_texture_rect)

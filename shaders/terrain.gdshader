@@ -87,6 +87,26 @@ void fragment() {
 	float blotch = fbm(world_pos * 0.012 + 17.0) - 0.5;
 	col.rgb += blotch * fbm_strength * 0.7;
 
+	// Broad geological strata: noise-warped horizontal bands (sandy clay / cool
+	// loam / dark peat) so the underground cross-section reads as material, not
+	// one flat brown mass.
+	float strata_pos = world_pos.y * 0.018 + noise(vec2(world_pos.x * 0.004, world_pos.y * 0.010)) * 1.4;
+	float band_id = mod(floor(strata_pos), 3.0);
+	vec3 band_tint = vec3(1.05, 0.99, 0.90);          // sandy clay: warm, lighter
+	if (band_id >= 0.5 && band_id < 1.5) {
+		band_tint = vec3(0.95, 0.97, 1.04);           // cool loam
+	} else if (band_id >= 1.5) {
+		band_tint = vec3(0.88, 0.85, 0.84);           // dark peat
+	}
+	float band_f = fract(strata_pos);
+	float band_soft = smoothstep(0.0, 0.18, band_f) * smoothstep(1.0, 0.82, band_f);
+	col.rgb *= mix(vec3(1.0), band_tint, 0.35 + 0.65 * band_soft);
+
+	// Occasional buried stones: sparse dark rounded specks
+	float rock_n = noise(world_pos * 0.09);
+	float rock = smoothstep(0.80, 0.86, rock_n);
+	col.rgb = mix(col.rgb, col.rgb * 0.70 + vec3(0.035), rock * 0.8);
+
 	// Vertical depth-darkening: deeper soil (larger world-Y below surface) is darker.
 	if (surface_y > -90000.0) {
 		float d = clamp((world_pos.y - surface_y) / depth_range, 0.0, 1.0);
