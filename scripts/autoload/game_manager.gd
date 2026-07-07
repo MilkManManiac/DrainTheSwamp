@@ -118,6 +118,10 @@ var tool_definitions: Dictionary = {
 	}
 }
 
+# Current save-format version. Bump when the save structure changes; SaveManager
+# uses this to detect saves written by a NEWER build (Steam Cloud downgrade case).
+const SAVE_VERSION: int = 18
+
 # --- Stat Definitions ---
 var stat_definitions: Dictionary = {
 	# --- Core Stats (cheap, QoL) ---
@@ -142,7 +146,7 @@ var stat_definitions: Dictionary = {
 	},
 	"stamina": {
 		"name": "Stamina",
-		"base_value": 10.0,
+		"base_value": 20.0,
 		"growth_rate": 1.15,
 		"scale": "exponential",
 		"base_cost": 10.0,
@@ -151,7 +155,7 @@ var stat_definitions: Dictionary = {
 	},
 	"stamina_regen": {
 		"name": "Stamina Regen",
-		"base_value": 2.0,
+		"base_value": 3.0,
 		"growth_rate": 1.15,
 		"scale": "exponential",
 		"base_cost": 12.0,
@@ -1079,7 +1083,7 @@ func get_save_data() -> Dictionary:
 		cave_pool_save[cave_id] = pools
 
 	return {
-		"version": 18,
+		"version": SAVE_VERSION,
 		"money": money,
 		"influence": influence,
 		"lifetime_earnings": lifetime_earnings,

@@ -274,9 +274,14 @@ func _physics_process(delta: float) -> void:
 	# Stamina regen
 	GameManager.regen_stamina(delta)
 
-	# Manual scoop: single press (skip if UI panel is open)
-	if Input.is_action_just_pressed("scoop") and scoop_cooldown_timer <= 0.0 and not ui_panel_open:
-		_handle_scoop()
+	# Manual scoop (skip if UI panel is open). A fresh press goes through the full
+	# handler (shop/cave entrance/water); HOLDING the key repeats water scooping only,
+	# so carrying the button held past a shop or cave entrance never triggers them.
+	if scoop_cooldown_timer <= 0.0 and not ui_panel_open:
+		if Input.is_action_just_pressed("scoop"):
+			_handle_scoop()
+		elif Input.is_action_pressed("scoop"):
+			_auto_scoop_water()
 
 	# Auto-scoop: only near water/cave pool, only when standing still for 3s, only scoops (never shop/pump/cave)
 	var auto_interval: float = GameManager.get_auto_scoop_interval()

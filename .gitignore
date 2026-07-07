@@ -3,6 +3,7 @@
 
 # Exported builds
 export/
+build/
 *.pck
 *.zip
 

@@ -18,14 +18,14 @@ jobs:
   export:
     runs-on: ubuntu-latest
     container:
-      image: barichello/godot-ci:4.4
+      image: barichello/godot-ci:4.6.3
     steps:
       - uses: actions/checkout@v4
 
       - name: Setup export templates
         run: |
-          mkdir -p /github/home/.local/share/godot/export_templates/4.4.stable
-          cp /root/.local/share/godot/export_templates/4.4.stable/* /github/home/.local/share/godot/export_templates/4.4.stable/
+          mkdir -p /github/home/.local/share/godot/export_templates/4.6.3.stable
+          cp /root/.local/share/godot/export_templates/4.6.3.stable/* /github/home/.local/share/godot/export_templates/4.6.3.stable/
 
       - name: Import project
         run: godot --headless --import 2>&1 || true

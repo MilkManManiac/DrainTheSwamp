@@ -222,10 +222,11 @@ func _build_menu(vp_size: Vector2) -> void:
 	btn_continue.visible = FileAccess.file_exists("user://save_data.json")
 	menu_vbox.add_child(btn_continue)
 
-	# Test Endgame (dev tool)
-	var btn_test_endgame := _create_menu_button("Test Endgame", Color(1.0, 0.3, 0.3))
-	btn_test_endgame.pressed.connect(_on_test_endgame)
-	menu_vbox.add_child(btn_test_endgame)
+	# Test Endgame (dev tool — hidden in release/exported builds)
+	if OS.is_debug_build():
+		var btn_test_endgame := _create_menu_button("Test Endgame", Color(1.0, 0.3, 0.3))
+		btn_test_endgame.pressed.connect(_on_test_endgame)
+		menu_vbox.add_child(btn_test_endgame)
 
 	# Quit
 	btn_quit = _create_menu_button("Quit", Color(0.6, 0.6, 0.6))

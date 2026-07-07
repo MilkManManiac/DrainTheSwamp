@@ -4914,7 +4914,9 @@ func _on_swamp_completed(swamp_index: int, reward: float) -> void:
 			var sabotage_amount: float = next_total * 0.07  # 7% add-back
 			GameManager.swamp_states[next_pool]["gallons_drained"] = maxf(
 				GameManager.swamp_states[next_pool]["gallons_drained"] - sabotage_amount, 0.0)
-			GameManager.water_level_changed.emit(next_pool)
+			GameManager.water_level_changed.emit(next_pool, GameManager.get_swamp_water_percent(next_pool))
+			# Tell the player WHY the next pool just refilled — this is the satire beat.
+			SceneManager.show_popup("EMERGENCY WATER REROUTING IN EFFECT\n— courtesy of your government", 4.0)
 			# Visual feedback — screen shake + splash
 			_screen_shake(2.0, 0.2)
 	# Show reward text

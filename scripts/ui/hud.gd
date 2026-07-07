@@ -80,13 +80,13 @@ func _on_money_changed(amount: float) -> void:
 		displayed_money = val
 		money_label.text = Economy.format_money(val)
 	, displayed_money, amount, 0.3)
-	# Golden pulse on big earnings
+	# Golden pulse on big earnings (restore to the label's base gold, not green)
 	if delta_money > 10.0:
-		money_label.add_theme_color_override("font_color", Color(1.0, 0.9, 0.3))
+		money_label.add_theme_color_override("font_color", Color(1.0, 1.0, 0.55))
 		var glow_tw := create_tween()
 		glow_tw.tween_interval(0.15)
 		glow_tw.tween_callback(func() -> void:
-			money_label.add_theme_color_override("font_color", Color(0.3, 1.0, 0.4))
+			money_label.add_theme_color_override("font_color", Color(1.0, 0.9, 0.3))
 		)
 
 func _on_water_level_changed(_swamp_index: int, _percent: float) -> void:
