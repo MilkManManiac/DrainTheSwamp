@@ -294,6 +294,13 @@ var wanted_poster: Node2D = null
 # Helicopter
 var helicopter_timer: float = 0.0
 var helicopter_active: Node2D = null
+
+# Town glow elements (window glass / lamp flames / string bulbs) lerped between a
+# day (unlit) and night (emissive) color by time-of-day — lit windows at noon made
+# the whole town read as a night scene.
+var town_glow_rects: Array = []          # [{node: ColorRect, day: Color, night: Color}]
+var town_glow_point_lights: Array = []   # [{node: PointLight2D, energy: float}]
+var _town_glow_last: float = -1.0
 # Second pass visuals
 var moon: Node2D = null
 var moon_glow: Sprite2D = null
@@ -768,8 +775,10 @@ func _build_sky() -> void:
 	mat.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
 	horizon_glow.material = mat
 	var half_vp: float = get_viewport_rect().size.x / 2.0
-	horizon_glow.add_point(Vector2(-200, 86))
-	horizon_glow.add_point(Vector2(world_w + 200, 86))
+	# Sky layer is viewport-anchored (motion_scale 0,0): y is logical-screen space.
+	# 168 hugs the treeline horizon under the raised camera framing.
+	horizon_glow.add_point(Vector2(-200, 168))
+	horizon_glow.add_point(Vector2(world_w + 200, 168))
 	sky_layer.add_child(horizon_glow)
 
 func _make_disc(radius: float, segs: int = 32) -> PackedVector2Array:
@@ -4999,7 +5008,7 @@ func _build_shop() -> void:
 	var shop_y: float = 136.0  # Shore ground level
 
 	# Hardware (Swamp Mike's) storefront — built with the shared painterly town helper.
-	_town_building(sx, shop_y, 46.0, 42.0, Color(0.46, 0.34, 0.22), Color(0.46, 0.24, 0.16), "HARDWARE", Color(1.0, 0.86, 0.4), 0)
+	_town_building(sx, shop_y, 46.0, 42.0, Color(0.68, 0.52, 0.34), Color(0.52, 0.28, 0.18), "HARDWARE", Color(1.0, 0.86, 0.4), 0)
 
 	# "SELL" indicator (sell point; will move to the water tower in a later pass)
 	var sell_lbl := Label.new()
@@ -5140,11 +5149,13 @@ func _build_town() -> void:
 		plank.z_index = 1
 		add_child(plank)
 	# --- Main street buildings, spread out (Hardware is built in _build_shop at ~-22) ---
+	# Weathered-but-sunlit paint: values high enough to read as daylight walls
+	# (the old 0.35-0.40 walls rendered as night silhouettes at noon).
 	var buildings: Array = [
-		{"x": -130.0, "w": 44.0, "h": 36.0, "wall": Color(0.40, 0.36, 0.28), "roof": Color(0.30, 0.20, 0.16), "sign": "DINER", "sc": Color(1.0, 0.84, 0.5), "style": 1},
-		{"x": -240.0, "w": 40.0, "h": 44.0, "wall": Color(0.37, 0.31, 0.31), "roof": Color(0.34, 0.27, 0.23), "sign": "PAWN", "sc": Color(1.0, 0.9, 0.45), "style": 2},
-		{"x": -345.0, "w": 46.0, "h": 38.0, "wall": Color(0.39, 0.36, 0.24), "roof": Color(0.30, 0.34, 0.22), "sign": "OUTFITTER", "sc": Color(0.95, 0.88, 0.6), "style": 0},
-		{"x": -448.0, "w": 40.0, "h": 33.0, "wall": Color(0.35, 0.33, 0.30), "roof": Color(0.26, 0.28, 0.30), "sign": "", "sc": Color(1, 1, 1), "style": 1},
+		{"x": -130.0, "w": 44.0, "h": 36.0, "wall": Color(0.66, 0.58, 0.42), "roof": Color(0.38, 0.26, 0.20), "sign": "DINER", "sc": Color(1.0, 0.84, 0.5), "style": 1},
+		{"x": -240.0, "w": 40.0, "h": 44.0, "wall": Color(0.60, 0.44, 0.40), "roof": Color(0.40, 0.32, 0.27), "sign": "PAWN", "sc": Color(1.0, 0.9, 0.45), "style": 2},
+		{"x": -345.0, "w": 46.0, "h": 38.0, "wall": Color(0.56, 0.60, 0.44), "roof": Color(0.34, 0.38, 0.26), "sign": "OUTFITTER", "sc": Color(0.95, 0.88, 0.6), "style": 0},
+		{"x": -448.0, "w": 40.0, "h": 33.0, "wall": Color(0.58, 0.55, 0.50), "roof": Color(0.32, 0.34, 0.36), "sign": "", "sc": Color(1, 1, 1), "style": 1},
 	]
 	for b in buildings:
 		var gy: float = _get_terrain_y_at(b["x"] + b["w"] * 0.5)
@@ -5299,9 +5310,11 @@ func _town_building(base_x: float, ground_y: float, w: float, h: float, wall_col
 	var glass := ColorRect.new()
 	glass.position = Vector2(wx, wy)
 	glass.size = Vector2(9, 9)
-	glass.color = _emit(Color(1.0, 0.82, 0.46, 0.95), 1.5)
+	var glass_day := Color(0.34, 0.42, 0.50, 0.95)  # cool reflective glass by day
+	glass.color = glass_day
 	glass.z_index = z + 1
 	add_child(glass)
+	town_glow_rects.append({"node": glass, "day": glass_day, "night": _emit(Color(1.0, 0.82, 0.46, 0.95), 1.5)})
 	var mh := ColorRect.new()
 	mh.position = Vector2(wx, wy + 4)
 	mh.size = Vector2(9, 1)
@@ -5324,11 +5337,12 @@ func _town_building(base_x: float, ground_y: float, w: float, h: float, wall_col
 	var winlight := PointLight2D.new()
 	winlight.position = Vector2(wx + 4, wy + 4)
 	winlight.color = Color(1.0, 0.8, 0.5)
-	winlight.energy = 0.5
+	winlight.energy = 0.0
 	winlight.blend_mode = PointLight2D.BLEND_MODE_ADD
 	winlight.texture = _make_light_texture()
 	winlight.texture_scale = 0.5
 	add_child(winlight)
+	town_glow_point_lights.append({"node": winlight, "energy": 0.5})
 	# Moss patch at the base + a climbing vine (weathering)
 	var moss := Polygon2D.new()
 	moss.polygon = PackedVector2Array([
@@ -5515,17 +5529,20 @@ func _town_lamp_post(x: float, ground_y: float) -> void:
 	var flame := ColorRect.new()
 	flame.position = Vector2(x + 4.7, ground_y - 28.5)
 	flame.size = Vector2(3.5, 5)
-	flame.color = _emit(Color(1.0, 0.78, 0.4, 0.95), 2.1)
+	var flame_day := Color(0.30, 0.26, 0.21, 0.9)  # unlit mantle by day
+	flame.color = flame_day
 	flame.z_index = 4
 	add_child(flame)
+	town_glow_rects.append({"node": flame, "day": flame_day, "night": _emit(Color(1.0, 0.78, 0.4, 0.95), 2.1)})
 	var light := PointLight2D.new()
 	light.position = Vector2(x + 6.5, ground_y - 26)
 	light.color = Color(1.0, 0.82, 0.5)
-	light.energy = 0.7
+	light.energy = 0.0
 	light.blend_mode = PointLight2D.BLEND_MODE_ADD
 	light.texture = _make_light_texture()
 	light.texture_scale = 0.9
 	add_child(light)
+	town_glow_point_lights.append({"node": light, "energy": 0.7})
 
 func _town_barrels(x: float, ground_y: float) -> void:
 	for i in range(3):
@@ -5597,9 +5614,12 @@ func _town_string_lights(x0: float, x1: float, y: float) -> void:
 		var bulb := ColorRect.new()
 		bulb.position = Vector2(b.x - 1, b.y)
 		bulb.size = Vector2(2, 3)
-		bulb.color = _emit(warm[i % warm.size()], 2.0)
+		var wcol: Color = warm[i % warm.size()]
+		var bulb_day := Color(wcol.r * 0.42, wcol.g * 0.42, wcol.b * 0.42, 0.9)  # unlit glass
+		bulb.color = bulb_day
 		bulb.z_index = 7
 		add_child(bulb)
+		town_glow_rects.append({"node": bulb, "day": bulb_day, "night": _emit(wcol, 2.0)})
 
 # --- Weather System ---
 func _build_weather() -> void:
@@ -6273,6 +6293,10 @@ func _save_debug_shot() -> void:
 		return
 	var img: Image = tex.get_image()
 	if img != null:
+		# HDR-2D viewports return LINEAR color data; without this conversion every
+		# capture looks gamma-darkened (~x0.5 at midtones) vs what the player sees.
+		if get_viewport().use_hdr_2d:
+			img.linear_to_srgb()
 		img.save_png(_shot_path)
 
 # --- HDR-2D glow (R1, Forward+/Mobile desktop only) ---
@@ -6513,6 +6537,21 @@ func _process(delta: float) -> void:
 	GameManager.cycle_progress = t
 	var tint: Color = _get_cycle_color(t)
 	canvas_modulate.color = tint
+
+	# Town lights: off in daylight, warm from dusk through dawn.
+	var glow_t: float = 0.0
+	if t > 0.62 or t < 0.18:
+		glow_t = 1.0
+	elif t >= 0.55 and t <= 0.62:
+		glow_t = (t - 0.55) / 0.07
+	elif t >= 0.18 and t <= 0.25:
+		glow_t = 1.0 - (t - 0.18) / 0.07
+	if absf(glow_t - _town_glow_last) > 0.01:
+		_town_glow_last = glow_t
+		for gr in town_glow_rects:
+			(gr["node"] as ColorRect).color = (gr["day"] as Color).lerp(gr["night"], glow_t)
+		for gl in town_glow_point_lights:
+			(gl["node"] as PointLight2D).energy = (gl["energy"] as float) * glow_t
 
 	# Update shader uniforms
 	var daytime_val: float = 0.0
@@ -7556,9 +7595,9 @@ func _build_billboards() -> void:
 		crossbar.z_index = 3
 		add_child(crossbar)
 
-		# Sign panel (120x60)
+		# Sign panel (sized so 5-6 wrapped lines at font 6 fit without clipping)
 		var sign_w: float = 120.0
-		var sign_h: float = 60.0
+		var sign_h: float = 68.0
 		var sign_node := Node2D.new()
 		sign_node.position = Vector2(ridge_mid_x, ground_y - post_h - sign_h * 0.5)
 		sign_node.z_index = 3
@@ -7576,6 +7615,7 @@ func _build_billboards() -> void:
 		var lbl := Label.new()
 		lbl.text = billboard_texts[ridge_i]
 		lbl.add_theme_font_size_override("font_size", 6)
+		lbl.add_theme_constant_override("line_spacing", -1)
 		lbl.add_theme_color_override("font_color", Color(0.15, 0.12, 0.10))
 		lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER

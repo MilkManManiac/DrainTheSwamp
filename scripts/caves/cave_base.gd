@@ -128,6 +128,9 @@ func _setup_debug_shot() -> void:
 		if tex:
 			var img: Image = tex.get_image()
 			if img:
+				# HDR-2D viewports return LINEAR data — convert or captures look dark.
+				if get_viewport().use_hdr_2d:
+					img.linear_to_srgb()
 				img.save_png(sp))
 	add_child(st)
 
