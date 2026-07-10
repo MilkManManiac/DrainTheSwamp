@@ -1,17 +1,20 @@
 extends PanelContainer
-# Ambient "Swamp Times" news crawl — a thin scrolling strip under the top HUD bar.
-# Non-interrupting: surfaces escalating satire during the long drain stretches
-# (the funniest writing was previously buried in skippable caves). Lines are
-# picked by total drain progress so the headlines escalate as you drain.
+# Ambient "Swamp Times" headline strip under the top HUD bar. Throttled: one
+# headline every ~45s, faded in and out, so the satire surfaces during long
+# drain stretches without the distraction of a constant crawl (the always-on
+# scroll version was cut for exactly that reason). Lines are picked by total
+# drain progress so the headlines escalate as you drain; a prestige pool joins
+# the mix once you've sold out at least once.
 
-const SPEED: float = 32.0
-const SEP: String = "        •        "  # bullet separator
-const VISIBLE_LINES: int = 6
+const HEADLINE_INTERVAL: float = 45.0
+const FIRST_DELAY: float = 12.0
+const HOLD_TIME: float = 7.0
+const FADE_TIME: float = 0.8
 
-var _clip: Control
 var _label: Label
-var _scroll_x: float = 0.0
-var _text_w: float = 0.0
+var _timer: float = HEADLINE_INTERVAL - FIRST_DELAY
+var _showing: bool = false
+var _last_line: String = ""
 
 var _generic: Array[String] = [
 	"Field operations budget remaining: $500.",
@@ -48,6 +51,11 @@ var _endgame: Array[String] = [
 	"Press conference cancelled; podium found abandoned, still warm.",
 	"It was always going to come back. You drained an ocean anyway.",
 ]
+var _prestige: Array[String] = [
+	"Officials report déjà vu as draining resumes. 'Not this guy again.'",
+	"Northwind Analytics reports 'strong repeat engagement' in the wetlands sector.",
+	"The swamp is back. The drainer is back. The Consultant invoiced both.",
+]
 
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -56,53 +64,56 @@ func _ready() -> void:
 	style.bg_color = Color(0.04, 0.05, 0.07, 0.72)
 	add_theme_stylebox_override("panel", style)
 
-	_clip = Control.new()
-	_clip.clip_contents = true
-	_clip.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_clip.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_clip.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	add_child(_clip)
-
 	_label = Label.new()
 	_label.add_theme_font_size_override("font_size", 10)
 	_label.add_theme_color_override("font_color", Color(0.85, 0.92, 0.8))
 	_label.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.6))
 	_label.add_theme_constant_override("shadow_offset_x", 1)
 	_label.add_theme_constant_override("shadow_offset_y", 1)
+	_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_clip.add_child(_label)
+	add_child(_label)
 
-	_rebuild()
+	modulate.a = 0.0
 
 func _process(delta: float) -> void:
-	if _text_w <= 0.0:
-		_rebuild()
+	if _showing:
 		return
-	_scroll_x -= SPEED * delta
-	_label.position.x = _scroll_x
-	_label.position.y = (size.y - _label.get_minimum_size().y) * 0.5
-	if _scroll_x < -_text_w:
-		_rebuild()
+	_timer += delta
+	if _timer >= HEADLINE_INTERVAL:
+		_timer = 0.0
+		_show_headline()
 
-func _rebuild() -> void:
-	_label.text = _compose()
-	_text_w = _label.get_minimum_size().x
-	_scroll_x = maxf(size.x, 1.0)  # start just off the right edge
-	_label.position.x = _scroll_x
+func _show_headline() -> void:
+	_showing = true
+	_label.text = "SWAMP TIMES — " + _pick_line()
+	var tw := create_tween()
+	tw.tween_property(self, "modulate:a", 1.0, FADE_TIME)
+	tw.tween_interval(HOLD_TIME)
+	tw.tween_property(self, "modulate:a", 0.0, FADE_TIME)
+	tw.tween_callback(func() -> void: _showing = false)
 
-func _compose() -> String:
+func _pick_line() -> String:
 	var pct: float = GameManager.get_total_water_percent()
-	var pool: Array[String] = _generic.duplicate()
+	var stage: Array[String]
 	if pct > 90.0:
-		pool.append_array(_intro)
+		stage = _intro
 	elif pct > 60.0:
-		pool.append_array(_early)
+		stage = _early
 	elif pct > 30.0:
-		pool.append_array(_mid)
+		stage = _mid
 	elif pct > 5.0:
-		pool.append_array(_late)
+		stage = _late
 	else:
-		pool.append_array(_endgame)
-	pool.shuffle()
-	var pick: Array[String] = pool.slice(0, mini(VISIBLE_LINES, pool.size()))
-	return "SWAMP TIMES" + SEP + SEP.join(pick) + SEP
+		stage = _endgame
+	var stage_pool: Array[String] = stage.duplicate()
+	if GameManager.prestige_count > 0:
+		stage_pool.append_array(_prestige)
+	# Weight toward stage lines so the escalation reads; generic fills the gaps.
+	var pool: Array[String] = stage_pool if randf() < 0.7 else _generic
+	var line: String = pool.pick_random()
+	if line == _last_line and pool.size() > 1:
+		line = pool.pick_random()
+	_last_line = line
+	return line

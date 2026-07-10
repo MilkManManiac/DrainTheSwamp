@@ -38,6 +38,48 @@ var endgame_active: bool = false
 var lore_layer: CanvasLayer = null
 var showing_lore: bool = false
 
+# --- Burner phone (Northwind Analytics) ---
+# Texts queue up and wait for a clear screen (no newspaper/lore/transition), so a
+# pool-completion text never fights the milestone newspaper for the same keypress.
+var phone_queue: Array[String] = []
+var phone_cooldown: float = 0.0
+
+# One-shot NA handler texts, keyed by story beat. Each beat is gated by a
+# persisted story flag ("na_text_<key>") so it fires once per save, ever —
+# the handler doesn't reintroduce herself after prestige.
+const NA_TEXTS: Dictionary = {
+	"first_sell": [
+		"First payment cleared. Not from them. From us.\n\nYou do good work. Do not thank me. Just keep draining. The water hides much.\n\n— a Friend"
+	],
+	"pond": [
+		"The puddle, now the pond. The papers say nobody cares. Somebody cares. Somebody bought you this phone.\n\nKeep everything you find in the water. Especially the papers.\n\n— a Friend"
+	],
+	"first_lore": [
+		"The document from the cave. Photograph it. Front and back. Good light, no shadow.\n\nA hobbyist asks. I am the hobbyist.\n\n— a Friend"
+	],
+	"bog": [
+		"Excellent labors, com— friend. My friend.\n\nThe trucks that refill the water at night — we have photographed the drivers. For no reason. We photograph many things.\n\n— a Friend",
+		"Also: the drop box at the west edge of town. It is ours. Check it when the flag is up.\n\nDo not wave back at the flag.\n\n— a Friend"
+	],
+	"lake": [
+		"Funds are not a problem. Buy the bigger bucket. We believe in you like a mother believes in a strong ox.\n\n— a Friend",
+		"A man in town asked about you today. We asked about him. He has stopped asking.\n\nDo not worry about this.\n\n— a Friend"
+	],
+	"lagoon": [
+		"Enough pretense. The containers from the lagoon — Northwind Analytics requires their contents catalogued. You will be compensated. You are always compensated.\n\nNotice this.\n\n— NA",
+		"Your government wants you in a cell. We want you employed.\n\nConsider which is the better retirement plan.\n\n— NA"
+	],
+	"bayou": [
+		"Fourteen officials fled the country this week. Twelve flew with airlines we also own. Business is good.\n\nKeep draining.\n\n— NA"
+	],
+	"atlantic": [
+		"The ocean is gone. There is a list at the bottom. There is an island past it.\n\nBring the List to the island. We will handle everything after. We are very good at handling.\n\n— NA"
+	],
+	"first_prestige": [
+		"You sold out. Good. Sentiment is a luxury for people with pensions.\n\nThe swamp refills. The arrangement continues. It always continues.\n\n— NA"
+	]
+}
+
 func _ready() -> void:
 	# Fade overlay — layer 100, full-screen black, starts transparent
 	fade_layer = CanvasLayer.new()
@@ -106,6 +148,12 @@ func _build_popup() -> void:
 	GameManager.loot_collected.connect(_on_loot_collected)
 	GameManager.swamp_completed.connect(_on_swamp_completed)
 
+	# Burner-phone story triggers (Northwind Analytics)
+	GameManager.water_sold.connect(func(_amount: float) -> void: _queue_na_text("first_sell"))
+	GameManager.lore_read.connect(func(_cave_id: String, _lore_id: String) -> void: _queue_na_text("first_lore"))
+	GameManager.prestige_performed.connect(func() -> void: _queue_na_text("first_prestige"))
+	GameManager.swamp_completed.connect(_on_story_swamp_completed)
+
 var _newspaper_elapsed: float = 0.0
 
 func _process(delta: float) -> void:
@@ -121,6 +169,20 @@ func _process(delta: float) -> void:
 	if showing_newspaper and newspaper_prompt:
 		_newspaper_elapsed += delta
 		newspaper_prompt.modulate.a = 0.5 + 0.5 * sin(_newspaper_elapsed * 2.0)
+
+	# Burner phone: deliver the next queued text once the screen is clear.
+	# While anything story-modal is up, hold at 1s so the text lands a beat
+	# after the other surface closes instead of the same frame.
+	if phone_queue.size() > 0:
+		if showing_lore or showing_newspaper or endgame_active or is_transitioning or ending_choice_layer != null:
+			phone_cooldown = maxf(phone_cooldown, 1.0)
+		elif phone_cooldown > 0.0:
+			phone_cooldown -= delta
+		else:
+			var msg: String = phone_queue.pop_front()
+			AudioManager.play("loot", 1.3, -6.0)
+			show_document_popup(msg, "MESSAGE RECEIVED", "phone")
+			phone_cooldown = 0.8
 
 func _input(event: InputEvent) -> void:
 	if not showing_newspaper or not newspaper_ready_for_input:
@@ -142,9 +204,11 @@ func _close_popup() -> void:
 	cave_popup.visible = false
 	popup_auto_close = 0.0
 
-func show_document_popup(text: String, title: String = "CAVE INSCRIPTION") -> void:
+func show_document_popup(text: String, title: String = "CAVE INSCRIPTION", kind: String = "paper") -> void:
 	if showing_lore:
 		return
+	# "paper" = aged document; "phone" = dark burner-phone screen (NA texts)
+	var is_phone: bool = kind == "phone"
 
 	showing_lore = true
 	lore_layer = CanvasLayer.new()
@@ -167,8 +231,8 @@ func show_document_popup(text: String, title: String = "CAVE INSCRIPTION") -> vo
 	panel.modulate = Color(1, 1, 1, 0)
 
 	var style := StyleBoxFlat.new()
-	style.bg_color = Color(0.92, 0.88, 0.78)
-	style.border_color = Color(0.3, 0.25, 0.2)
+	style.bg_color = Color(0.07, 0.09, 0.08, 0.97) if is_phone else Color(0.92, 0.88, 0.78)
+	style.border_color = Color(0.30, 0.50, 0.38) if is_phone else Color(0.3, 0.25, 0.2)
 	style.border_width_top = 2
 	style.border_width_bottom = 2
 	style.border_width_left = 2
@@ -190,13 +254,13 @@ func show_document_popup(text: String, title: String = "CAVE INSCRIPTION") -> vo
 	var title_lbl := Label.new()
 	title_lbl.text = title
 	title_lbl.add_theme_font_size_override("font_size", 11)
-	title_lbl.add_theme_color_override("font_color", Color(0.15, 0.12, 0.10))
+	title_lbl.add_theme_color_override("font_color", Color(0.55, 0.85, 0.60) if is_phone else Color(0.15, 0.12, 0.10))
 	title_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	vbox.add_child(title_lbl)
 
 	var sep := HSeparator.new()
 	var sep_style := StyleBoxFlat.new()
-	sep_style.bg_color = Color(0.3, 0.25, 0.2, 0.5)
+	sep_style.bg_color = Color(0.30, 0.50, 0.38, 0.5) if is_phone else Color(0.3, 0.25, 0.2, 0.5)
 	sep_style.content_margin_top = 2
 	sep_style.content_margin_bottom = 2
 	sep.add_theme_stylebox_override("separator", sep_style)
@@ -205,7 +269,7 @@ func show_document_popup(text: String, title: String = "CAVE INSCRIPTION") -> vo
 	var body := Label.new()
 	body.text = text
 	body.add_theme_font_size_override("font_size", 8)
-	body.add_theme_color_override("font_color", Color(0.18, 0.15, 0.12))
+	body.add_theme_color_override("font_color", Color(0.72, 0.88, 0.75) if is_phone else Color(0.18, 0.15, 0.12))
 	body.autowrap_mode = TextServer.AUTOWRAP_WORD
 	body.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	body.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -264,6 +328,27 @@ func _wait_for_lore_dismiss(overlay: ColorRect, panel: PanelContainer, prompt: L
 
 func _on_loot_collected(_cave_id: String, _loot_id: String, reward_text: String) -> void:
 	show_document_popup(reward_text, "CAVE DISCOVERY")
+
+# Queues a one-shot NA text beat; no-op if this save has already seen it.
+func _queue_na_text(key: String) -> void:
+	if not NA_TEXTS.has(key):
+		return
+	if not GameManager.mark_story_flag("na_text_" + key):
+		return
+	for msg in NA_TEXTS[key]:
+		phone_queue.append(msg)
+	# First text of a batch waits a few seconds so a milestone newspaper
+	# (fired 2s after pool completion) goes first.
+	phone_cooldown = maxf(phone_cooldown, 3.5)
+
+func _on_story_swamp_completed(swamp_index: int, _reward: float) -> void:
+	match swamp_index:
+		1: _queue_na_text("pond")
+		3: _queue_na_text("bog")
+		5: _queue_na_text("lake")
+		7: _queue_na_text("lagoon")
+		8: _queue_na_text("bayou")
+		9: _queue_na_text("atlantic")
 
 func _on_swamp_completed(swamp_index: int, _reward: float) -> void:
 	# Skip milestone newspaper for Atlantic (pool 9) — endgame cinematic handles it
@@ -492,10 +577,20 @@ func _build_newspaper_overlay() -> void:
 
 	newspaper_overlay.add_child(newspaper_panel)
 
+# On repeat runs the first paper acknowledges the loop instead of replaying verbatim.
+const PRESTIGE_PUDDLE_NEWSPAPER: Dictionary = {
+	"date": "Vol. XLIII, No. 1 — the following spring",
+	"headline": "SWAMP EMPLOYEE DRAINS PUDDLE. AGAIN.",
+	"subhead": "\"Wait, the same guy?\" asks entire government",
+	"body": "The puddle is gone. Again. Officials who spent $400M refilling the swamp expressed outrage that \"the drainage issue has resumed.\"\n\nPress Secretary Spinwell, reading from last year's statement with the dates crossed out, called it \"proof the system works, still.\"\n\nA foreign data-analytics consulting firm declined to comment, but was described by witnesses as \"visibly pleased.\""
+}
+
 func _show_milestone_newspaper(swamp_index: int) -> void:
 	if showing_newspaper:
 		return
 	var data: Dictionary = milestone_newspapers[swamp_index]
+	if swamp_index == 0 and GameManager.prestige_count >= 1:
+		data = PRESTIGE_PUDDLE_NEWSPAPER
 	newspaper_date_label.text = data["date"]
 	newspaper_headline.text = data["headline"]
 	newspaper_subhead.text = data["subhead"]
@@ -596,6 +691,13 @@ func _dismiss_milestone_newspaper() -> void:
 		newspaper_overlay.visible = false
 	)
 
+# One standalone newspaper (e.g. "IT'S GONE" when the Atlantic drains) —
+# dismisses back to gameplay instead of rolling into the endgame queue.
+func show_single_newspaper(data: Dictionary) -> void:
+	if showing_newspaper:
+		return
+	_show_newspaper_data(data)
+
 func show_endgame_newspapers(newspapers: Array) -> void:
 	if newspapers.size() == 0:
 		return
@@ -620,11 +722,11 @@ func _show_newspaper_data(data: Dictionary) -> void:
 		newspaper_photo_label.visible = true
 	else:
 		newspaper_photo_label.visible = false
-	# Update prompt text
-	if endgame_newspaper_queue.size() > 0:
-		newspaper_prompt.text = "[Press any key to continue]"
-	else:
+	# Update prompt text — only the last endgame card returns to title
+	if endgame_active and endgame_newspaper_queue.size() == 0:
 		newspaper_prompt.text = "[Press any key to return to title]"
+	else:
+		newspaper_prompt.text = "[Press any key to continue]"
 	showing_newspaper = true
 	newspaper_ready_for_input = false
 	newspaper_overlay.visible = true
@@ -634,6 +736,110 @@ func _show_newspaper_data(data: Dictionary) -> void:
 	tw.tween_property(newspaper_panel, "modulate:a", 1.0, 0.5)
 	tw.set_parallel(false)
 	tw.tween_callback(func() -> void: newspaper_ready_for_input = true)
+
+# --- Ending choice (island climax) ---
+var ending_choice_layer: CanvasLayer = null
+
+# Modal binary choice at the island: hand the Guest List to NA, or swing.
+# Calls on_choice with "hand_over" or "swing" after the panel closes.
+func show_ending_choice(on_choice: Callable) -> void:
+	if ending_choice_layer != null:
+		return
+	ending_choice_layer = CanvasLayer.new()
+	ending_choice_layer.layer = 96
+	add_child(ending_choice_layer)
+
+	var vp_size: Vector2 = get_viewport().get_visible_rect().size
+
+	var overlay := ColorRect.new()
+	overlay.size = vp_size
+	overlay.color = Color(0, 0, 0, 0.0)
+	overlay.mouse_filter = Control.MOUSE_FILTER_STOP
+	ending_choice_layer.add_child(overlay)
+
+	var panel := PanelContainer.new()
+	var panel_w: float = 430.0
+	var panel_h: float = 210.0
+	panel.position = Vector2((vp_size.x - panel_w) * 0.5, (vp_size.y - panel_h) * 0.5)
+	panel.size = Vector2(panel_w, panel_h)
+	panel.modulate = Color(1, 1, 1, 0)
+
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color(0.06, 0.07, 0.08, 0.97)
+	style.border_color = Color(0.55, 0.50, 0.35)
+	style.border_width_top = 2
+	style.border_width_bottom = 2
+	style.border_width_left = 2
+	style.border_width_right = 2
+	style.content_margin_left = 18
+	style.content_margin_right = 18
+	style.content_margin_top = 12
+	style.content_margin_bottom = 12
+	panel.add_theme_stylebox_override("panel", style)
+
+	var vbox := VBoxContainer.new()
+	vbox.add_theme_constant_override("separation", 8)
+	panel.add_child(vbox)
+
+	var title_lbl := Label.new()
+	title_lbl.text = "THE GUEST LIST"
+	title_lbl.add_theme_font_size_override("font_size", 14)
+	title_lbl.add_theme_color_override("font_color", Color(0.9, 0.78, 0.45))
+	title_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	vbox.add_child(title_lbl)
+
+	var body := Label.new()
+	body.text = "Seven officials. One mansion. Nowhere left to hide.\n\nThe burner phone buzzes once: \"The List. Now. — NA\"\n\nIn your bag: every name, every date, every flight.\nIn your hand: the hammer you came here to swing."
+	body.add_theme_font_size_override("font_size", 9)
+	body.add_theme_color_override("font_color", Color(0.82, 0.80, 0.72))
+	body.autowrap_mode = TextServer.AUTOWRAP_WORD
+	body.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	body.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	vbox.add_child(body)
+
+	var btn_row := HBoxContainer.new()
+	btn_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	btn_row.add_theme_constant_override("separation", 20)
+	vbox.add_child(btn_row)
+
+	var make_btn := func(label_text: String, choice: String, accent: Color) -> Button:
+		var b := Button.new()
+		b.text = label_text
+		b.add_theme_font_size_override("font_size", 11)
+		b.add_theme_color_override("font_color", accent)
+		b.custom_minimum_size = Vector2(160, 28)
+		var bs := StyleBoxFlat.new()
+		bs.bg_color = Color(0.13, 0.12, 0.10)
+		bs.border_color = accent.darkened(0.3)
+		bs.border_width_top = 1
+		bs.border_width_bottom = 1
+		bs.border_width_left = 1
+		bs.border_width_right = 1
+		b.add_theme_stylebox_override("normal", bs)
+		var bs_hover: StyleBoxFlat = bs.duplicate()
+		bs_hover.bg_color = Color(0.20, 0.18, 0.14)
+		b.add_theme_stylebox_override("hover", bs_hover)
+		b.add_theme_stylebox_override("focus", bs_hover)
+		b.pressed.connect(func() -> void:
+			var layer_ref: CanvasLayer = ending_choice_layer
+			ending_choice_layer = null
+			if is_instance_valid(layer_ref):
+				layer_ref.queue_free()
+			on_choice.call(choice)
+		)
+		return b
+
+	var hand_btn: Button = make_btn.call("HAND OVER THE LIST", "hand_over", Color(0.55, 0.85, 0.60))
+	btn_row.add_child(hand_btn)
+	btn_row.add_child(make_btn.call("SWING", "swing", Color(0.95, 0.55, 0.45)))
+
+	overlay.add_child(panel)
+	hand_btn.grab_focus()
+
+	var tw := create_tween()
+	tw.set_parallel(true)
+	tw.tween_property(overlay, "color:a", 0.75, 0.6)
+	tw.tween_property(panel, "modulate:a", 1.0, 0.6)
 
 # --- Scene Transitions ---
 func transition_to_scene(scene_path: String, use_pixelate: bool = false) -> void:

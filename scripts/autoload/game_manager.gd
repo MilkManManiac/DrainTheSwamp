@@ -124,7 +124,8 @@ var tool_definitions: Dictionary = {
 # Current save-format version. Bump when the save structure changes; SaveManager
 # uses this to detect saves written by a NEWER build (Steam Cloud downgrade case).
 # v19: pump_levels + saved_at (offline progress).
-const SAVE_VERSION: int = 19
+# v20: story_flags (one-shot narrative beats: NA phone texts, ending choice).
+const SAVE_VERSION: int = 20
 
 # --- Stat Definitions ---
 var stat_definitions: Dictionary = {
@@ -198,6 +199,18 @@ var influence: float = 0.0           # prestige currency; persists through prest
 var lifetime_earnings: float = 0.0   # money earned from SELLING since last prestige
 var prestige_count: int = 0
 var prestige_upgrades: Dictionary = {"kickback": 0, "muscle": 0, "cap_hike": 0, "war_chest": 0}
+
+# --- Story State ---
+# One-shot narrative beats (NA phone texts, ending choice). Survives prestige —
+# the handler doesn't reintroduce herself every run. Cleared only by reset_game().
+var story_flags: Dictionary = {}
+
+# Sets a story flag; returns true only the first time (use to gate one-shot beats).
+func mark_story_flag(flag: String) -> bool:
+	if story_flags.get(flag, false):
+		return false
+	story_flags[flag] = true
+	return true
 
 var tools_owned: Dictionary = {
 	"hands": {"owned": true, "level": 0},
@@ -1187,6 +1200,7 @@ func reset_game() -> void:
 	lifetime_earnings = 0.0
 	prestige_count = 0
 	prestige_upgrades = {"kickback": 0, "muscle": 0, "cap_hike": 0, "war_chest": 0}
+	story_flags = {}
 	_reset_progression(0.0)
 	prestige_changed.emit()
 
@@ -1286,7 +1300,8 @@ func get_save_data() -> Dictionary:
 		"cave_data": cave_data.duplicate(true),
 		"cave_pool_states": cave_pool_save,
 		"cycle_progress": cycle_progress,
-		"touch_controls_enabled": touch_controls_enabled
+		"touch_controls_enabled": touch_controls_enabled,
+		"story_flags": story_flags.duplicate(true)
 	}
 
 func load_save_data(data: Dictionary) -> void:
@@ -1369,6 +1384,12 @@ func load_save_data(data: Dictionary) -> void:
 
 	# Device preference
 	touch_controls_enabled = data.get("touch_controls_enabled", false)
+
+	# Story flags (absent in pre-v20 saves — beats simply fire fresh)
+	story_flags = {}
+	if data.has("story_flags"):
+		for key in data["story_flags"]:
+			story_flags[str(key)] = bool(data["story_flags"][key])
 
 	# Pumps (JSON stringifies int keys — convert back)
 	pump_levels.clear()

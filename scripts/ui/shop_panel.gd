@@ -500,6 +500,14 @@ func _build_prestige_tab() -> void:
 		warn.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		sellout_col.add_child(warn)
 
+		# The handler's blessing — selling out is NA's idea of career growth
+		var na_line := Label.new()
+		na_line.add_theme_font_size_override("font_size", 11)
+		na_line.add_theme_color_override("font_color", Color(0.55, 0.85, 0.60))
+		na_line.text = "\"The swamp refills. The arrangement continues.\" — NA"
+		na_line.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		sellout_col.add_child(na_line)
+
 		var confirm_row := HBoxContainer.new()
 		confirm_row.alignment = BoxContainer.ALIGNMENT_CENTER
 		confirm_row.add_theme_constant_override("separation", 16)
@@ -599,6 +607,15 @@ func _build_prestige_upgrade_row(key: String, display_name: String, effect: Stri
 		var starter_names: Array = ["Spoon", "Cup", "Bucket"]
 		if level < starter_names.size():
 			tip += "\nAlso starts owned: %s" % ", ".join(starter_names.slice(0, level + 1))
+	# One handler line each — the upgrades are NA's payroll categories
+	var na_notes: Dictionary = {
+		"kickback": "\"Everyone takes a cut. Yours is simply honest about it.\" — NA",
+		"muscle": "\"We sent protein powder and a man who teaches lifting. Do not ask where he teaches.\" — NA",
+		"cap_hike": "\"Regulations are for people without friends.\" — NA",
+		"war_chest": "\"Consider it an advance. Northwind always collects.\" — NA",
+	}
+	if na_notes.has(key):
+		tip += "\n\n%s" % na_notes[key]
 	row_panel.tooltip_text = tip
 	row_panel.mouse_filter = Control.MOUSE_FILTER_PASS
 	row_panel.add_child(row)

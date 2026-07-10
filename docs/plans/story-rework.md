@@ -17,7 +17,7 @@ All narrative flows through exactly three voices, each with its own channel, ton
 2. **The News (local → national).** The press reporting on the drainer. Local = quirky human-interest ("local man drains puddle"); national = establishment spin as it escalates to "the Atlantic is draining." Tone: satirical, sensational, increasingly alarmed. Channel: **newspaper popups** at milestones (+ optional HUD news ticker for ambient beats). *(Reuses the existing 10 milestone newspapers + intro/credits.)*
 3. **Northwind Analytics (NA).** Your secret patron/handler. Tone: friendly → transactional → menacing; deadpan foreign case-officer who mangles idioms. Channels: **burner phone (texts)** + **dead-drop box** (below). Signs **"— a Friend"** until the Stage-3 reveal, then **"— NA."**
 
-*(Note: Congressman Goodwell's hero→villain arc is DROPPED in this rework to keep the channels clean. Cut or flatten him; the three voices above carry the story.)*
+*(Note — decision revised 2026-07: Congressman Goodwell is KEPT BUT DEMOTED. His hero→villain arc stays as the **News channel's recurring subject** (it was already fully implemented across the 10 milestone papers and lands well); he is no longer protagonist-adjacent. NA takes the second-voice slot.)*
 
 ## NA's two channels — phone + dead-drop
 - **Burner phone (texts) = messages/story.** The ambient handler voice; messages arrive as you play (no walking), keyed to progress. This is NA's narrative channel and fills the "long stretches with no story" dead-air the roadmap flagged.
@@ -58,7 +58,7 @@ Identical lesson: **the individual who exposes the truth is disposable to every 
 ## What to reuse vs. touch
 - **Reuse as-is:** all 10 milestone newspapers, billboards, consultant reports, most cave-lore docs, sabotage/helicopter/wanted-poster beats, the island confrontation + "it was all fake" refill ending (now = the CIA road).
 - **Add:** burner-phone text system + dead-drop box; ~4 stages of NA texts; intel turn-in payouts; the NA reveal beats; the second (NA) ending road + the island choice point.
-- **Cut/flatten:** Congressman Goodwell's arc (dropped from this rework).
+- **Keep-but-demote:** Congressman Goodwell's arc — retained as News-channel subject matter (already shipped in the milestone newspapers), demoted from protagonist-adjacent.
 
 ## Mechanics implications (to spec in a build pass)
 1. **Phone/text system** — message queue keyed to drain progress + pool completions + intel turn-ins; HUD notification + a readable log. (Could extend the existing newspaper-popup system.)
@@ -70,9 +70,17 @@ Identical lesson: **the individual who exposes the truth is disposable to every 
 
 ## Resolved decisions
 - Comms: **phone for messages, dead-drop for special upgrades + extra money** ✔
-- Agency: **Northwind Analytics, aka NA**, country unnamed/fictional ✔
-- **Goodwell arc dropped** ✔
+- Agency: **Northwind Analytics, aka NA**, country unnamed/fictional ✔ (this is the canonical name everywhere — some old session notes said "Directorate"; that name is dead)
+- **Goodwell kept-but-demoted** — News-channel subject, not protagonist-adjacent ✔
 - Three delivery channels: **US Government · News · NA** ✔
+
+## Implementation status (2026-07-09)
+Shipped in the Phase-3 story pass:
+- **Burner phone (minimum-viable):** 12 one-shot NA texts on existing triggers (first sell, pools 1/3/5/7/8/9, first lore read, first prestige) via a queued dark-styled `show_document_popup` variant in SceneManager; persisted `story_flags` in GameManager (save v20).
+- **Walk-to-the-island ending:** pool-9 completion no longer freezes the player — it shows the "IT'S GONE" paper and releases you onto the seabed; the climax fires at the island (`jeff_area`) with the binary choice **Hand over the List / Swing**, branching NA-road vs CIA-road ending newspapers.
+- **NA in prestige:** SELL OUT confirm carries an NA line; all four prestige upgrades have NA tooltip notes; the town dead-drop is interactable with arc-aware contents (teaser → field box → dispensary).
+- **High-frequency surfaces:** news ticker re-enabled throttled (one fading headline/~45s, prestige pool); milestone popups have rotating one-liners; Guest List rewritten in the deadpan voice; prestige-aware Puddle newspaper variant.
+Still open from this spec: intel turn-in payouts at the dead-drop; dead-drop as an upgrade dispensary (mechanical); prestige-aware variants beyond the Puddle paper.
 
 ## Still open
 - Exact split of baseline shop income vs. NA dead-drop rewards (who "buys" the drained water in-fiction — Swamp Mike front, or NA directly?).

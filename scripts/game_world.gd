@@ -4394,7 +4394,10 @@ func _build_island_politicians() -> void:
 	col.position = Vector2(island_cx, island_y - 10)
 	jeff_area.add_child(col)
 	add_child(jeff_area)
-	jeff_area.body_entered.connect(func(_body: Node2D) -> void: player_near_jeff = true)
+	jeff_area.body_entered.connect(func(_body: Node2D) -> void:
+		player_near_jeff = true
+		_on_reached_island()
+	)
 	jeff_area.body_exited.connect(func(_body: Node2D) -> void: player_near_jeff = false)
 
 func _spawn_helicopter() -> void:
@@ -4457,25 +4460,80 @@ func _spawn_helicopter() -> void:
 	skid_l.color = Color(0.25, 0.25, 0.25, 0.8)
 	helicopter_active.add_child(skid_l)
 
-func _trigger_endgame() -> void:
+# The Atlantic just drained: show the "IT'S GONE" paper, then nudge the player
+# east. The climax itself waits at the island (jeff_area → _on_reached_island).
+func _on_atlantic_drained() -> void:
+	get_tree().create_timer(2.0).timeout.connect(func() -> void:
+		SceneManager.show_single_newspaper({
+			"date": "SPECIAL EDITION",
+			"headline": "IT'S GONE. HE ACTUALLY DID IT.",
+			"subhead": "Lone government employee drains the Atlantic Ocean with his bare hands",
+			"body": "In what experts are calling \"the most pointlessly determined act in human history,\" the sole employee of the Swamp Draining Initiative has drained the Atlantic Ocean.\n\nThe man, whose name has been redacted from all government records, began with a puddle and a pair of hands. He ended with an empty ocean basin and what neighbors describe as \"a thousand-yard stare.\"\n\n\"We gave him no tools, no budget, and no support,\" said a visibly shaken government spokesperson. \"We honestly thought he'd quit after the first day.\"\n\nThe ocean floor is now visible for the first time in recorded history. Several previously unknown species have been discovered, all of them \"very confused.\""
+		})
+	)
+	get_tree().create_timer(12.0).timeout.connect(func() -> void:
+		if not endgame_triggered:
+			SceneManager.show_popup("The seabed lies bare. The island waits to the east.", 6.0)
+	)
+
+# Reaching the politicians on the island (only possible once the Atlantic is
+# drained) freezes the player and presents the final choice.
+func _on_reached_island() -> void:
 	if endgame_triggered:
+		return
+	if not GameManager.is_swamp_completed(9):
 		return
 	endgame_triggered = true
 
-	# Freeze player
+	# Freeze player for the confrontation
 	var players_eg: Array[Node] = get_tree().get_nodes_in_group("player")
 	if players_eg.size() > 0 and is_instance_valid(players_eg[0]):
 		players_eg[0].set_physics_process(false)
 		players_eg[0].set_process_unhandled_input(false)
 
-	# Tell the story through newspapers
-	SceneManager.show_endgame_newspapers([
+	_screen_shake(2.0, 0.2)
+	SceneManager.show_ending_choice(_trigger_endgame)
+
+# choice: "hand_over" (give NA the Guest List — they whack you quietly) or
+# "swing" (refuse — the CIA road: arrest, pardons, refill). Both roads end the
+# same way for the drainer; that's the point.
+func _trigger_endgame(choice: String) -> void:
+	GameManager.story_flags["ending_chosen"] = choice
+	SceneManager.flash_white(0.25)
+	_screen_shake(4.0, 0.3)
+	if choice == "hand_over":
+		SceneManager.show_endgame_newspapers(_na_ending_newspapers())
+	else:
+		SceneManager.show_endgame_newspapers(_cia_ending_newspapers())
+
+# The NA road — the List is handed over; the drainer vanishes; Northwind
+# quietly owns everyone. New bosses, same swamp.
+func _na_ending_newspapers() -> Array:
+	return [
 		{
-			"date": "SPECIAL EDITION",
-			"headline": "IT'S GONE. HE ACTUALLY DID IT.",
-			"subhead": "Lone government employee drains the Atlantic Ocean with his bare hands",
-			"body": "In what experts are calling \"the most pointlessly determined act in human history,\" the sole employee of the Swamp Draining Initiative has drained the Atlantic Ocean.\n\nThe man, whose name has been redacted from all government records, began with a puddle and a pair of hands. He ended with an empty ocean basin and what neighbors describe as \"a thousand-yard stare.\"\n\n\"We gave him no tools, no budget, and no support,\" said a visibly shaken government spokesperson. \"We honestly thought he'd quit after the first day.\"\n\nThe ocean floor is now visible for the first time in recorded history. Several previously unknown species have been discovered, all of them \"very confused.\""
+			"date": "SPECIAL EDITION — BREAKING",
+			"headline": "DRAINER VANISHES FROM PRIVATE ISLAND",
+			"subhead": "Officials decline to comment; officials seem relaxed for the first time in months",
+			"body": "The man who drained the Atlantic Ocean has disappeared. Witnesses on the private island report seeing him hand a waterlogged leather book to \"a polite man with an umbrella\" moments before a boat, a helicopter, and possibly a submarine all departed in different directions.\n\nNo arrest was made. No statement was issued. The seven officials present have declined to press charges, file reports, or make eye contact.\n\nA data-analytics consulting firm called Northwind Analytics issued a one-sentence press release: \"We are pleased with the quarter.\"\n\nThe drainer's burner phone was found on the dock. Its final message read only: \"Payment processed.\""
 		},
+		{
+			"date": "SPECIAL EDITION — WHERE ARE THEY NOW",
+			"headline": "EVERYONE KEEPS THEIR JOBS, SOMEHOW",
+			"subhead": "All seven officials suddenly vote in perfect unison; nobody asks why",
+			"body": "SENATE MAJORITY LEADER GOODWELL — Retains leadership. Now votes in favor of the \"international data partnerships\" he denounced last month. Aides describe him as \"tense.\"\n\nSENATOR SWAMPSWORTH — Returned from his non-extradition vacation \"feeling cooperative.\" Sponsoring a bill to outsource federal record-keeping to an unnamed foreign consulting firm.\n\nCONGRESSWOMAN LOBBYTON — Canceled her memoir. Her publisher received a phone call. The publisher declined to describe the call.\n\nTHE CONSULTANT — Now subcontracts for Northwind Analytics. His reports are still three pages. They are now three very specific pages.\n\nMAYOR KICKBACK — Reinstated. Redirecting drainage toward his ex-wife's property with renewed confidence.\n\nJEFF — No comment. Northwind Analytics also had no comment about Jeff. Nobody has ever had a comment about Jeff.\n\nTHE DRAINER — Whereabouts unknown. A fisherman claims he saw a man with a bucket boarding a cargo ship at midnight, \"looking employed.\""
+		},
+		{
+			"date": "SPECIAL EVENING EDITION",
+			"headline": "NORTHWIND ANALYTICS ANNOUNCES EXPANDED U.S. PRACTICE",
+			"subhead": "New bosses. Same swamp.",
+			"body": "Northwind Analytics, a foreign data-analytics consulting firm founded \"recently,\" has announced a major expansion of its American government practice. Its client list is confidential. Its client list votes in unison.\n\nThe swamp has been ordered refilled at a cost of $400M to taxpayers — a Northwind white paper recommended it. \"Assets are safer under water,\" the paper notes. \"Ask anyone.\"\n\nNothing was exposed. Nobody was punished. The truth was not destroyed — it was acquired, catalogued, and filed under LEVERAGE.\n\nThe swamp is back. It was always going to come back. The only question was who would own it.\n\n\nDRAIN THE SWAMP\nThanks for playing."
+		},
+	]
+
+# The CIA road — the drainer swings, the government gets there first: arrest,
+# blanket pardons, refill, "it was all fake."
+func _cia_ending_newspapers() -> Array:
+	return [
 		{
 			"date": "SPECIAL EDITION — BREAKING",
 			"headline": "DRAINER ARRESTED IN DRAMATIC ISLAND RAID",
@@ -4494,7 +4552,7 @@ func _trigger_endgame() -> void:
 			"subhead": "Swamp ordered refilled. Public told to \"focus on more important things.\"",
 			"body": "Senate Majority Leader Goodwell held a press conference today declaring the entire swamp scandal \"fabricated\" and urging citizens to \"focus on more important things.\"\n\n\"There was no island. There were no officials. The swamp was always fine,\" Goodwell said, standing ankle-deep in swamp water. \"This was a coordinated hoax by one disgruntled employee with a spoon.\"\n\nAll seven officials have been pardoned and reinstated. The swamp has been ordered refilled at a cost of $400M to taxpayers. The drainer's $500 field operations budget has been reclassified as \"misappropriated funds\" and added to his growing list of charges.\n\nThe swamp is back. It was always going to come back.\n\n\nDRAIN THE SWAMP\nThanks for playing."
 		},
-	])
+	]
 
 # --- Water Detection ---
 func _build_water_detect_areas() -> void:
@@ -4963,9 +5021,13 @@ func _on_swamp_completed(swamp_index: int, reward: float) -> void:
 	if swamp_index >= 0 and swamp_index < swamp_gallon_labels.size():
 		swamp_gallon_labels[swamp_index].text = "DRAINED"
 		swamp_gallon_labels[swamp_index].add_theme_color_override("font_color", Color(0.3, 1.0, 0.4, 0.8))
-	# Atlantic (pool 9): skip all normal effects, go straight to endgame
-	if swamp_index == 9 and not endgame_triggered:
-		_trigger_endgame()
+	# Atlantic (pool 9): the ocean is gone. Don't freeze — release the player to
+	# walk east across the dry seabed; the ending fires when they reach the island.
+	if swamp_index == 9:
+		_screen_shake(6.0, 0.4)
+		_milestone_flash()
+		_scatter_birds()
+		_on_atlantic_drained()
 		return
 	# Phase 7a: Heavy screen shake on swamp drained
 	_screen_shake(5.0, 0.3)
@@ -5569,6 +5631,11 @@ func _town_water_tower(cx: float, ground_y: float) -> void:
 
 func _town_dropbox(cx: float, ground_y: float) -> void:
 	# A weathered, understated mailbox on a post (the secret NA dead-drop).
+	# Interaction (SPACE to read; contents track the NA arc) lives in dead_drop.gd.
+	var drop := preload("res://scripts/world/dead_drop.gd").new()
+	drop.position = Vector2(cx, ground_y)
+	drop.z_index = 6
+	add_child(drop)
 	var post := ColorRect.new()
 	post.position = Vector2(cx - 1, ground_y - 15)
 	post.size = Vector2(2, 15)
@@ -5974,6 +6041,32 @@ func _check_pool_milestones(swamp_index: int) -> void:
 			triggered[key] = true
 			_trigger_pool_milestone(swamp_index, threshold)
 
+# Rotating one-liners so the highest-frequency popup in the game has an author.
+const MILESTONE_QUIPS_25: Array[String] = [
+	"Officials describe progress as 'unauthorized.'",
+	"A committee has been formed to monitor the situation.",
+	"The Consultant has been notified. He invoiced.",
+	"Local leeches file for relocation assistance.",
+]
+const MILESTONE_QUIPS_50: Array[String] = [
+	"City Hall requests you stop finding things.",
+	"Campaign signs from 1987 begin surfacing.",
+	"'Half empty' and 'half full' are now both classified.",
+	"Nearby property values rise and fall simultaneously.",
+]
+const MILESTONE_QUIPS_75: Array[String] = [
+	"Officials demand the water be put back 'at once.'",
+	"Emergency session called. Catering budget: $2M.",
+	"A wetlands-preservation PAC registers overnight.",
+	"Somewhere, a shredder is running very hot.",
+]
+const MILESTONE_QUIPS_90: Array[String] = [
+	"The bottom is visible. So is a filing cabinet.",
+	"Officials are 'unavailable until further notice.'",
+	"A memo advises: do not look at what's down there.",
+	"The last of the water has retained a lawyer.",
+]
+
 func _trigger_pool_milestone(swamp_index: int, threshold: float) -> void:
 	var pool_name: String = GameManager.swamp_definitions[swamp_index]["name"]
 	var drained_pct: int = 100 - int(threshold * 100)
@@ -5983,23 +6076,23 @@ func _trigger_pool_milestone(swamp_index: int, threshold: float) -> void:
 	match threshold:
 		0.75:
 			_screen_shake(1.5, 0.15)
-			SceneManager.show_popup(pool_name + " — 25%% drained!", 2.5)
+			SceneManager.show_popup(pool_name + " — 25% drained!\n" + MILESTONE_QUIPS_25.pick_random(), 3.0)
 			_spawn_milestone_particles(cx, cy, Color(0.4, 0.8, 1.0))
 		0.50:
 			_screen_shake(2.5, 0.2)
-			SceneManager.show_popup(pool_name + " — 50%% drained! Pool bed emerging...", 3.0)
+			SceneManager.show_popup(pool_name + " — 50% drained! Pool bed emerging...\n" + MILESTONE_QUIPS_50.pick_random(), 3.5)
 			_spawn_pool_debris(swamp_index)
 			_spawn_milestone_particles(cx, cy, Color(0.3, 1.0, 0.5))
 		0.25:
 			_screen_shake(3.0, 0.25)
 			SceneManager.flash_white(0.2)
-			SceneManager.show_popup(pool_name + " — 75%% drained! Almost there!", 3.0)
+			SceneManager.show_popup(pool_name + " — 75% drained! Almost there!\n" + MILESTONE_QUIPS_75.pick_random(), 3.5)
 			_spawn_pool_cracks(swamp_index)
 			_spawn_milestone_particles(cx, cy, Color(1.0, 0.85, 0.2))
 		0.10:
 			_screen_shake(4.0, 0.3)
 			SceneManager.flash_white(0.25)
-			SceneManager.show_popup(pool_name + " — 90%% drained! Just a puddle left!", 3.0)
+			SceneManager.show_popup(pool_name + " — 90% drained! Just a puddle left!\n" + MILESTONE_QUIPS_90.pick_random(), 3.5)
 			_spawn_milestone_particles(cx, cy, Color(1.0, 0.5, 0.2))
 	# Floating milestone text at pool
 	var ms_label := Label.new()

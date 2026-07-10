@@ -18,6 +18,20 @@
 >   contextual onboarding hints. REMAINING in Phase 2: item 9 (music/ambient — needs a
 >   listening session, not automatable headless) and the fuller prestige mechanic-unlock
 >   ladder (P1 pump discount shipped; P2-P4 pending design with story tie-in).
+> - 2026-07-09: Phase 3 (story) complete in one pass — (a) walk-to-the-island ending:
+>   pool-9 completion now shows "IT'S GONE" and RELEASES the player; the climax fires at
+>   the island (`jeff_area`, formerly dead code) with a binary choice ("Hand over the List /
+>   Swing") branching NA-road vs CIA-road ending newspapers (3 new NA papers written);
+>   (b) burner phone: 12 one-shot NA texts (queued dark-styled `show_document_popup`
+>   variant; triggers: first sell, pools 1/3/5/7/8/9, first lore read, first prestige)
+>   gated by persisted `story_flags` (save v20); (c) NA in prestige: SELL OUT confirm line,
+>   NA tooltip notes on all 4 upgrades, dead-drop mailbox interactable (scripts/world/
+>   dead_drop.gd, arc-aware: teaser → field box → dispensary); (d) surfaces: ticker
+>   re-enabled throttled (1 fading headline/45s + prestige pool), milestone popups get
+>   rotating quips (also fixed literal "%%" bug), Guest List rewritten deadpan,
+>   prestige-aware Puddle paper; (e) story-rework.md reconciled (Goodwell kept-but-demoted,
+>   NA naming canonical). Verified: headless boot + trench scene clean, economy invariants
+>   ALL PASS. NOT yet play-verified: island choice UI, phone popup pacing.
 >
 > **NEXT SESSION — start here**
 > 1. **Playtest feedback first.** Phase 2 shipped unplayed (curves, pumps, air meter,

@@ -101,7 +101,7 @@ func _setup_loot_and_lore() -> void:
 	var lore1 = preload("res://scripts/caves/lore_wall.gd").new()
 	lore1.lore_id = "trench_truth"
 	lore1.cave_id = cave_id
-	lore1.lore_text = "THE GUEST LIST\n\n[A leather-bound book, waterlogged but legible]\n\nEvery name. Every date. Every flight.\nBoth parties. All of them.\n\nThe swamp wasn't hiding water.\nIt was hiding the truth.\n\nAnd you just drained it all."
+	lore1.lore_text = "THE GUEST LIST\n\n[A leather-bound book, waterlogged but legible]\n\nNames. Dates. Flight manifests. Donor codes.\nSenators, governors, one very nervous Vice President.\nBoth parties, alphabetized — the only bipartisan\ndocument in American history.\n\nThe last page is a waiting list.\n\nThe swamp wasn't hiding water.\nIt was hiding the ledger.\n\nAnd you just drained it all."
 	lore1.position = Vector2(1100, _get_cave_terrain_y_at(1100))
 	add_child(lore1)
 
