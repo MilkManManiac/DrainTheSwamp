@@ -5,8 +5,15 @@ extends PanelContainer
 @onready var title_label: Label = $MarginContainer/VBoxContainer/TopBar/TitleLabel
 
 var _dirty: bool = false
+var _dirty_structural: bool = false
 var _refresh_cooldown: float = 0.0
 const REFRESH_INTERVAL: float = 0.3
+
+# Closures registered during a build; run on the money tick to update
+# affordability/labels IN PLACE. A full tree rebuild every 0.3s destroyed
+# hover state and open tooltips mid-interaction, so rebuilds are reserved
+# for structural changes (tab switch, purchases, prestige).
+var _live_updaters: Array[Callable] = []
 
 var current_tab: int = 0  # 0=Tools, 1=Stats, 2=Influence
 var tab_buttons: Array[Button] = []
@@ -14,23 +21,58 @@ var confirming_sellout: bool = false
 
 func _ready() -> void:
 	close_button.pressed.connect(func() -> void: close())
+	# Money changes constantly while selling — soft refresh only.
 	GameManager.money_changed.connect(func(_m: float) -> void: _dirty = true)
-	GameManager.tool_upgraded.connect(func(_t: String, _l: int) -> void: _dirty = true; _refresh_cooldown = REFRESH_INTERVAL)
-	GameManager.tool_changed.connect(func(_d: Dictionary) -> void: _dirty = true; _refresh_cooldown = REFRESH_INTERVAL)
-	GameManager.camel_changed.connect(func() -> void: _dirty = true; _refresh_cooldown = REFRESH_INTERVAL)
-	GameManager.upgrade_changed.connect(func() -> void: _dirty = true; _refresh_cooldown = REFRESH_INTERVAL)
-	GameManager.stat_upgraded.connect(func(_s: String, _l: int) -> void: _dirty = true; _refresh_cooldown = REFRESH_INTERVAL)
-	GameManager.prestige_changed.connect(func() -> void: _dirty = true; _refresh_cooldown = REFRESH_INTERVAL)
-	GameManager.pump_changed.connect(func(_i: int, _l: int) -> void: _dirty = true; _refresh_cooldown = REFRESH_INTERVAL)
+	# Everything else changes row structure/costs — full rebuild.
+	GameManager.tool_upgraded.connect(func(_t: String, _l: int) -> void: _mark_structural())
+	GameManager.tool_changed.connect(func(_d: Dictionary) -> void: _mark_structural())
+	GameManager.camel_changed.connect(func() -> void: _mark_structural())
+	GameManager.upgrade_changed.connect(func() -> void: _mark_structural())
+	GameManager.stat_upgraded.connect(func(_s: String, _l: int) -> void: _mark_structural())
+	GameManager.prestige_changed.connect(func() -> void: _mark_structural())
+	GameManager.pump_changed.connect(func(_i: int, _l: int) -> void: _mark_structural())
 	visible = false
+
+func _mark_structural() -> void:
+	_dirty = true
+	_dirty_structural = true
+	_refresh_cooldown = REFRESH_INTERVAL
 
 func _process(delta: float) -> void:
 	if _dirty and visible:
 		_refresh_cooldown -= delta
 		if _refresh_cooldown <= 0.0:
+			var structural: bool = _dirty_structural
 			_dirty = false
+			_dirty_structural = false
 			_refresh_cooldown = REFRESH_INTERVAL
-			_refresh()
+			if structural:
+				_refresh()
+			else:
+				_soft_refresh()
+
+func _soft_refresh() -> void:
+	for fn in _live_updaters:
+		fn.call()
+
+func _register_updater(fn: Callable) -> void:
+	_live_updaters.append(fn)
+	fn.call()
+
+# Standard affordability wiring: the button is always connected (GameManager
+# buy functions self-guard on funds); this just keeps disabled/color live.
+func _register_afford(btn: Button, cost: float, active_color: Color, extra_ok: bool = true, use_influence: bool = false) -> void:
+	_register_updater(func() -> void:
+		if not is_instance_valid(btn):
+			return
+		var funds: float = GameManager.influence if use_influence else GameManager.money
+		var ok: bool = extra_ok and funds >= cost
+		btn.disabled = not ok
+		if ok:
+			btn.add_theme_color_override("font_color", active_color)
+		else:
+			btn.remove_theme_color_override("font_color")
+	)
 
 func open() -> void:
 	visible = true
@@ -54,6 +96,7 @@ func close() -> void:
 	tw.tween_callback(func() -> void: visible = false)
 
 func _refresh() -> void:
+	_live_updaters.clear()
 	for child in tool_list.get_children():
 		tool_list.remove_child(child)
 		child.queue_free()
@@ -207,12 +250,9 @@ func _build_tools_tab() -> void:
 			var cost: float = GameManager.get_tool_upgrade_cost(tid)
 			upgrade_btn.text = "Up %s" % Economy.format_money(cost)
 			upgrade_btn.custom_minimum_size = Vector2(96, 0)
-			if GameManager.money < cost:
-				upgrade_btn.disabled = true
-			else:
-				upgrade_btn.add_theme_color_override("font_color", Color(0.5, 0.85, 1.0))
-				var t: String = tid
-				upgrade_btn.pressed.connect(func() -> void: GameManager.upgrade_tool(t))
+			var ut: String = tid
+			upgrade_btn.pressed.connect(func() -> void: GameManager.upgrade_tool(ut))
+			_register_afford(upgrade_btn, cost, Color(0.5, 0.85, 1.0))
 			_style_button(upgrade_btn, Color(0.1, 0.18, 0.3))
 			entry.add_child(upgrade_btn)
 		else:
@@ -226,12 +266,9 @@ func _build_tools_tab() -> void:
 				var prev_id: String = sorted_tools[tool_index - 1]
 				if not GameManager.tools_owned[prev_id]["owned"]:
 					prev_owned = false
-			if GameManager.money < defn["cost"] or not prev_owned:
-				buy_btn.disabled = true
-			else:
-				buy_btn.add_theme_color_override("font_color", Color(0.3, 1.0, 0.4))
-				var t: String = tid
-				buy_btn.pressed.connect(func() -> void: GameManager.buy_tool(t); GameManager.equip_tool(t))
+			var t: String = tid
+			buy_btn.pressed.connect(func() -> void: GameManager.buy_tool(t); GameManager.equip_tool(t))
+			_register_afford(buy_btn, defn["cost"], Color(0.3, 1.0, 0.4), prev_owned)
 			_style_button(buy_btn, Color(0.08, 0.22, 0.1))
 			entry.add_child(buy_btn)
 
@@ -324,12 +361,9 @@ func _build_stats_tab() -> void:
 			up_btn.add_theme_font_size_override("font_size", 14)
 			up_btn.text = "Up %s" % Economy.format_money(cost)
 			up_btn.custom_minimum_size = Vector2(110, 0)
-			if GameManager.money < cost:
-				up_btn.disabled = true
-			else:
-				up_btn.add_theme_color_override("font_color", Color(0.5, 0.85, 1.0))
-				var sid: String = stat_id
-				up_btn.pressed.connect(func() -> void: GameManager.upgrade_stat(sid))
+			var sid: String = stat_id
+			up_btn.pressed.connect(func() -> void: GameManager.upgrade_stat(sid))
+			_register_afford(up_btn, cost, Color(0.5, 0.85, 1.0))
 			_style_button(up_btn, Color(0.1, 0.18, 0.3))
 			row.add_child(up_btn)
 
@@ -406,12 +440,9 @@ func _build_stats_tab() -> void:
 			else:
 				u_btn.text = "Up %s" % Economy.format_money(u_cost)
 			u_btn.custom_minimum_size = Vector2(110, 0)
-			if GameManager.money < u_cost:
-				u_btn.disabled = true
-			else:
-				u_btn.add_theme_color_override("font_color", Color(0.4, 1.0, 0.5))
-				var u: String = uid
-				u_btn.pressed.connect(func() -> void: GameManager.buy_upgrade(u))
+			var u: String = uid
+			u_btn.pressed.connect(func() -> void: GameManager.buy_upgrade(u))
+			_register_afford(u_btn, u_cost, Color(0.4, 1.0, 0.5))
 			_style_button(u_btn, Color(0.08, 0.2, 0.08))
 			u_row.add_child(u_btn)
 
@@ -441,7 +472,6 @@ func _build_prestige_tab() -> void:
 	tool_list.add_child(sub)
 
 	# --- Sell Out panel ---
-	var pending: int = GameManager.get_pending_influence()
 	var sellout_panel := PanelContainer.new()
 	var sellout_style := StyleBoxFlat.new()
 	sellout_style.bg_color = Color(0.14, 0.08, 0.16, 0.6)
@@ -459,22 +489,29 @@ func _build_prestige_tab() -> void:
 	sellout_col.add_theme_constant_override("separation", 6)
 
 	var pending_lbl := Label.new()
-	pending_lbl.text = "Pending payout: +%d Influence" % pending
 	pending_lbl.add_theme_font_size_override("font_size", 14)
 	pending_lbl.add_theme_color_override("font_color", Color(0.8, 0.7, 1.0))
 	pending_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	sellout_col.add_child(pending_lbl)
 
-	# Progress toward the NEXT influence point (sqrt curve -> next threshold)
-	var next_thresh: float = GameManager.PRESTIGE_SCALE * pow(float(pending + 1), 2.0)
-	var prev_thresh: float = GameManager.PRESTIGE_SCALE * pow(float(pending), 2.0)
-	var frac: float = clampf((GameManager.lifetime_earnings - prev_thresh) / maxf(next_thresh - prev_thresh, 1.0), 0.0, 1.0)
+	# Progress toward the NEXT influence point (sqrt curve -> next threshold).
+	# Live-updated: lifetime earnings tick up while the panel is open.
 	var next_lbl := Label.new()
-	next_lbl.text = "Next +1 at %s lifetime (%d%%)" % [Economy.format_money(next_thresh), int(frac * 100.0)]
 	next_lbl.add_theme_font_size_override("font_size", 10)
 	next_lbl.add_theme_color_override("font_color", Color(0.62, 0.55, 0.78))
 	next_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	sellout_col.add_child(next_lbl)
+
+	_register_updater(func() -> void:
+		if not is_instance_valid(pending_lbl):
+			return
+		var p: int = GameManager.get_pending_influence()
+		pending_lbl.text = "Pending payout: +%d Influence" % p
+		var next_thresh: float = GameManager.PRESTIGE_SCALE * pow(float(p + 1), 2.0)
+		var prev_thresh: float = GameManager.PRESTIGE_SCALE * pow(float(p), 2.0)
+		var frac: float = clampf((GameManager.lifetime_earnings - prev_thresh) / maxf(next_thresh - prev_thresh, 1.0), 0.0, 1.0)
+		next_lbl.text = "Next +1 at %s lifetime (%d%%)" % [Economy.format_money(next_thresh), int(frac * 100.0)]
+	)
 
 	if not confirming_sellout:
 		var sellout_btn := Button.new()
@@ -482,14 +519,20 @@ func _build_prestige_tab() -> void:
 		sellout_btn.text = "SELL OUT"
 		sellout_btn.custom_minimum_size = Vector2(160, 30)
 		sellout_btn.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-		if not GameManager.can_prestige():
-			sellout_btn.disabled = true
-		else:
-			sellout_btn.add_theme_color_override("font_color", Color(1.0, 0.8, 0.4))
-			sellout_btn.pressed.connect(func() -> void:
-				confirming_sellout = true
-				_refresh()
-			)
+		sellout_btn.pressed.connect(func() -> void:
+			confirming_sellout = true
+			_refresh()
+		)
+		_register_updater(func() -> void:
+			if not is_instance_valid(sellout_btn):
+				return
+			var ok: bool = GameManager.can_prestige()
+			sellout_btn.disabled = not ok
+			if ok:
+				sellout_btn.add_theme_color_override("font_color", Color(1.0, 0.8, 0.4))
+			else:
+				sellout_btn.remove_theme_color_override("font_color")
+		)
 		_style_button(sellout_btn, Color(0.3, 0.12, 0.3))
 		sellout_col.add_child(sellout_btn)
 	else:
@@ -554,6 +597,55 @@ func _build_prestige_tab() -> void:
 	_build_prestige_upgrade_row("cap_hike", "Cap Hike", "+25% stat caps per level")
 	_build_prestige_upgrade_row("war_chest", "War Chest", "Start with seed money + tools")
 
+	# --- The Arrangement: one perk per sell-out, no purchase needed ---
+	var arr_sep := HSeparator.new()
+	arr_sep.add_theme_constant_override("separation", 6)
+	tool_list.add_child(arr_sep)
+	var arr_hdr := Label.new()
+	arr_hdr.text = "-- The Arrangement --"
+	arr_hdr.add_theme_font_size_override("font_size", 14)
+	arr_hdr.add_theme_color_override("font_color", Color(0.55, 0.85, 0.60))
+	arr_hdr.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	tool_list.add_child(arr_hdr)
+
+	var perks: Array = [
+		{"p": 1, "name": "Federal Infrastructure Grant", "desc": "Pumps at half price",
+			"na": "\"We know a man on the appropriations committee. We know all the men on the appropriations committee.\" — NA"},
+		{"p": 2, "name": "Camel Caravan", "desc": "Camel herd cap x3",
+			"na": "\"A caravan says: this man is settled. Also, they carry water.\" — NA"},
+		{"p": 3, "name": "NA Courier Service", "desc": "In-cave sell basin; documents auto-read",
+			"na": "\"Our couriers were in the caves before you. Do not ask how. They are professionals.\" — NA"},
+		{"p": 4, "name": "Buyback Windows", "desc": "Periodic 2x sell-price events",
+			"na": "\"Sometimes a buyer needs water gone quickly and quietly, at twice the price. You will know the moment.\" — NA"},
+	]
+	for perk in perks:
+		var unlocked: bool = GameManager.prestige_count >= perk["p"]
+		var perk_panel := PanelContainer.new()
+		var perk_style := StyleBoxFlat.new()
+		perk_style.bg_color = Color(0.08, 0.14, 0.10, 0.6) if unlocked else Color(0.10, 0.10, 0.12, 0.5)
+		perk_style.corner_radius_top_left = 4
+		perk_style.corner_radius_top_right = 4
+		perk_style.corner_radius_bottom_left = 4
+		perk_style.corner_radius_bottom_right = 4
+		perk_style.content_margin_left = 8
+		perk_style.content_margin_right = 8
+		perk_style.content_margin_top = 4
+		perk_style.content_margin_bottom = 4
+		perk_panel.add_theme_stylebox_override("panel", perk_style)
+		var perk_lbl := Label.new()
+		perk_lbl.add_theme_font_size_override("font_size", 12)
+		if unlocked:
+			perk_lbl.text = "[P%d] %s — %s" % [perk["p"], perk["name"], perk["desc"]]
+			perk_lbl.add_theme_color_override("font_color", Color(0.6, 0.95, 0.7))
+		else:
+			perk_lbl.text = "[P%d] Sell out %d times to unlock" % [perk["p"], perk["p"]]
+			perk_lbl.add_theme_color_override("font_color", Color(0.45, 0.48, 0.5))
+		perk_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD
+		perk_panel.tooltip_text = "%s\n%s\n\n%s" % [perk["name"], perk["desc"], perk["na"]] if unlocked else "Unlocks at %d sell-outs" % perk["p"]
+		perk_panel.mouse_filter = Control.MOUSE_FILTER_PASS
+		perk_panel.add_child(perk_lbl)
+		tool_list.add_child(perk_panel)
+
 func _build_prestige_upgrade_row(key: String, display_name: String, effect: String) -> void:
 	var level: int = GameManager.prestige_upgrades[key]
 	var cost: int = GameManager.get_prestige_upgrade_cost(key)
@@ -592,12 +684,9 @@ func _build_prestige_upgrade_row(key: String, display_name: String, effect: Stri
 	buy_btn.add_theme_font_size_override("font_size", 14)
 	buy_btn.text = "Buy (%d Inf)" % cost
 	buy_btn.custom_minimum_size = Vector2(110, 0)
-	if GameManager.influence < cost:
-		buy_btn.disabled = true
-	else:
-		buy_btn.add_theme_color_override("font_color", Color(0.9, 0.7, 1.0))
-		var k: String = key
-		buy_btn.pressed.connect(func() -> void: GameManager.buy_prestige_upgrade(k))
+	var k: String = key
+	buy_btn.pressed.connect(func() -> void: GameManager.buy_prestige_upgrade(k))
+	_register_afford(buy_btn, float(cost), Color(0.9, 0.7, 1.0), true, true)
 	_style_button(buy_btn, Color(0.2, 0.1, 0.25))
 	row.add_child(buy_btn)
 
@@ -806,12 +895,9 @@ func _build_pump_section() -> void:
 			else:
 				btn.text = "Lv%d %s" % [level + 1, Economy.format_money(cost)]
 			btn.custom_minimum_size = Vector2(130, 0)
-			if GameManager.money < cost:
-				btn.disabled = true
-			else:
-				btn.add_theme_color_override("font_color", Color(0.55, 0.85, 0.95))
-				var pump_idx: int = idx
-				btn.pressed.connect(func() -> void: GameManager.buy_pump(pump_idx))
+			var pump_idx: int = idx
+			btn.pressed.connect(func() -> void: GameManager.buy_pump(pump_idx))
+			_register_afford(btn, cost, Color(0.55, 0.85, 0.95))
 			_style_button(btn, Color(0.06, 0.14, 0.18))
 			row.add_child(btn)
 
@@ -868,7 +954,7 @@ func _build_camel_section() -> void:
 		camel_info.add_theme_color_override("font_color", Color(0.6, 0.5, 0.35))
 	camel_buy_row.add_child(camel_info)
 
-	if GameManager.camel_count >= GameManager.CAMEL_MAX_COUNT:
+	if GameManager.camel_count >= GameManager.get_camel_max_count():
 		var max_label := Label.new()
 		max_label.text = "[MAX]"
 		max_label.add_theme_font_size_override("font_size", 14)
@@ -880,11 +966,8 @@ func _build_camel_section() -> void:
 		var camel_cost: float = GameManager.get_camel_cost()
 		buy_camel_btn.text = "Buy %s" % Economy.format_money(camel_cost)
 		buy_camel_btn.custom_minimum_size = Vector2(110, 0)
-		if GameManager.money < camel_cost:
-			buy_camel_btn.disabled = true
-		else:
-			buy_camel_btn.add_theme_color_override("font_color", Color(0.85, 0.7, 0.3))
-			buy_camel_btn.pressed.connect(func() -> void: GameManager.buy_camel())
+		buy_camel_btn.pressed.connect(func() -> void: GameManager.buy_camel())
+		_register_afford(buy_camel_btn, camel_cost, Color(0.85, 0.7, 0.3))
 		_style_button(buy_camel_btn, Color(0.2, 0.15, 0.05))
 		camel_buy_row.add_child(buy_camel_btn)
 
@@ -894,7 +977,9 @@ func _build_camel_section() -> void:
 		camel_tip += "Cost: %s" % Economy.format_money(GameManager.get_camel_cost())
 	else:
 		camel_tip += "Capacity: %.1f gal (25%% of yours) | Speed: %.0f px/s\n" % [GameManager.get_camel_capacity(), GameManager.get_camel_speed()]
-		camel_tip += "Max %d camels." % GameManager.CAMEL_MAX_COUNT
+		camel_tip += "Max %d camels." % GameManager.get_camel_max_count()
+		if GameManager.prestige_count >= 2:
+			camel_tip += " (Caravan: x3 herd cap)"
 	camel_buy_panel.tooltip_text = camel_tip
 	camel_buy_panel.mouse_filter = Control.MOUSE_FILTER_PASS
 	camel_buy_panel.add_child(camel_buy_row)
@@ -930,11 +1015,8 @@ func _build_camel_section() -> void:
 		var cur_cap: float = GameManager.get_camel_capacity()
 		var next_cap: float = cur_cap * 1.25
 		cap_btn.tooltip_text = "Camel Capacity Lv%d\nCurrent: %.1f gal\nNext: %.1f gal (+25%%)\nCost: %s" % [GameManager.camel_capacity_level, cur_cap, next_cap, Economy.format_money(cap_cost)]
-		if GameManager.money < cap_cost:
-			cap_btn.disabled = true
-		else:
-			cap_btn.add_theme_color_override("font_color", Color(0.5, 0.85, 1.0))
-			cap_btn.pressed.connect(func() -> void: GameManager.upgrade_camel_capacity())
+		cap_btn.pressed.connect(func() -> void: GameManager.upgrade_camel_capacity())
+		_register_afford(cap_btn, cap_cost, Color(0.5, 0.85, 1.0))
 		_style_button(cap_btn, Color(0.1, 0.15, 0.2))
 		up_row.add_child(cap_btn)
 
@@ -953,11 +1035,8 @@ func _build_camel_section() -> void:
 			var cur_spd: float = GameManager.get_camel_speed()
 			var next_spd: float = 35.0 * pow(1.20, GameManager.camel_speed_level + 1)
 			spd_btn.tooltip_text = "Camel Speed Lv%d\nCurrent: %.0f px/s\nNext: %.0f px/s (+20%%)\nCost: %s" % [GameManager.camel_speed_level, cur_spd, next_spd, Economy.format_money(spd_cost)]
-			if GameManager.money < spd_cost:
-				spd_btn.disabled = true
-			else:
-				spd_btn.add_theme_color_override("font_color", Color(0.5, 0.85, 1.0))
-				spd_btn.pressed.connect(func() -> void: GameManager.upgrade_camel_speed())
+			spd_btn.pressed.connect(func() -> void: GameManager.upgrade_camel_speed())
+			_register_afford(spd_btn, spd_cost, Color(0.5, 0.85, 1.0))
 			_style_button(spd_btn, Color(0.1, 0.15, 0.2))
 			up_row.add_child(spd_btn)
 

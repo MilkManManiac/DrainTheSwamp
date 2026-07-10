@@ -71,6 +71,34 @@ func _init() -> void:
 		failures.append("offline pumps earned $0 over 1h")
 	gm2.free()
 
+	# 6. Arrangement perk ladder (prestige-count gates).
+	var gm3: Node = load("res://scripts/autoload/game_manager.gd").new()
+	gm3._init_swamp_states()
+	gm3._init_cave_pool_states()
+	if gm3.get_camel_max_count() != gm3.CAMEL_MAX_COUNT:
+		failures.append("P0: camel cap should be base (%d), got %d" % [gm3.CAMEL_MAX_COUNT, gm3.get_camel_max_count()])
+	if gm3.has_cave_sell_basin() or gm3.has_auto_lore():
+		failures.append("P0: cave perks unlocked before P3")
+	gm3.prestige_count = 2
+	if gm3.get_camel_max_count() != gm3.CAMEL_MAX_COUNT * 3:
+		failures.append("P2: camel caravan should triple cap, got %d" % gm3.get_camel_max_count())
+	gm3.prestige_count = 3
+	if not (gm3.has_cave_sell_basin() and gm3.has_auto_lore()):
+		failures.append("P3: cave sell basin / auto-lore not unlocked")
+	gm3.prestige_count = 4
+	var base_mult: float = gm3.get_money_multiplier()
+	gm3.sell_window_active = true
+	if absf(gm3.get_money_multiplier() / base_mult - gm3.SELL_WINDOW_MULT) > 0.001:
+		failures.append("P4: buyback window multiplier is x%.2f, expected x%.1f"
+			% [gm3.get_money_multiplier() / base_mult, gm3.SELL_WINDOW_MULT])
+	gm3.sell_window_active = false
+	# Window must never tick on below P4
+	gm3.prestige_count = 3
+	gm3._tick_sell_window(10_000.0)
+	if gm3.sell_window_active:
+		failures.append("P3: buyback window ticked on below P4")
+	gm3.free()
+
 	gm.free()
 	if failures.is_empty():
 		print("economy_invariants: ALL PASS")

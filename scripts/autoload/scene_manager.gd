@@ -77,6 +77,15 @@ const NA_TEXTS: Dictionary = {
 	],
 	"first_prestige": [
 		"You sold out. Good. Sentiment is a luxury for people with pensions.\n\nThe swamp refills. The arrangement continues. It always continues.\n\n— NA"
+	],
+	"prestige_2": [
+		"Twice now. We are impressed. We sent camels — a caravan says: this man is settled, he is not going anywhere.\n\nAlso, they carry water.\n\n— NA"
+	],
+	"prestige_3": [
+		"Our couriers now collect inside the caves, and photograph the documents so you do not have to squint.\n\nDo not ask how they got down there first. They are professionals.\n\n— NA"
+	],
+	"prestige_4": [
+		"Sometimes a buyer needs water gone quickly, quietly, and at twice the price. You will know the moment when it arrives.\n\nIt is not subtle.\n\n— NA"
 	]
 }
 
@@ -151,7 +160,16 @@ func _build_popup() -> void:
 	# Burner-phone story triggers (Northwind Analytics)
 	GameManager.water_sold.connect(func(_amount: float) -> void: _queue_na_text("first_sell"))
 	GameManager.lore_read.connect(func(_cave_id: String, _lore_id: String) -> void: _queue_na_text("first_lore"))
-	GameManager.prestige_performed.connect(func() -> void: _queue_na_text("first_prestige"))
+	GameManager.prestige_performed.connect(func() -> void:
+		_queue_na_text("first_prestige")
+		# Arrangement perk unlocks (P2-P4) each get their own handler text
+		if GameManager.prestige_count >= 2:
+			_queue_na_text("prestige_2")
+		if GameManager.prestige_count >= 3:
+			_queue_na_text("prestige_3")
+		if GameManager.prestige_count >= 4:
+			_queue_na_text("prestige_4")
+	)
 	GameManager.swamp_completed.connect(_on_story_swamp_completed)
 
 var _newspaper_elapsed: float = 0.0

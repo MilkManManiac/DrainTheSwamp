@@ -62,10 +62,16 @@ func _build_interaction() -> void:
 	hint_label.visible = false
 	add_child(hint_label)
 
+var _auto_read_done: bool = false
+
 func _on_body_entered(body: Node2D) -> void:
 	if body is CharacterBody2D:
 		player_in_range = true
 		hint_label.visible = true
+		# P3 perk: NA photographs documents for you — walls read on approach
+		if GameManager.has_auto_lore() and not _auto_read_done:
+			_auto_read_done = true
+			_read_lore()
 
 func _on_body_exited(body: Node2D) -> void:
 	if body is CharacterBody2D:

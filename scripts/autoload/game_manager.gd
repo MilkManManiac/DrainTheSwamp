@@ -27,6 +27,7 @@ signal prestige_performed
 signal pump_changed(swamp_index: int, level: int)
 signal cave_air_changed(current: float, maximum: float)
 signal cave_air_depleted
+signal sell_window_changed(active: bool, duration: float)
 
 # --- Prestige Scaling ---
 # pending influence = floor(sqrt(lifetime_earnings / PRESTIGE_SCALE)).
@@ -211,6 +212,42 @@ func mark_story_flag(flag: String) -> bool:
 		return false
 	story_flags[flag] = true
 	return true
+
+# --- The Arrangement (prestige-count perk ladder) ---
+# One mechanic per sell-out. P1 = pump discount ("Federal Infrastructure
+# Grant", applied in get_pump_cost). P2-P4 below.
+const SELL_WINDOW_INTERVAL: float = 300.0  # seconds between buyback windows
+const SELL_WINDOW_DURATION: float = 45.0
+const SELL_WINDOW_MULT: float = 2.0
+var sell_window_active: bool = false
+var _sell_window_timer: float = 0.0
+
+# P2: the camel herd cap triples ("Camel Caravan").
+func get_camel_max_count() -> int:
+	return CAMEL_MAX_COUNT * 3 if prestige_count >= 2 else CAMEL_MAX_COUNT
+
+# P3: NA couriers collect inside caves (sell basin) and photograph documents
+# for you (lore walls auto-read on approach).
+func has_cave_sell_basin() -> bool:
+	return prestige_count >= 3
+
+func has_auto_lore() -> bool:
+	return prestige_count >= 3
+
+# P4: periodic "buyback window" — everything sells at 2x while it's open.
+func _tick_sell_window(delta: float) -> void:
+	if prestige_count < 4:
+		return
+	_sell_window_timer += delta
+	if sell_window_active:
+		if _sell_window_timer >= SELL_WINDOW_DURATION:
+			sell_window_active = false
+			_sell_window_timer = 0.0
+			sell_window_changed.emit(false, 0.0)
+	elif _sell_window_timer >= SELL_WINDOW_INTERVAL:
+		sell_window_active = true
+		_sell_window_timer = 0.0
+		sell_window_changed.emit(true, SELL_WINDOW_DURATION)
 
 var tools_owned: Dictionary = {
 	"hands": {"owned": true, "level": 0},
@@ -512,7 +549,10 @@ func get_carrying_capacity() -> float:
 func get_money_multiplier() -> float:
 	# Prestige: Kickback boosts all money earned globally. Multiplicative x1.25 per
 	# level — additive +8% was noise against the x10-per-pool content scaling.
-	return get_stat_value("water_value") * pow(1.25, prestige_upgrades["kickback"])
+	var mult: float = get_stat_value("water_value") * pow(1.25, prestige_upgrades["kickback"])
+	if sell_window_active:
+		mult *= SELL_WINDOW_MULT  # P4 buyback window
+	return mult
 
 func get_stamina_cost() -> float:
 	return 1.0
@@ -858,7 +898,7 @@ func buy_upgrade(upgrade_id: String) -> bool:
 
 # --- Camel actions ---
 func buy_camel() -> bool:
-	if not camel_unlocked or camel_count >= CAMEL_MAX_COUNT:
+	if not camel_unlocked or camel_count >= get_camel_max_count():
 		return false
 	var cost: float = get_camel_cost()
 	if money < cost:
@@ -1212,6 +1252,9 @@ func regen_stamina(delta: float) -> void:
 		stamina_changed.emit(current_stamina, max_stam)
 
 func _process(delta: float) -> void:
+	# P4 perk: periodic 2x buyback windows
+	_tick_sell_window(delta)
+
 	# Cave air drains while inside a cave; depletion ejects the player (handled
 	# by the cave scene via cave_air_depleted).
 	if in_cave and cave_air > 0.0:

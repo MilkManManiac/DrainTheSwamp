@@ -650,6 +650,7 @@ func _ready() -> void:
 	GameManager.scoop_performed.connect(_on_scoop_performed)
 	GameManager.camel_changed.connect(_on_camel_changed)
 	GameManager.pump_changed.connect(_on_pump_changed)
+	GameManager.sell_window_changed.connect(_on_sell_window_changed)
 	_build_camels()
 	for pidx in GameManager.pump_levels.keys():
 		_build_pump_prop(pidx)
@@ -4459,6 +4460,16 @@ func _spawn_helicopter() -> void:
 	skid_l.position = Vector2(-6, 5)
 	skid_l.color = Color(0.25, 0.25, 0.25, 0.8)
 	helicopter_active.add_child(skid_l)
+
+# P4 perk: the buyback window opening/closing is a loud, dumb event — sell fast.
+func _on_sell_window_changed(active: bool, duration: float) -> void:
+	if active:
+		_screen_shake(2.0, 0.2)
+		SceneManager.flash_white(0.15)
+		SceneManager.show_popup("EMERGENCY BUYBACK WINDOW OPEN\nSomeone needs this water gone before an audit — 2x prices for %ds!" % int(duration), 5.0)
+		AudioManager.play("discovery")
+	else:
+		SceneManager.show_popup("The buyback window closes. The audit found nothing.", 3.0)
 
 # The Atlantic just drained: show the "IT'S GONE" paper, then nudge the player
 # east. The climax itself waits at the island (jeff_area → _on_reached_island).

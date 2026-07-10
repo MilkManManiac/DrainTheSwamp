@@ -57,6 +57,10 @@ var cave_hud = null
 var cave_shop_panel = null
 var cave_menu_panel = null
 
+# P3 perk: NA courier basin (in-cave sell point)
+var _basin_in_range: bool = false
+var _basin_sell_cooldown: float = 0.0
+
 func _ready() -> void:
 	_setup_cave()
 
@@ -95,6 +99,7 @@ func _setup_cave() -> void:
 	_spawn_player()
 	_setup_camera()
 	_setup_loot_and_lore()
+	_build_sell_basin()
 	_setup_cave_ui()
 	_build_cave_post_processing()
 
@@ -1976,6 +1981,54 @@ func _setup_camera() -> void:
 func _setup_loot_and_lore() -> void:
 	pass
 
+# P3 perk ("The Arrangement"): NA courier basin just inside the entrance —
+# an in-cave sell point so loot runs don't require surfacing.
+func _build_sell_basin() -> void:
+	if not GameManager.has_cave_sell_basin():
+		return
+	var bx: float = cave_terrain_points[0].x + 130.0
+	var by: float = _get_cave_terrain_y_at(bx)
+	var root := Node2D.new()
+	root.position = Vector2(bx, by)
+	root.z_index = 6
+	add_child(root)
+
+	var bowl := Polygon2D.new()
+	bowl.polygon = PackedVector2Array([
+		Vector2(-10, -6), Vector2(10, -6), Vector2(7, 0), Vector2(-7, 0)])
+	bowl.color = Color(0.16, 0.22, 0.19)
+	root.add_child(bowl)
+	var liquid := Polygon2D.new()
+	liquid.polygon = PackedVector2Array([
+		Vector2(-8, -6), Vector2(8, -6), Vector2(6, -2), Vector2(-6, -2)])
+	liquid.color = Color(0.35, 0.85, 0.55, 0.85)
+	root.add_child(liquid)
+	var tag := Label.new()
+	tag.text = "NA COURIER"
+	tag.add_theme_font_size_override("font_size", 6)
+	tag.add_theme_color_override("font_color", Color(0.55, 0.85, 0.60, 0.85))
+	tag.position = Vector2(-22, -20)
+	root.add_child(tag)
+
+	var area := Area2D.new()
+	area.collision_layer = 0
+	area.collision_mask = 1
+	var coll := CollisionShape2D.new()
+	var shape := RectangleShape2D.new()
+	shape.size = Vector2(36, 30)
+	coll.shape = shape
+	coll.position = Vector2(0, -10)
+	area.add_child(coll)
+	root.add_child(area)
+	area.body_entered.connect(func(body: Node2D) -> void:
+		if body is CharacterBody2D:
+			_basin_in_range = true
+	)
+	area.body_exited.connect(func(body: Node2D) -> void:
+		if body is CharacterBody2D:
+			_basin_in_range = false
+	)
+
 # --- Cave UI (HUD + Shop + Menu) ---
 func _setup_cave_ui() -> void:
 	# HUD (CanvasLayer at layer 10 — same as overworld)
@@ -2117,6 +2170,17 @@ func _get_cave_ceiling_y_at(x: float) -> float:
 # --- Process: Drips, Crystal pulses, Dust motes ---
 func _process(delta: float) -> void:
 	wave_time += delta
+
+	# P3 basin: auto-sell while standing at the courier basin
+	if _basin_in_range:
+		_basin_sell_cooldown -= delta
+		if _basin_sell_cooldown <= 0.0 and GameManager.water_carried > 0.0001:
+			var earned: float = GameManager.sell_water()
+			if earned > 0.0:
+				AudioManager.play("sell")
+				if player_ref and player_ref.has_method("show_floating_text"):
+					player_ref.show_floating_text("+%s" % Economy.format_money(earned), Color(0.55, 0.85, 0.60))
+			_basin_sell_cooldown = 0.5
 
 	# Post-processing time uniform
 	cave_post_time += delta
