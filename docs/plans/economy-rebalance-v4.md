@@ -1,3 +1,7 @@
+> **SUPERSEDED (2026-07-09).** This plan tuned systems that no longer exist in this form.
+> The shipped economy is the Phase 2 curve rework in `full-audit-2026-07.md`
+> (output 1.15 / cost 1.28 + x2 milestones), guarded by `tests/economy_invariants.gd`.
+
 # Economy Rebalance v4
 
 ## Philosophy

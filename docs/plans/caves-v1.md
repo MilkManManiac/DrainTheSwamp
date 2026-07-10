@@ -1,3 +1,5 @@
+> **SUPERSEDED (2026-07-09)** by `cave-overhaul-v3.md` (shipped) and the cave items in `full-audit-2026-07.md`.
+
 # Cave System v1 — Implementation Plan
 
 ## Overview

@@ -1,3 +1,6 @@
+> **SUPERSEDED (2026-07-09)** by `visual-overhaul-research.md`, `high-res-2d-overhaul.md`,
+> and the shipped Phase 1 visual pass in `full-audit-2026-07.md`.
+
 # Graphics Overhaul — Master Plan
 
 ## Current State Summary

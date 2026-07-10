@@ -1,3 +1,5 @@
+> **SUPERSEDED (2026-07-09)** by `full-audit-2026-07.md` (the 2026-07 five-track audit and its phased plan).
+
 # Game Review v2 — Full Audit & Roadmap
 
 ## Date: 2026-02-17

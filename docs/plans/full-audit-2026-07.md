@@ -32,6 +32,18 @@
 >   prestige-aware Puddle paper; (e) story-rework.md reconciled (Goodwell kept-but-demoted,
 >   NA naming canonical). Verified: headless boot + trench scene clean, economy invariants
 >   ALL PASS. NOT yet play-verified: island choice UI, phone popup pacing.
+> - 2026-07-09 (cont.): Phase 4 items 1 & 4(partial) + Phase 2 prestige-ladder leftover —
+>   (a) shop panel in-place refresh: money ticks update affordability/labels via
+>   registered updaters; full rebuilds only on structural signals (fixes tooltips dying
+>   every 0.3s); (b) "The Arrangement" perk ladder: P2 camel caravan (herd cap x3),
+>   P3 NA courier basin in caves (auto-sell near entrance) + auto-read lore walls,
+>   P4 periodic 2x buyback windows (45s every ~5min, announced) — each with an NA text
+>   and a ladder display in the Influence tab; invariant tests extended; (c) town
+>   extracted to scripts/world/town.gd (~510 lines out of the god-file), glow arrays move
+>   with it, DTS_SHOT A/B diff confirmed within same-build animation noise floor;
+>   (d) six dead plan docs marked SUPERSEDED. Still open in Phase 4: shared VisualFX
+>   helper, remaining god-file modules, touch-input verification, controller support,
+>   web perf pass.
 >
 > **NEXT SESSION — start here**
 > 1. **Playtest feedback first.** Phase 2 shipped unplayed (curves, pumps, air meter,
