@@ -1,6 +1,6 @@
 extends Node2D
 # The NA dead-drop mailbox at the west edge of town. The decorative shapes are
-# drawn by game_world._town_dropbox(); this node adds the interaction on top.
+# drawn by town.gd's _dropbox(); this node adds the interaction on top.
 # What's inside tracks the NA arc: locked teaser -> field box (post-reveal) ->
 # dispensary (post-prestige).
 
