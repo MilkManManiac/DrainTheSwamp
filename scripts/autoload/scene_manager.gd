@@ -320,6 +320,7 @@ func _wait_for_lore_dismiss(overlay: ColorRect, panel: PanelContainer, prompt: L
 	var elapsed_ref: Array[float] = [0.0]
 	var dismissed: Array[bool] = [false]
 	var layer_ref: CanvasLayer = lore_layer
+	var frame_ref: Array[Callable] = [Callable()]
 	var check_fn: Callable
 	check_fn = func(delta_val: float) -> void:
 		if dismissed[0]:
@@ -335,14 +336,18 @@ func _wait_for_lore_dismiss(overlay: ColorRect, panel: PanelContainer, prompt: L
 			tw_out.set_parallel(false)
 			tw_out.tween_interval(0.2)
 			tw_out.tween_callback(func() -> void:
+				# Stop the per-frame poll before the layer dies, else the lambda
+				# errors every frame forever ("Lambda capture at index 0 was freed").
+				if frame_ref[0].is_valid() and get_tree().process_frame.is_connected(frame_ref[0]):
+					get_tree().process_frame.disconnect(frame_ref[0])
 				layer_ref.queue_free()
 				showing_lore = false
 				lore_layer = null
 			)
-	get_tree().process_frame.connect(func() -> void:
+	frame_ref[0] = func() -> void:
 		if is_instance_valid(layer_ref):
 			check_fn.call(get_process_delta_time())
-	)
+	get_tree().process_frame.connect(frame_ref[0])
 
 func _on_loot_collected(_cave_id: String, _loot_id: String, reward_text: String) -> void:
 	show_document_popup(reward_text, "CAVE DISCOVERY")

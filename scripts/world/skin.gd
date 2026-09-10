@@ -12,8 +12,8 @@ var world: Node2D = null
 var _sky: Sprite2D = null
 var _sky_night: Sprite2D = null
 var _sky_dusk: Sprite2D = null
-var _tree_fill: ColorRect = null
-var _cypress_fill: ColorRect = null
+var _tree_fill: Polygon2D = null
+var _cypress_fill: Polygon2D = null
 var _cypress: Array = []
 var _water_tints: Array = []
 var _sky_fill: ColorRect = null
@@ -43,27 +43,6 @@ func _build_sky() -> void:
 		for c in nh.get_children():
 			if c is CanvasItem:
 				(c as CanvasItem).visible = false
-		var ctex: Texture2D = _tex("cypress_band")
-		var cw: float = ctex.get_width() * SCALE
-		var ww: float = world.terrain_points[world.terrain_points.size() - 1].x + 400.0
-		_cypress_fill = ColorRect.new()
-		_cypress_fill.color = Color(38.0 / 255.0, 56.0 / 255.0, 58.0 / 255.0)
-		_cypress_fill.position = Vector2(-1000.0, 196.0)
-		_cypress_fill.size = Vector2(ww + 2000.0, 1200.0)
-		_cypress_fill.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		_cypress_fill.z_index = -4
-		nh.add_child(_cypress_fill)
-		var cx: float = -1000.0
-		while cx < ww:
-			var c := Sprite2D.new()
-			c.texture = ctex
-			c.centered = false
-			c.scale = Vector2(SCALE, SCALE)
-			c.position = Vector2(cx, 198.0 - ctex.get_height() * SCALE)
-			c.z_index = -4
-			nh.add_child(c)
-			_cypress.append(c)
-			cx += cw
 	for c in world.clouds:
 		if c:
 			c.visible = false
@@ -120,45 +99,76 @@ func _hide_visuals(n: Node) -> void:
 		if c is CanvasItem and not (c is Light2D):
 			(c as CanvasItem).visible = false
 
-# --- treeline: pack pines tiled across the world in the 0.6 parallax layer ---
-func _build_treeline() -> void:
-	var tl: ParallaxLayer = world.treeline_layer
-	if tl == null:
-		return
-	for c in tl.get_children():
-		if c is CanvasItem:
-			(c as CanvasItem).visible = false
-	var tex: Texture2D = _tex("far_treeline")
+# --- treeline: pines + cypress silhouettes ride a smoothed copy of the terrain
+# in world space (not a viewport-anchored parallax band), so when the land
+# drops they stay behind the ground instead of floating at screen height.
+func _smooth_y(x: float) -> float:
+	var acc: float = 0.0
+	var n: int = 0
+	var dx: float = -160.0
+	while dx <= 160.0:
+		acc += world._get_terrain_y_at(x + dx)
+		n += 1
+		dx += 40.0
+	return acc / float(n)
+
+func _band_fill(color: Color, lift: float, z: int, x0: float, x1: float) -> Polygon2D:
+	var poly := PackedVector2Array()
+	var x: float = x0
+	while x < x1:
+		poly.append(Vector2(x, _smooth_y(x) - lift))
+		x += 32.0
+	poly.append(Vector2(x1, _smooth_y(x1) - lift))
+	poly.append(Vector2(x1, 2400.0))
+	poly.append(Vector2(x0, 2400.0))
+	var p := Polygon2D.new()
+	p.polygon = poly
+	p.color = color
+	p.z_index = z
+	add_child(p)
+	return p
+
+func _band_row(tex: Texture2D, x0: float, x1: float, lift: float, z: int, mod: Color, flip: bool, xoff: float) -> Array:
 	var w: float = tex.get_width() * SCALE
-	var world_w: float = world.terrain_points[world.terrain_points.size() - 1].x + 400.0
-	# Solid band under the pines so low terrain never shows sky beneath the treeline.
-	_tree_fill = ColorRect.new()
-	_tree_fill.color = Color(0.36, 0.44, 0.42)
-	_tree_fill.position = Vector2(-1000.0, 150.0 - 3.0)
-	_tree_fill.size = Vector2(world_w + 2000.0, 60.0)
-	_tree_fill.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_tree_fill.z_index = -5
-	tl.add_child(_tree_fill)
-	var x: float = -900.0
-	while x < world_w:
+	var out: Array = []
+	var x: float = x0 + xoff
+	while x < x1:
+		var ya: float = _smooth_y(x) - lift
+		var yb: float = _smooth_y(x + w) - lift
 		var s := Sprite2D.new()
 		s.texture = tex
 		s.centered = false
+		s.offset = Vector2(0.0, -float(tex.get_height()))   # pivot = bottom-left
 		s.scale = Vector2(SCALE, SCALE)
-		s.position = Vector2(x, 150.0 - tex.get_height() * SCALE)
-		s.z_index = -5
-		tl.add_child(s)
-		# Second, darker row a little lower: reads as forest depth, not a flat wall.
-		var s2 := Sprite2D.new()
-		s2.texture = tex
-		s2.centered = false
-		s2.scale = Vector2(SCALE, SCALE)
-		s2.flip_h = true
-		s2.position = Vector2(x + w * 0.37, 172.0 - tex.get_height() * SCALE)
-		s2.modulate = Color(0.62, 0.68, 0.66)
-		s2.z_index = -5
-		tl.add_child(s2)
+		s.flip_h = flip
+		s.position = Vector2(x, ya)
+		s.rotation = atan2(yb - ya, w)
+		s.modulate = mod
+		s.z_index = z
+		add_child(s)
+		out.append(s)
 		x += w
+	return out
+
+func _build_treeline() -> void:
+	var tl: ParallaxLayer = world.treeline_layer
+	if tl:
+		for c in tl.get_children():
+			if c is CanvasItem:
+				(c as CanvasItem).visible = false
+	var x0: float = world.terrain_points[0].x - 600.0
+	var x1: float = world.terrain_points[world.terrain_points.size() - 1].x + 600.0
+	var tex: Texture2D = _tex("far_treeline")
+	var w: float = tex.get_width() * SCALE
+	# Solid forest mass under the pines, down past any dip in the ground.
+	_tree_fill = _band_fill(Color(0.36, 0.44, 0.42), 36.0, -5, x0, x1)
+	_band_row(tex, x0, x1, 36.0, -5, Color.WHITE, false, 0.0)
+	# Second, darker row a little lower: reads as forest depth, not a flat wall.
+	_band_row(tex, x0, x1, 14.0, -5, Color(0.62, 0.68, 0.66), true, w * 0.37)
+	# Cypress silhouettes just behind the ground line, in front of the pines.
+	var ctex: Texture2D = _tex("cypress_band")
+	_cypress_fill = _band_fill(Color(38.0 / 255.0, 56.0 / 255.0, 58.0 / 255.0), -12.0, -4, x0, x1)
+	_cypress = _band_row(ctex, x0, x1, -12.0, -4, Color.WHITE, false, 0.0)
 
 # --- ground: textured polygon under the terrain line + surface strip -------
 func _build_ground() -> void:

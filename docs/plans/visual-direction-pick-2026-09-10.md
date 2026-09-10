@@ -57,3 +57,9 @@ Captures: `_screenshots/lookdev-2026-09-10/v3b_*.png` (town day/dusk/night, pool
 4. Caves scene untouched.
 5. Player: current ColorRect figure reads fine at 2x; revisit only if Wes calls it.
 6. Credits screen line for CraftPix (OGA-BY) and Admurin (CC-BY) — Admurin not used in-engine yet; CraftPix is.
+
+## 2026-09-10 night — Wes's first reaction + two fixes
+
+Wes: "Massive improvement overall." Two notes, both fixed:
+1. **Console spam** `Lambda capture at index 0 was freed` every frame after dismissing the tutorial popup. Pre-existing bug in `scene_manager._wait_for_lore_dismiss`: a `process_frame` lambda captured the popup layer and was never disconnected after the layer was freed. Fixed by keeping the callable in `frame_ref` and disconnecting it in the dismiss callback before `queue_free`. Never showed in captures because `DTS_SHOT` suppresses the tutorial.
+2. **Trees hovering downhill.** Pines and cypress band were viewport-anchored parallax rows (fixed screen y), so when the terrain drops east of town they floated as a shelf. `skin.gd::_build_treeline` now builds them in world space on a smoothed terrain line (`_smooth_y`, ±160 units, 9 taps): a `Polygon2D` forest mass under each row (`_band_fill`) down past any dip, sprite tiles rotated to the local slope (`_band_row`, bottom-left pivot). Cypress row sits 12 under the ground line at z -4, pines 36 / 14 above at z -5. The 0.6x parallax on the treeline is gone; sky still parallaxes. Captures: `fix_hill1/2.png`, `fix_town.png`.
