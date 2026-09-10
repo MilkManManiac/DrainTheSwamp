@@ -76,6 +76,9 @@ func _ready() -> void:
 	GameManager.tool_changed.connect(func(_d: Dictionary) -> void: _update_tool_visual())
 	_update_tool_visual()
 	_setup_lantern()
+	var skin := preload("res://scripts/player/player_skin.gd").new()
+	skin.player = self
+	add_child(skin)
 
 func _unhandled_input(event: InputEvent) -> void:
 	# Dev cheats (F4/F5) only available in debug builds — never in Steam/app releases

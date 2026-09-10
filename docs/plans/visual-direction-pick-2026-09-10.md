@@ -63,3 +63,16 @@ Captures: `_screenshots/lookdev-2026-09-10/v3b_*.png` (town day/dusk/night, pool
 Wes: "Massive improvement overall." Two notes, both fixed:
 1. **Console spam** `Lambda capture at index 0 was freed` every frame after dismissing the tutorial popup. Pre-existing bug in `scene_manager._wait_for_lore_dismiss`: a `process_frame` lambda captured the popup layer and was never disconnected after the layer was freed. Fixed by keeping the callable in `frame_ref` and disconnecting it in the dismiss callback before `queue_free`. Never showed in captures because `DTS_SHOT` suppresses the tutorial.
 2. **Trees hovering downhill.** Pines and cypress band were viewport-anchored parallax rows (fixed screen y), so when the terrain drops east of town they floated as a shelf. `skin.gd::_build_treeline` now builds them in world space on a smoothed terrain line (`_smooth_y`, ±160 units, 9 taps): a `Polygon2D` forest mass under each row (`_band_fill`) down past any dip, sprite tiles rotated to the local slope (`_band_row`, bottom-left pivot). Cypress row sits 12 under the ground line at z -4, pines 36 / 14 above at z -5. The 0.6x parallax on the treeline is gone; sky still parallaxes. Captures: `fix_hill1/2.png`, `fix_town.png`.
+
+## 2026-09-10 night — player character candidates
+
+Three Gemini sprite sheets (idle row + walk row on magenta), baked by `bake/bake_char.py` in the session scratchpad into `assets/art/drainsville/player_{a,b,c}_{idle,walk}.png` (40 art px tall, x2 NEAREST, one 28-colour palette per character). Sources in `assets/gen/char-sheet-*.{png,jpg}`.
+- A: bearded swamp guy, brown hat, red shirt, blue overalls (matches Wes's June 3D concept `Downloads/swamp_character.png`). 5 idle / 7 walk frames.
+- B: young guy, green trucker cap, grey tee, overalls. 4 / 8.
+- C: middle-aged woman, red bandana, olive shirt, waders. 6 / 7.
+
+`scripts/player/player_skin.gd` (hooked with 3 lines at the end of `player._ready`): hides every ColorRect under Visual except Shadow, hides ToolSprite, adds a Sprite2D strip under Visual so the old bob / lean / flip / flash still apply; swaps idle/walk strip off `player.is_walking`. Env `DTS_CHAR=a|b|c` picks the variant for captures; `DEFAULT_CHAR` in the script is the shipped one. Frame counts live in `FRAMES`.
+
+Captures: `char_a/b/c.png`, `char_zoom.png` (3-up), `char_stack.png`.
+
+Open after the pick: per-tool sprite in the hand (sheets all draw a bucket; the ColorRect tools are hidden), scoop animation (still the old arm tween on a hidden node — add a 2-frame scoop strip), lantern still ColorRects.
