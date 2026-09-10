@@ -590,6 +590,9 @@ func _ready() -> void:
 	town = preload("res://scripts/world/town.gd").new()
 	town.world = self
 	add_child(town)
+	var skin := preload("res://scripts/world/skin.gd").new()
+	skin.world = self
+	add_child(skin)
 	_build_shop()
 	town.build()
 	_build_water()
