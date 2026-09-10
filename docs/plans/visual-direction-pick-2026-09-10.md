@@ -22,3 +22,16 @@ All three are single flat plates with a PIL bloom/vignette/grain comp, NOT layer
 4. HUD needs a matching pass — the Silkscreen pixel HUD fights A and C.
 
 Tooling: ComfyUI server per `ArtGen/comfy/README.md` (port 8188, our own venv, not the Desktop app). Packs live in the session scratchpad `packs/` — copy into `assets/` once a pixel direction is picked.
+
+## 2026-09-10 later — B picked, first in-engine screen done
+Wes: *"I mean B def looks the best."* Branch **`v3-pixel-art`** (off v2-2d-polish @ 97a6a9b).
+
+Done: `scripts/world/town.gd` rewritten as sprites (same API; `game_world.gd` untouched). Pack art copied to `assets/art/` (+ `LICENSES.md`); recolored/assembled sprites baked to `assets/art/drainsville/` by a PIL script (houses hue-shifted to wood and lifted ×1.45 so they read in daylight; water tower = barrel ×3 on drawn legs; swamp trees keyed from their black bg). Sprites at world scale 0.5 = 1:1 screen px at 720p, nearest filter on the town node. Captures: `_screenshots/lookdev-2026-09-10/ingame_town_{day,night}.png`.
+
+Known gaps, in order:
+1. **Player is ~10 world units tall vs 90-unit houses** (the yellow eyes at the pawn door). Needs a real player sprite ~20 units and the interaction/scoop positions checked. Biggest remaining "pasted-in" tell.
+2. **Ground/terrain** is still the procedural dirt slab (40% of frame). Next: tiled ground (Gothicvania swamp tileset / CraftPix) + camera framing lower so the dirt is ~25%.
+3. **Signs** are unreadable at font size 5; plate not centered on text. Bake sign text into the sprite or use a larger plate.
+4. Sky/sun/moon are still procedural (white disc). Replace with a pixel sky gradient + sun sprite; keep the heal grade.
+5. Night: lamp point-lights work; string bulbs are white dots, want warm + bloom. House windows should glow (bake an emissive window overlay).
+6. Then pools area and caves in the same language. Do NOT re-tune the old procedural draws anywhere.
