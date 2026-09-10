@@ -35,3 +35,25 @@ Known gaps, in order:
 4. Sky/sun/moon are still procedural (white disc). Replace with a pixel sky gradient + sun sprite; keep the heal grade.
 5. Night: lamp point-lights work; string bulbs are white dots, want warm + bloom. House windows should glow (bake an emissive window overlay).
 6. Then pools area and caves in the same language. Do NOT re-tune the old procedural draws anywhere.
+
+## 2026-09-10 later still — Gemini imagegen joined the pipeline; whole overworld skinned
+
+Wes proposed the new `imagegen` skill (Gemini web, free) for assets. Split agreed and then used:
+- **Gemini for single flattened pictures**: sky (day / dusk / night, three-way crossfade driven off the old sky gradient's mid colour), ground cross-section texture, one bayou shack (`shack_a`, west end of the town, style 3). Sources kept in `assets/gen/`, bakes in `assets/art/drainsville/`. Bake script lives in the session scratchpad (`bake/bake_gen.py`); the recipe is: crop, LANCZOS to 2-screen-px art grid, quantize, key magenta/white, `x2 NEAREST`.
+- **Packs for anything that repeats**: CraftPix trees/willows/bushes/stones/tufts along the banks (`skin.gd::_build_vegetation`, seeded).
+
+New module `scripts/world/skin.gd` (created next to `town` in `game_world._ready`, builds deferred): painted skies + fill, pixel sun/moon riding the old nodes' positions (their orbs hidden, lights kept), far pines in `treeline_layer` (two rows) + cypress silhouette band in `near_hills_layer`, textured ground polygon + depth shade + surface strip tiles, dark mud beds under every basin, murk overlay polygons that copy each `water_polygons[i].polygon` per frame (z 4, alpha 0.7), bank vegetation.
+
+`game_world.gd` changes are switches only: `const V3_SKIN := true` skips `_build_clouds/_distant_hills/_treeline/_terrain_details/_vegetation/_tree_trunks/_mud_patches/_mushrooms/_ferns/_left_trees/_cypresses`. Camera offset in `player.tscn` -55 → -38 (ground sits lower in frame).
+
+Town fixes: buildings/props now z ≤ -1 so the player (z 0) is in front (he was hidden behind z 3 sprites — the "ten-pixel eyes" was a z-order bug, not a size bug); baked sign textures (`sign_<name>.png`, Silkscreen 8px, `building()` prefers them); additive window-glow rects per house (`WINDOWS` table, texture px) lit by `update_glow`; warm string bulbs.
+
+Captures: `_screenshots/lookdev-2026-09-10/v3b_*.png` (town day/dusk/night, pools x3, stacks).
+
+**Still old / next:**
+1. Billboards: pink `ColorRect` + smooth font (`_build_billboards`) — reskin to a wooden pixel board with Silkscreen; they are story content so keep the text system.
+2. Water: shader sparkle/foam layers still read as noise; needs an authored pixel-water pass (animated tile strip) rather than more tint.
+3. Island house / politicians / cave entrances / camels / pumps / east tower — procedural props still in place.
+4. Caves scene untouched.
+5. Player: current ColorRect figure reads fine at 2x; revisit only if Wes calls it.
+6. Credits screen line for CraftPix (OGA-BY) and Admurin (CC-BY) — Admurin not used in-engine yet; CraftPix is.

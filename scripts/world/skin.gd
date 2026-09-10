@@ -12,6 +12,10 @@ var world: Node2D = null
 var _sky: Sprite2D = null
 var _sky_night: Sprite2D = null
 var _sky_dusk: Sprite2D = null
+var _tree_fill: ColorRect = null
+var _cypress_fill: ColorRect = null
+var _cypress: Array = []
+var _water_tints: Array = []
 var _sky_fill: ColorRect = null
 var _sun: Sprite2D = null
 var _moon: Sprite2D = null
@@ -28,12 +32,38 @@ func _build() -> void:
 	_build_sun_moon()
 	_build_treeline()
 	_build_ground()
+	_build_vegetation()
 
 # --- sky ----------------------------------------------------------------
 func _build_sky() -> void:
-	for l in [world.far_hills_layer, world.near_hills_layer]:
-		if l:
-			l.visible = false
+	if world.far_hills_layer:
+		world.far_hills_layer.visible = false
+	var nh: ParallaxLayer = world.near_hills_layer
+	if nh:
+		for c in nh.get_children():
+			if c is CanvasItem:
+				(c as CanvasItem).visible = false
+		var ctex: Texture2D = _tex("cypress_band")
+		var cw: float = ctex.get_width() * SCALE
+		var ww: float = world.terrain_points[world.terrain_points.size() - 1].x + 400.0
+		_cypress_fill = ColorRect.new()
+		_cypress_fill.color = Color(38.0 / 255.0, 56.0 / 255.0, 58.0 / 255.0)
+		_cypress_fill.position = Vector2(-1000.0, 196.0)
+		_cypress_fill.size = Vector2(ww + 2000.0, 1200.0)
+		_cypress_fill.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_cypress_fill.z_index = -4
+		nh.add_child(_cypress_fill)
+		var cx: float = -1000.0
+		while cx < ww:
+			var c := Sprite2D.new()
+			c.texture = ctex
+			c.centered = false
+			c.scale = Vector2(SCALE, SCALE)
+			c.position = Vector2(cx, 198.0 - ctex.get_height() * SCALE)
+			c.z_index = -4
+			nh.add_child(c)
+			_cypress.append(c)
+			cx += cw
 	for c in world.clouds:
 		if c:
 			c.visible = false
@@ -101,6 +131,14 @@ func _build_treeline() -> void:
 	var tex: Texture2D = _tex("far_treeline")
 	var w: float = tex.get_width() * SCALE
 	var world_w: float = world.terrain_points[world.terrain_points.size() - 1].x + 400.0
+	# Solid band under the pines so low terrain never shows sky beneath the treeline.
+	_tree_fill = ColorRect.new()
+	_tree_fill.color = Color(0.36, 0.44, 0.42)
+	_tree_fill.position = Vector2(-1000.0, 150.0 - 3.0)
+	_tree_fill.size = Vector2(world_w + 2000.0, 60.0)
+	_tree_fill.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_tree_fill.z_index = -5
+	tl.add_child(_tree_fill)
 	var x: float = -900.0
 	while x < world_w:
 		var s := Sprite2D.new()
@@ -110,6 +148,16 @@ func _build_treeline() -> void:
 		s.position = Vector2(x, 150.0 - tex.get_height() * SCALE)
 		s.z_index = -5
 		tl.add_child(s)
+		# Second, darker row a little lower: reads as forest depth, not a flat wall.
+		var s2 := Sprite2D.new()
+		s2.texture = tex
+		s2.centered = false
+		s2.scale = Vector2(SCALE, SCALE)
+		s2.flip_h = true
+		s2.position = Vector2(x + w * 0.37, 172.0 - tex.get_height() * SCALE)
+		s2.modulate = Color(0.62, 0.68, 0.66)
+		s2.z_index = -5
+		tl.add_child(s2)
 		x += w
 
 # --- ground: textured polygon under the terrain line + surface strip -------
@@ -152,6 +200,33 @@ func _build_ground() -> void:
 	shade.vertex_colors = sc
 	shade.z_index = -3
 	add_child(shade)
+	# Dark mud beds under every pool basin (the water shader refracts what is
+	# behind it; bright root texture there read as a grey sheet).
+	var bed_tex: Texture2D = _tex("ground_dirt")
+	for r in world.SWAMP_RANGES:
+		var bed := Polygon2D.new()
+		var bv := PackedVector2Array()
+		var top_y: float = minf(pts[r[0]].y, pts[r[1]].y)
+		bv.append(Vector2(pts[r[0]].x, top_y - 2.0))
+		for i in range(r[0], r[1] + 1):
+			bv.append(pts[i])
+		bv.append(Vector2(pts[r[1]].x, top_y - 2.0))
+		bed.polygon = bv
+		bed.texture = bed_tex
+		bed.texture_repeat = CanvasItem.TEXTURE_REPEAT_MIRROR
+		bed.texture_scale = Vector2(2.0, 2.0)
+		bed.color = Color(0.22, 0.20, 0.16)
+		bed.z_index = -3
+		add_child(bed)
+	# Murk overlays that track each water polygon: the shader's sky reflection
+	# and sparkle wash the pools out to grey; this puts the pool's colour back.
+	for i in range(world.water_polygons.size()):
+		var t := Polygon2D.new()
+		var wc: Color = world.SWAMP_WATER_COLORS[i]
+		t.color = Color(wc.r, wc.g, wc.b, 0.7)
+		t.z_index = 4
+		add_child(t)
+		_water_tints.append(t)
 	# Surface strip: 32-unit tiles following the terrain slope.
 	var tiles: Array = []
 	for i in range(10):
@@ -176,6 +251,59 @@ func _build_ground() -> void:
 		x += 32.0 * cos(s.rotation)
 		k += 1
 
+# --- vegetation: pack trees / willows / bushes / stones / tufts along the banks ---
+func _build_vegetation() -> void:
+	var pts: Array = world.terrain_points
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 90210
+	# Keep-out spans: town strip and every pool basin (plus a margin).
+	var spans: Array = [[-600.0, 130.0]]
+	for r in world.SWAMP_RANGES:
+		spans.append([pts[r[0]].x - 24.0, pts[r[1]].x + 24.0])
+	var x: float = -520.0
+	var end_x: float = pts[-1].x - 40.0
+	while x < end_x:
+		var blocked := false
+		for sp in spans:
+			if x > sp[0] and x < sp[1]:
+				blocked = true
+				break
+		if blocked:
+			x += 18.0
+			continue
+		var gy: float = world._get_terrain_y_at(x)
+		if gy > 0.0:
+			var roll: float = rng.randf()
+			var flip: bool = rng.randf() < 0.5
+			if roll < 0.14:
+				_veg("tree_%d" % rng.randi_range(1, 3), x, gy + 2.0, -4, flip)
+			elif roll < 0.24:
+				_veg("willow_%d" % rng.randi_range(1, 3), x, gy + 2.0, -4, flip)
+			elif roll < 0.55:
+				_veg("bush_%d" % rng.randi_range(4, 9), x, gy + 1.0, 1 if rng.randf() < 0.5 else -1, flip)
+			elif roll < 0.72:
+				_veg("stone_%d" % rng.randi_range(1, 5), x, gy + 1.0, -1, flip)
+			else:
+				_veg("tuft_%d" % rng.randi_range(1, 6), x, gy + 1.0, 1, flip)
+		x += rng.randf_range(28.0, 70.0)
+	# A willow leaning over each pool's near bank.
+	for r in world.SWAMP_RANGES:
+		var bx: float = pts[r[0]].x - 14.0
+		var by: float = world._get_terrain_y_at(bx)
+		if by > 0.0:
+			_veg("willow_%d" % rng.randi_range(2, 3), bx, by + 2.0, -4, false)
+
+func _veg(name: String, x: float, ground_y: float, z: int, flip: bool) -> Sprite2D:
+	var s := Sprite2D.new()
+	s.texture = _tex(name)
+	s.centered = false
+	s.scale = Vector2(SCALE, SCALE)
+	s.flip_h = flip
+	s.position = Vector2(x - s.texture.get_width() * SCALE * 0.5, ground_y - s.texture.get_height() * SCALE)
+	s.z_index = z
+	add_child(s)
+	return s
+
 func _process(_dt: float) -> void:
 	if _sky and world.sky_gradient_res:
 		var cols: PackedColorArray = world.sky_gradient_res.colors
@@ -193,6 +321,17 @@ func _process(_dt: float) -> void:
 			# Fill matches the bottom row of whichever sky is showing.
 			var fill: Color = Color(0.60, 0.83, 0.89).lerp(Color(0.96, 0.74, 0.60), dusk_amt).lerp(Color(0.18, 0.30, 0.51), night_amt)
 			_sky_fill.modulate = fill * tint
+			if _tree_fill:
+				_tree_fill.modulate = Color(tint, tint, tint).lerp(Color(0.12, 0.16, 0.22), night_amt)
+			if _cypress_fill:
+				var cm: Color = Color(tint, tint, tint).lerp(Color(0.10, 0.13, 0.20), night_amt)
+				_cypress_fill.modulate = cm
+				for c in _cypress:
+					c.modulate = cm
+	for i in range(_water_tints.size()):
+		var wp: Polygon2D = world.water_polygons[i]
+		_water_tints[i].polygon = wp.polygon
+		_water_tints[i].visible = wp.visible and wp.polygon.size() >= 3
 	if _sun and world.sun_node:
 		_sun.global_position = world.sun_node.global_position.round()
 		_sun.visible = world.sun_node.visible

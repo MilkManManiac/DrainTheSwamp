@@ -241,6 +241,9 @@ const SWAMP_RANGES: Array = [
 	[186, 214],  # The Atlantic
 ]
 const SWAMP_COUNT: int = 10
+# v3 pixel-art skin (scripts/world/skin.gd) replaces the procedural sky/ground/
+# vegetation; the builders below stay in the file but are not run when it is on.
+const V3_SKIN := true
 const WATER_SHADER = preload("res://shaders/water.gdshader")
 const POST_PROCESS_SHADER = preload("res://shaders/post_process.gdshader")
 const TERRAIN_SHADER = preload("res://shaders/terrain.gdshader")
@@ -581,11 +584,15 @@ func _ready() -> void:
 	_build_parallax()
 	_build_sky()
 	_build_sun()
-	_build_clouds()
-	_build_distant_hills()
-	_build_treeline()
+	if not V3_SKIN:
+		_build_clouds()
+	if not V3_SKIN:
+		_build_distant_hills()
+	if not V3_SKIN:
+		_build_treeline()
 	_build_terrain()
-	_build_terrain_details()
+	if not V3_SKIN:
+		_build_terrain_details()
 	_build_terrain_zones()
 	town = preload("res://scripts/world/town.gd").new()
 	town.world = self
@@ -599,16 +606,21 @@ func _ready() -> void:
 	_build_water_walls()
 	_build_water_detect_areas()
 	_build_swamp_labels()
-	_build_vegetation()
+	if not V3_SKIN:
+		_build_vegetation()
 	_build_stars()
 	_build_fireflies()
-	_build_tree_trunks()
+	if not V3_SKIN:
+		_build_tree_trunks()
 	_build_lily_pads()
 	_build_depth_gradients()
 	_build_shimmer_lines()
-	_build_mud_patches()
-	_build_mushrooms()
-	_build_ferns()
+	if not V3_SKIN:
+		_build_mud_patches()
+	if not V3_SKIN:
+		_build_mushrooms()
+	if not V3_SKIN:
+		_build_ferns()
 	_build_moon()
 	_build_foam_lines()
 	_build_fog_patches()
@@ -624,8 +636,10 @@ func _ready() -> void:
 	_build_pool_features()
 	_build_pool_glow_lights()
 	_build_left_boundary()
-	_build_left_trees()
-	_build_cypresses()
+	if not V3_SKIN:
+		_build_left_trees()
+	if not V3_SKIN:
+		_build_cypresses()
 	_build_right_boundary()
 	_build_island_house()
 	_build_island_politicians()
