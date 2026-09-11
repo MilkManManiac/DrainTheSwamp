@@ -253,6 +253,7 @@ const V3_WATER := true
 # not run when these are on.
 const V3_CRITTERS := true
 const V3_NIGHT := true
+const V3_PROPS := true  # scripts/world/props.gd: pumps, camels, island, helicopter, wanted poster
 const WATER_SHADER = preload("res://shaders/water.gdshader")
 const POST_PROCESS_SHADER = preload("res://shaders/post_process.gdshader")
 const TERRAIN_SHADER = preload("res://shaders/terrain.gdshader")
@@ -627,6 +628,10 @@ func _ready() -> void:
 		night_mod = preload("res://scripts/world/night.gd").new()
 		night_mod.world = self
 		add_child(night_mod)
+	if V3_PROPS:
+		var props := preload("res://scripts/world/props.gd").new()
+		props.world = self
+		add_child(props)
 	_build_shop()
 	town.build()
 	_build_water()
@@ -4325,6 +4330,8 @@ func _build_left_trees() -> void:
 
 # --- Island with house at the right end ---
 func _build_island_house() -> void:
+	if V3_PROPS:
+		return
 	var island_cx: float = 5660.0
 	var island_y: float = 484.0  # Ground level on the flat top
 	var mw: float = 80.0  # Mansion width
@@ -4705,6 +4712,8 @@ func _spawn_helicopter() -> void:
 	helicopter_active.position = Vector2(start_x, sky_y)
 	helicopter_active.z_index = 15
 	add_child(helicopter_active)
+	if V3_PROPS:
+		return  # props.gd adds the sprite; the flight path below in _process is unchanged
 
 	# Body
 	var body := Polygon2D.new()
@@ -5588,6 +5597,8 @@ func _on_pump_changed(swamp_index: int, _level: int) -> void:
 	_build_pump_prop(swamp_index)
 
 func _build_pump_prop(swamp_index: int) -> void:
+	if V3_PROPS:
+		return
 	if pump_props.has(swamp_index):
 		var old: Node2D = pump_props[swamp_index]
 		if is_instance_valid(old):
