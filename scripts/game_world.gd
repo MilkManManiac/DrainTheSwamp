@@ -244,6 +244,12 @@ const SWAMP_COUNT: int = 10
 # v3 pixel-art skin (scripts/world/skin.gd) replaces the procedural sky/ground/
 # vegetation; the builders below stay in the file but are not run when it is on.
 const V3_SKIN := true
+# v3 pixel-art critters (scripts/world/critters.gd) and night dressing
+# (scripts/world/night.gd) — see docs/plans/pixel-art-revamp-2026-09-11.md,
+# track 4. Builders below stay in the file (quarantined, not deleted) but are
+# not run when these are on.
+const V3_CRITTERS := true
+const V3_NIGHT := true
 const WATER_SHADER = preload("res://shaders/water.gdshader")
 const POST_PROCESS_SHADER = preload("res://shaders/post_process.gdshader")
 const TERRAIN_SHADER = preload("res://shaders/terrain.gdshader")
@@ -275,7 +281,7 @@ var swamp_percent_labels: Array[Label] = []
 var swamp_gallon_labels: Array[Label] = []
 var clouds: Array[Node2D] = []
 var cattails: Array[Node2D] = []
-var stars: Array[ColorRect] = []
+var stars: Array[CanvasItem] = []
 var fireflies: Array[Dictionary] = []
 var leaves: Array[Dictionary] = []
 var leaf_timer: float = 0.0
@@ -301,6 +307,12 @@ var helicopter_active: Node2D = null
 # Drainsville (extracted to scripts/world/town.gd) — owns the town visuals and
 # their day/night glow elements; game_world drives town.update_glow() per frame.
 var town: Node2D = null
+
+# v3 critters + night (scripts/world/critters.gd, scripts/world/night.gd) —
+# critters_mod is used only at build time (sprite factory); night_mod is
+# driven per frame from _process via night_mod.update(t).
+var critters_mod: Node2D = null
+var night_mod: Node2D = null
 
 # Pump props: swamp_index -> root Node2D (rebuilt on level-up)
 var pump_props: Dictionary = {}
@@ -600,6 +612,14 @@ func _ready() -> void:
 	var skin := preload("res://scripts/world/skin.gd").new()
 	skin.world = self
 	add_child(skin)
+	if V3_CRITTERS:
+		critters_mod = preload("res://scripts/world/critters.gd").new()
+		critters_mod.world = self
+		add_child(critters_mod)
+	if V3_NIGHT:
+		night_mod = preload("res://scripts/world/night.gd").new()
+		night_mod.world = self
+		add_child(night_mod)
 	_build_shop()
 	town.build()
 	_build_water()
@@ -1759,7 +1779,26 @@ func _place_grass_tuft(pos: Vector2) -> void:
 		_make_blade(tuft, Vector2(randf_range(-3, 3), 0), bh, bw, lean, dark, light, _sway_mat_grass, zi)
 
 # --- Stars ---
+const STAR_TEXTURES: Array[String] = [
+	"res://assets/art/drainsville/star_1.png",
+	"res://assets/art/drainsville/star_2.png",
+	"res://assets/art/drainsville/star_3.png",
+	"res://assets/art/drainsville/star_3w.png",
+]
 func _build_stars() -> void:
+	if V3_NIGHT:
+		for i in range(35):
+			var star := Sprite2D.new()
+			star.texture = load(STAR_TEXTURES[randi() % STAR_TEXTURES.size()])
+			star.centered = true
+			star.scale = Vector2(0.5, 0.5)
+			star.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+			star.position = Vector2(randf_range(-100, terrain_points[terrain_points.size() - 1].x + 100), randf_range(-80, 100))
+			star.modulate.a = 0.0
+			star.z_index = -11
+			add_child(star)
+			stars.append(star)
+		return
 	for i in range(35):
 		var star := ColorRect.new()
 		var sz: float = randf_range(1, 3)
@@ -1774,6 +1813,44 @@ func _build_stars() -> void:
 
 # --- Fireflies ---
 func _build_fireflies() -> void:
+	if V3_NIGHT:
+		for i in range(36):
+			var fly := Sprite2D.new()
+			fly.texture = load("res://assets/art/drainsville/firefly.png")
+			fly.centered = true
+			fly.scale = Vector2(0.5, 0.5)
+			fly.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+			fly.modulate.a = 0.0
+			fly.z_index = 6
+			var base_x0: float = randf_range(50, terrain_points[terrain_points.size() - 1].x - 30)
+			var terrain_at_ff0: float = _get_terrain_y_at(base_x0)
+			var base_y0: float = terrain_at_ff0 - randf_range(10, 45)
+			fly.position = Vector2(base_x0, base_y0)
+			add_child(fly)
+			var glow0 := Sprite2D.new()
+			glow0.texture = load("res://assets/art/drainsville/glow_16.png")
+			glow0.centered = true
+			glow0.modulate = Color(0.85, 1.0, 0.5, 0.0)
+			glow0.scale = Vector2(0.7, 0.7)
+			glow0.z_index = 5
+			var glow_mat0 := CanvasItemMaterial.new()
+			glow_mat0.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
+			glow0.material = glow_mat0
+			fly.add_child(glow0)
+			fireflies.append({
+				"node": fly,
+				"glow": glow0,
+				"base_x": base_x0,
+				"base_y": base_y0,
+				"phase_x": randf() * TAU,
+				"phase_y": randf() * TAU,
+				"speed_x": randf_range(0.3, 0.8),
+				"speed_y": randf_range(0.4, 0.9),
+				"amp_x": randf_range(15, 40),
+				"amp_y": randf_range(10, 25),
+				"glow_phase": randf() * TAU,
+			})
+		return
 	for i in range(36):
 		var fly := ColorRect.new()
 		fly.size = Vector2(2, 2)
@@ -2186,6 +2263,25 @@ func _build_dragonflies() -> void:
 		Color(0.9, 0.4, 0.2),   # Orange
 	]
 	for i in range(16):
+		if V3_CRITTERS:
+			var df_sprite: Sprite2D = critters_mod.make_dragonfly()
+			df_sprite.z_index = 6
+			add_child(df_sprite)
+			var base_x0: float = randf_range(80, terrain_points[terrain_points.size() - 1].x - 60)
+			var terrain_at_df0: float = _get_terrain_y_at(base_x0)
+			var base_y0: float = terrain_at_df0 - randf_range(15, 50)
+			df_sprite.position = Vector2(base_x0, base_y0)
+			dragonflies.append({
+				"node": df_sprite,
+				"base_x": base_x0,
+				"base_y": base_y0,
+				"phase_x": randf() * TAU,
+				"phase_y": randf() * TAU,
+				"speed": randf_range(0.8, 1.5),
+				"amp_x": randf_range(30, 60),
+				"amp_y": randf_range(15, 30),
+			})
+			continue
 		var df := Node2D.new()
 		df.z_index = 6
 		add_child(df)
@@ -2316,21 +2412,29 @@ func _spawn_bird() -> void:
 	for fi in range(flock_count):
 		if birds.size() >= 8:
 			break
-		var bird := Node2D.new()
-		bird.z_index = -7
-		add_child(bird)
-		var wing_l := Line2D.new()
-		wing_l.width = 1.5
-		wing_l.default_color = Color(0.1, 0.1, 0.15, 0.6)
-		wing_l.add_point(Vector2(-4, 2))
-		wing_l.add_point(Vector2(0, 0))
-		bird.add_child(wing_l)
-		var wing_r := Line2D.new()
-		wing_r.width = 1.5
-		wing_r.default_color = Color(0.1, 0.1, 0.15, 0.6)
-		wing_r.add_point(Vector2(0, 0))
-		wing_r.add_point(Vector2(4, 2))
-		bird.add_child(wing_r)
+		var bird: Node2D
+		var wing_l: Line2D = null
+		var wing_r: Line2D = null
+		if V3_CRITTERS:
+			bird = critters_mod.make_bird()
+			bird.z_index = -7
+			add_child(bird)
+		else:
+			bird = Node2D.new()
+			bird.z_index = -7
+			add_child(bird)
+			wing_l = Line2D.new()
+			wing_l.width = 1.5
+			wing_l.default_color = Color(0.1, 0.1, 0.15, 0.6)
+			wing_l.add_point(Vector2(-4, 2))
+			wing_l.add_point(Vector2(0, 0))
+			bird.add_child(wing_l)
+			wing_r = Line2D.new()
+			wing_r.width = 1.5
+			wing_r.default_color = Color(0.1, 0.1, 0.15, 0.6)
+			wing_r.add_point(Vector2(0, 0))
+			wing_r.add_point(Vector2(4, 2))
+			bird.add_child(wing_r)
 		# V-formation offset: leader at front, followers behind and to sides
 		var offset_x: float = -float(fi) * randf_range(8, 14)
 		var offset_y: float = float(fi) * (4.0 if fi % 2 == 0 else -4.0) * randf_range(0.5, 1.0)
@@ -2384,6 +2488,27 @@ func _spawn_ripple(rx: float, ry: float) -> void:
 func _spawn_butterfly() -> void:
 	var cam: Camera2D = get_viewport().get_camera_2d() if get_viewport() else null
 	var cam_x: float = cam.get_screen_center_position().x if cam else 320.0
+	if V3_CRITTERS:
+		var bf_sprite: Sprite2D = critters_mod.make_butterfly()
+		bf_sprite.z_index = 6
+		add_child(bf_sprite)
+		var bx0: float = cam_x + randf_range(-350, 350)
+		var terrain_at_bf0: float = _get_terrain_y_at(bx0)
+		var by0: float = terrain_at_bf0 - randf_range(10, 40)
+		bf_sprite.position = Vector2(bx0, by0)
+		butterflies.append({
+			"node": bf_sprite,
+			"wing_l": null,
+			"wing_r": null,
+			"phase": randf() * TAU,
+			"flutter_speed": randf_range(6.0, 10.0),
+			"drift_x": randf_range(-15, 15),
+			"bob_amp": randf_range(5, 12),
+			"base_y": by0,
+			"lifetime": 0.0,
+			"max_life": randf_range(8, 18),
+		})
+		return
 	var bf_node := Node2D.new()
 	bf_node.z_index = 6
 	add_child(bf_node)
@@ -2541,6 +2666,27 @@ func _build_fish() -> void:
 		var basin_w: float = basin_right.x - basin_left.x
 		var count: int = clampi(int(basin_w / 40.0), 1, 5)
 		for j in range(count):
+			if V3_CRITTERS:
+				var fish_sprite: Sprite2D = critters_mod.make_fish()
+				fish_sprite.z_index = 4
+				add_child(fish_sprite)
+				var fx0: float = basin_left.x + randf_range(12, basin_w - 12)
+				fish.append({
+					"node": fish_sprite,
+					"swamp": i,
+					"x": fx0,
+					"swim_phase": randf() * TAU,
+					"swim_speed": randf_range(0.6, 1.4),
+					"swim_range": randf_range(15, 35),
+					"depth_offset": randf_range(0.3, 0.7),
+					"direction": 1.0 if randf() > 0.5 else -1.0,
+					"alive": true,
+					"death_timer": 0.0,
+					"jump_timer": randf_range(12.0, 35.0),
+					"jumping": false,
+					"jump_time": 0.0,
+				})
+				continue
 			var fish_node := Node2D.new()
 			fish_node.z_index = 4
 			add_child(fish_node)
@@ -2604,6 +2750,20 @@ func _build_frogs() -> void:
 		if randf() < 0.4:
 			continue
 		var pad_node: Node2D = lp["node"]
+		if V3_CRITTERS:
+			var frog_sprite: Sprite2D = critters_mod.make_frog()
+			frog_sprite.z_index = 5
+			pad_node.add_child(frog_sprite)
+			frogs.append({
+				"node": frog_sprite,
+				"swamp": lp["swamp"],
+				"hop_timer": randf_range(3.0, 10.0),
+				"hopping": false,
+				"hop_progress": 0.0,
+				"base_y": frog_sprite.position.y,
+			})
+			placed += 1
+			continue
 		var frog_node := Node2D.new()
 		frog_node.z_index = 5
 		pad_node.add_child(frog_node)
@@ -2798,6 +2958,18 @@ func _build_turtles() -> void:
 		else:
 			tx = exit_top.x + randf_range(-10, -2)
 			ty = exit_top.y + randf_range(-2, 4)
+		if V3_CRITTERS:
+			var turtle_sprite: Sprite2D = critters_mod.make_turtle()
+			turtle_sprite.z_index = 3
+			turtle_sprite.position = Vector2(tx, ty - 3)
+			add_child(turtle_sprite)
+			turtles.append({
+				"node": turtle_sprite,
+				"swamp": i,
+				"head_ref": turtle_sprite,
+				"phase": randf() * TAU,
+			})
+			continue
 		var turtle_node := Node2D.new()
 		turtle_node.z_index = 3
 		add_child(turtle_node)
@@ -2861,6 +3033,21 @@ func _build_tadpoles() -> void:
 		var basin_w: float = basin_right.x - basin_left.x
 		var count: int = clampi(int(basin_w / 50.0), 1, 4)
 		for j in range(count):
+			if V3_CRITTERS:
+				var tp_sprite: Sprite2D = critters_mod.make_tadpole()
+				tp_sprite.z_index = 3
+				add_child(tp_sprite)
+				var tpx0: float = basin_left.x + randf_range(8, basin_w - 8)
+				tadpoles.append({
+					"node": tp_sprite,
+					"swamp": i,
+					"x": tpx0,
+					"swim_phase": randf() * TAU,
+					"swim_speed": randf_range(1.5, 3.0),
+					"swim_range": randf_range(10, 25),
+					"depth_offset": randf_range(0.5, 0.9),
+				})
+				continue
 			var tp_node := Node2D.new()
 			tp_node.z_index = 3
 			add_child(tp_node)
@@ -6333,6 +6520,8 @@ func _process(delta: float) -> void:
 	elif t >= 0.18 and t <= 0.25:
 		glow_t = 1.0 - (t - 0.18) / 0.07
 	town.update_glow(glow_t)
+	if V3_NIGHT and night_mod:
+		night_mod.update(t)
 
 	# Update shader uniforms
 	var daytime_val: float = 0.0
@@ -6682,9 +6871,13 @@ func _process(delta: float) -> void:
 	elif t < 0.2:
 		star_alpha = clampf(1.0 - (t - 0.15) / 0.05, 0.0, 1.0)
 	for i in range(stars.size()):
-		var s: ColorRect = stars[i]
+		var s = stars[i]
 		var twinkle: float = (sin(wave_time * 2.5 + s.position.x * 0.7) + 1.0) * 0.5
-		s.color.a = star_alpha * lerpf(0.4, 1.0, twinkle)
+		var s_a: float = star_alpha * lerpf(0.4, 1.0, twinkle)
+		if V3_NIGHT:
+			s.modulate.a = s_a
+		else:
+			(s as ColorRect).color.a = s_a
 
 	# Fireflies: visible from dusk through night
 	var fly_alpha: float = 0.0
@@ -6695,16 +6888,21 @@ func _process(delta: float) -> void:
 	elif t < 0.2:
 		fly_alpha = clampf(1.0 - (t - 0.15) / 0.05, 0.0, 1.0)
 	for fd in fireflies:
-		var node: ColorRect = fd["node"]
+		var node = fd["node"]
 		var px: float = fd["base_x"] + sin(wave_time * fd["speed_x"] + fd["phase_x"]) * fd["amp_x"]
 		var py: float = fd["base_y"] + sin(wave_time * fd["speed_y"] + fd["phase_y"]) * fd["amp_y"]
 		py = minf(py, _get_terrain_y_at(px) - 10.0)
 		node.position = Vector2(px, py)
 		var glow: float = (sin(wave_time * 1.8 + fd["glow_phase"]) + 1.0) * 0.5
 		var fly_vis: float = fly_alpha * lerpf(0.2, 0.9, glow)
-		node.color.a = fly_vis
-		if fd.has("glow"):
-			fd["glow"].color.a = fly_vis * 0.35
+		if V3_NIGHT:
+			node.modulate.a = fly_vis
+			if fd.has("glow"):
+				fd["glow"].modulate.a = fly_vis * 0.9
+		else:
+			(node as ColorRect).color.a = fly_vis
+			if fd.has("glow"):
+				(fd["glow"] as ColorRect).color.a = fly_vis * 0.35
 
 	# Leaf particles
 	leaf_timer += delta
@@ -6844,9 +7042,12 @@ func _process(delta: float) -> void:
 		dnode.position = Vector2(dpx, dpy)
 		dnode.modulate.a = df_alpha
 		# Wing flap
-		var flap: float = sin(wave_time * 12.0 + dd["phase_x"]) * 0.5
-		dd["wing_l"].position.y = -2 + flap
-		dd["wing_r"].position.y = -2 - flap
+		if V3_CRITTERS:
+			(dnode as Sprite2D).frame = wrapi(int(wave_time * 14.0 + dd["phase_x"]), 0, 2)
+		else:
+			var flap: float = sin(wave_time * 12.0 + dd["phase_x"]) * 0.5
+			dd["wing_l"].position.y = -2 + flap
+			dd["wing_r"].position.y = -2 - flap
 
 	# Water reflection highlights (daytime)
 	var hl_alpha: float = 0.0
@@ -6953,9 +7154,12 @@ func _process(delta: float) -> void:
 		bnode.position.x += brd["speed"] * delta
 		bnode.position.y += brd["y_drift"] * delta
 		# Wing flap animation
-		var flap_angle: float = sin(wave_time * brd["flap_speed"]) * 3.0
-		brd["wing_l"].points[0].y = 2 + flap_angle
-		brd["wing_r"].points[1].y = 2 + flap_angle
+		if V3_CRITTERS:
+			(bnode as Sprite2D).frame = wrapi(int(wave_time * brd["flap_speed"] * 3.0), 0, 3)
+		else:
+			var flap_angle: float = sin(wave_time * brd["flap_speed"]) * 3.0
+			brd["wing_l"].points[0].y = 2 + flap_angle
+			brd["wing_r"].points[1].y = 2 + flap_angle
 		if bnode.position.x > 2000:
 			birds_to_remove.append(i)
 	for i in range(birds_to_remove.size() - 1, -1, -1):
@@ -7191,9 +7395,12 @@ func _process(delta: float) -> void:
 		var bf_bob_y: float = bd["base_y"] + sin(bd["phase"] * 0.4) * bd["bob_amp"]
 		bf_node.position.y = minf(bf_bob_y, _get_terrain_y_at(bf_node.position.x) - 8.0)
 		# Wing flap
-		var wing_scale: float = absf(sin(bd["phase"]))
-		bd["wing_l"].scale.x = wing_scale
-		bd["wing_r"].scale.x = wing_scale
+		if V3_CRITTERS:
+			(bf_node as Sprite2D).frame = wrapi(int(bd["phase"] * 2.0), 0, 2)
+		else:
+			var wing_scale: float = absf(sin(bd["phase"]))
+			bd["wing_l"].scale.x = wing_scale
+			bd["wing_r"].scale.x = wing_scale
 		var bf_life: float = bd["lifetime"] / bd["max_life"]
 		var bf_fade: float = 1.0
 		if bf_life < 0.1:
@@ -7252,7 +7459,7 @@ func _process(delta: float) -> void:
 
 	# Turtle head bob
 	for tt in turtles:
-		var tt_head: ColorRect = tt["head_ref"]
+		var tt_head = tt["head_ref"]
 		var head_bob: float = sin(wave_time * 0.8 + tt["phase"]) * 0.5
 		tt_head.position.y += head_bob * 0.02
 
@@ -7293,8 +7500,13 @@ func _get_cycle_color(t: float) -> Color:
 	var sunrise := Color(1.0, 0.92, 0.85)
 	var noon := Color(1.0, 1.0, 1.0)
 	var golden_hour := Color(1.0, 0.85, 0.6)
-	var sunset := Color(0.95, 0.55, 0.4)
-	var dusk := Color(0.65, 0.35, 0.5)
+	# V3_NIGHT: the old sunset/dusk multiply-tint (0.95,0.55,0.4) -> (0.65,0.35,0.5)
+	# crushed the red channel far above green/blue, so it read as a blood-red
+	# wash over every brown/green surface on screen (not just the sky). The v3
+	# pair keeps a warm amber rim at sunset but holds the channels closer
+	# together through dusk so the ground stays readable as brown, not red.
+	var sunset: Color = Color(0.90, 0.68, 0.56) if V3_NIGHT else Color(0.95, 0.55, 0.4)
+	var dusk: Color = Color(0.58, 0.54, 0.66) if V3_NIGHT else Color(0.65, 0.35, 0.5)
 	var night := Color(0.38, 0.42, 0.66)
 
 	if t < 0.1:

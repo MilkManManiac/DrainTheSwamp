@@ -54,4 +54,25 @@ for y in range(size):
         a = round(a * 6) / 6.0
         p[x, y] = (255, 255, 255, int(a * 255))
 im.resize((size * 2, size * 2), Image.NEAREST).save(OUT / "glow_16.png")
-print("wrote star_1/2/3/3w, firefly, chirp_px, glow_16 to", OUT)
+
+# tadpole: 2-frame strip, round body + curved tail wagging left/right
+TAD = (35, 38, 20, 255)
+TAD_HL = (70, 78, 40, 220)
+tad_a = px_image([
+    "..##...",
+    ".####..",
+    ".####t.",
+    "..##.tt",
+], {"#": TAD, "t": TAD_HL})
+tad_b = px_image([
+    "..##...",
+    ".####..",
+    ".t####.",
+    "tt##...",
+], {"#": TAD, "t": TAD_HL})
+strip = Image.new("RGBA", (tad_a.width + tad_b.width, tad_a.height), (0, 0, 0, 0))
+strip.paste(tad_a, (0, 0))
+strip.paste(tad_b, (tad_a.width, 0))
+strip.save(OUT / "tadpole.png")
+
+print("wrote star_1/2/3/3w, firefly, chirp_px, glow_16, tadpole to", OUT)
