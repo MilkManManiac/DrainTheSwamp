@@ -244,6 +244,9 @@ const SWAMP_COUNT: int = 10
 # v3 pixel-art skin (scripts/world/skin.gd) replaces the procedural sky/ground/
 # vegetation; the builders below stay in the file but are not run when it is on.
 const V3_SKIN := true
+# v3 signage (scripts/world/signage.gd): billboards, basin name posts, SELL
+# planks, cave mouths, pixel float text. Old builders below are gated off.
+const V3_SIGNAGE := true
 const WATER_SHADER = preload("res://shaders/water.gdshader")
 const POST_PROCESS_SHADER = preload("res://shaders/post_process.gdshader")
 const TERRAIN_SHADER = preload("res://shaders/terrain.gdshader")
@@ -600,6 +603,10 @@ func _ready() -> void:
 	var skin := preload("res://scripts/world/skin.gd").new()
 	skin.world = self
 	add_child(skin)
+	if V3_SIGNAGE:
+		var signage := preload("res://scripts/world/signage.gd").new()
+		signage.world = self
+		add_child(signage)
 	_build_shop()
 	town.build()
 	_build_water()
@@ -4631,6 +4638,8 @@ func _format_gallons(gal: float) -> String:
 		return "%.1f" % gal
 
 func _build_swamp_labels() -> void:
+	if V3_SIGNAGE:
+		return
 	swamp_labels.clear()
 	swamp_percent_labels.clear()
 	swamp_gallon_labels.clear()
@@ -5156,16 +5165,17 @@ func _build_shop() -> void:
 	town.building(sx, shop_y, 46.0, 42.0, Color(0.68, 0.52, 0.34), Color(0.52, 0.28, 0.18), "HARDWARE", Color(1.0, 0.86, 0.4), 0)
 
 	# "SELL" indicator (sell point; will move to the water tower in a later pass)
-	var sell_lbl := Label.new()
-	sell_lbl.text = "SELL"
-	sell_lbl.add_theme_font_size_override("font_size", 9)
-	sell_lbl.add_theme_color_override("font_color", Color(1.0, 0.9, 0.3, 0.75))
-	sell_lbl.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.5))
-	sell_lbl.add_theme_constant_override("shadow_offset_x", 1)
-	sell_lbl.add_theme_constant_override("shadow_offset_y", 1)
-	sell_lbl.position = Vector2(sx + 20, shop_y - 8)
-	sell_lbl.z_index = 5
-	add_child(sell_lbl)
+	if not V3_SIGNAGE:
+		var sell_lbl := Label.new()
+		sell_lbl.text = "SELL"
+		sell_lbl.add_theme_font_size_override("font_size", 9)
+		sell_lbl.add_theme_color_override("font_color", Color(1.0, 0.9, 0.3, 0.75))
+		sell_lbl.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.5))
+		sell_lbl.add_theme_constant_override("shadow_offset_x", 1)
+		sell_lbl.add_theme_constant_override("shadow_offset_y", 1)
+		sell_lbl.position = Vector2(sx + 20, shop_y - 8)
+		sell_lbl.z_index = 5
+		add_child(sell_lbl)
 
 	# Shop interaction Area2D
 	var shop_area := Area2D.new()
@@ -5264,17 +5274,18 @@ func _build_east_tower() -> void:
 	east_tower_built = true
 	var gy: float = _grnd(EAST_TOWER_X, 136.0)
 	town.water_tower(EAST_TOWER_X, gy)
-	var sell_lbl := Label.new()
-	sell_lbl.text = "SELL"
-	sell_lbl.add_theme_font_size_override("font_size", 9)
-	sell_lbl.add_theme_color_override("font_color", Color(1.0, 0.85, 0.3))
-	sell_lbl.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.7))
-	sell_lbl.add_theme_constant_override("shadow_offset_x", 1)
-	sell_lbl.add_theme_constant_override("shadow_offset_y", 1)
-	sell_lbl.position = Vector2(EAST_TOWER_X - 12, gy - 104)
-	sell_lbl.size = Vector2(26, 10)
-	sell_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	add_child(sell_lbl)
+	if not V3_SIGNAGE:
+		var sell_lbl := Label.new()
+		sell_lbl.text = "SELL"
+		sell_lbl.add_theme_font_size_override("font_size", 9)
+		sell_lbl.add_theme_color_override("font_color", Color(1.0, 0.85, 0.3))
+		sell_lbl.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.7))
+		sell_lbl.add_theme_constant_override("shadow_offset_x", 1)
+		sell_lbl.add_theme_constant_override("shadow_offset_y", 1)
+		sell_lbl.position = Vector2(EAST_TOWER_X - 12, gy - 104)
+		sell_lbl.size = Vector2(26, 10)
+		sell_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		add_child(sell_lbl)
 	var area := Area2D.new()
 	area.position = Vector2(EAST_TOWER_X, gy - 20)
 	area.collision_layer = 0
@@ -7330,6 +7341,8 @@ func _get_pool_deepest_point(swamp_index: int) -> Vector2:
 	return Vector2(deepest_x, deepest_y)
 
 func _build_billboards() -> void:
+	if V3_SIGNAGE:
+		return
 	var billboard_texts: Array[String] = [
 		"VOTE SWAMPSWORTH\nLeadership You\nCan Trust\nPAID FOR BY FRIENDS OF SWAMPSWORTH",
 		"LOBBYTON 2024\nA Fresh Voice\nFor Real Change\nPAID FOR BY LOBBYTON FOR CONGRESS",
