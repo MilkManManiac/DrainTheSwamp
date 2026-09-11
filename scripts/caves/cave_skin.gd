@@ -32,6 +32,19 @@ const FRAMES := {
 }
 const SIG_FRAME := {"crates": 0, "mine_cart": 1, "pump": 2, "skeleton": 3, "dead_tree": 4, "pillars": 5, "coral": 6}
 const SCALE_STEPS := [0.75, 1.0, 1.25]
+# Family hue for stalactites/roots (2026-09-11 review: same pale icicle sprite in every
+# cave read as one repeated asset). Blended over the baked grey art, not a hard replace.
+const FAMILY_TINT := {
+	"mud": Color(0.60, 0.44, 0.22), "grotto": Color(0.46, 0.60, 0.46),
+	"stone": Color(0.56, 0.63, 0.70), "crystal": Color(0.62, 0.46, 0.78),
+	"deep": Color(0.38, 0.56, 0.78),
+}
+# Floor/ceiling edge-lip trim per family (2026-09-11 review: contour was a flat 1px line).
+const FAMILY_EDGE := {
+	"mud": "edge_moss", "grotto": "edge_moss",
+	"stone": "edge_rubble", "deep": "edge_rubble",
+	"crystal": "edge_crystal",
+}
 
 var cave: Node2D = null
 var _rng := RandomNumberGenerator.new()
@@ -51,6 +64,7 @@ func _ready() -> void:
 	_right = cave.cave_terrain_points[cave.cave_terrain_points.size() - 1].x
 	_build_backdrop()
 	_build_rock()
+	_build_edge_lip()
 	_build_ceiling_props()
 	_build_floor_props()
 	_build_signature()
@@ -124,6 +138,7 @@ func _rock_poly(pts: PackedVector2Array, tint: Color, z: int, shade_top: float =
 	var t: Texture2D = _tex(TILE.get(_family, "tile_stone"))
 	if t:
 		p.texture = t
+		p.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 		p.texture_scale = Vector2(2.0, 2.0)
 	p.color = tint
 	var vc := PackedColorArray()
@@ -183,11 +198,17 @@ func _build_backdrop() -> void:
 		bot_y = maxf(bot_y, p.y)
 	var h: float = t.get_height() * SCALE
 	var py: float = (top_y + bot_y) * 0.5 - h * 0.5 - 10.0
-	var tint: Color = Color.WHITE.lerp(_norm(cave.rock_mid_color), 0.5) * 0.62
+	# 2026-09-11 review: plates read too dark/muddy under the cave lights (Coral's
+	# crystal plate was barely visible). Lean much closer to the plate's own colour.
+	# "deep" plate's own source art is unusually dark (near-black ocean-floor rock)
+	# even after that, so it gets an extra lift or Mariana reads as an empty void.
+	var base_mul: float = 1.18 if _family == "deep" else 0.95
+	var tint: Color = Color.WHITE.lerp(_norm(cave.rock_mid_color), 0.3) * base_mul
 	tint.a = 1.0
 	for i in range(2):
 		var s := Sprite2D.new()
 		s.texture = t
+		s.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 		s.centered = false
 		s.scale = Vector2(SCALE, SCALE)
 		s.flip_h = (i == 1)
@@ -224,14 +245,12 @@ func _build_rock() -> void:
 	fpts.append(Vector2(_right, bottom))
 	fpts.append(Vector2(_left, bottom))
 	_rock_poly(fpts, g_tint, 1, 1.0, 0.35)
-	# floor lip: dark outline + lighter 1px edge just under the contour
+	# floor contour: dark outline; the textured lip strip (moss/rubble/crystal) is
+	# built separately in _build_edge_lip() so the ground reads as more than a line.
 	var line := PackedVector2Array()
-	var lip := PackedVector2Array()
 	for p in tp:
 		line.append(p)
-		lip.append(Vector2(p.x, p.y + 2.0))
 	_outline(line, Color(0.03, 0.02, 0.03, 0.95), 2.0, 1)
-	_outline(lip, (cave.ground_color as Color).lightened(0.35), 1.0, 1)
 
 	# ceiling
 	var cpts := PackedVector2Array()
@@ -265,64 +284,123 @@ func _build_rock() -> void:
 	# wall edge outline so the mouth is a hard pixel edge
 	_outline(PackedVector2Array([Vector2(_right, cp[cp.size() - 1].y - 2.0), Vector2(_right, tp[tp.size() - 1].y + 2.0)]), Color(0.03, 0.02, 0.03, 0.95), 2.0, 5)
 
+# --- edge lip: textured strip along the floor/ceiling contour (moss / rubble /
+# crystal crust per family) so the ground reads as more than a 1px line ------------
+func _build_edge_lip() -> void:
+	var name: String = FAMILY_EDGE.get(_family, "edge_rubble")
+	var t: Texture2D = _tex(name)
+	if t == null:
+		return
+	var tp: Array[Vector2] = cave.cave_terrain_points
+	var cp: Array[Vector2] = cave.cave_ceiling_points
+
+	# floor: band straddles the contour, mostly above it (the lip sits ON the ground)
+	var fpts := PackedVector2Array()
+	for p in tp:
+		fpts.append(Vector2(p.x, p.y - 11.0))
+	for i in range(tp.size() - 1, -1, -1):
+		fpts.append(Vector2(tp[i].x, tp[i].y + 3.0))
+	var fp := Polygon2D.new()
+	fp.polygon = fpts
+	fp.texture = t
+	fp.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	fp.texture_scale = Vector2(2.0, 2.0)
+	fp.z_index = 2
+	add_child(fp)
+
+	# ceiling: same strip, flipped so it hangs from the rock instead of sitting on it
+	var cpts := PackedVector2Array()
+	for p in cp:
+		cpts.append(Vector2(p.x, p.y - 3.0))
+	for i in range(cp.size() - 1, -1, -1):
+		cpts.append(Vector2(cp[i].x, cp[i].y + 11.0))
+	var cpoly := Polygon2D.new()
+	cpoly.polygon = cpts
+	cpoly.texture = t
+	cpoly.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	cpoly.texture_scale = Vector2(2.0, -2.0)  # negative y = sample flipped (Polygon2D has no flip_v)
+	cpoly.z_index = 5
+	add_child(cpoly)
+
 # --- ceiling: stalactites, roots -------------------------------------------
+# 2026-09-11 review: every cave used the same pale icicle at the same even spacing
+# and read as one repeated asset. Tint per family, cluster irregularly (1-4 per
+# stop, jittered), vary length/scale continuously (not 3 fixed steps), and never
+# repeat the same frame+flip+scale combo twice running.
 func _build_ceiling_props() -> void:
-	var x: float = _left + 70.0 + _rng.randf_range(0.0, 40.0)
-	var last_frame: int = -1
-	while x < _right - 40.0:
-		var frame: int = _rng.randi_range(0, FRAMES["stalactites"] - 1)
-		if frame == last_frame:
-			frame = (frame + 1) % FRAMES["stalactites"]
-		last_frame = frame
-		var sm: float = SCALE_STEPS[_rng.randi_range(0, 2)]
-		_strip("stalactites", frame, x, _ceil_y(x) - 1.0, 6, null, _rng.randf() < 0.5, sm, true)
-		# a second, smaller one close by about half the time (clusters, not a comb)
-		if _rng.randf() < 0.5:
-			var x2: float = x + _rng.randf_range(18.0, 34.0)
-			_strip("stalactites", (frame + 2) % FRAMES["stalactites"], x2, _ceil_y(x2) - 1.0, 6, null, _rng.randf() < 0.5, 0.75, true)
-		x += _rng.randf_range(90.0, 170.0)
-	if _family == "mud" or _family == "grotto":
-		var rx: float = _left + 120.0 + _rng.randf_range(0.0, 80.0)
+	var tint: Color = FAMILY_TINT.get(_family, Color.WHITE)
+	var last_key: String = ""
+	var x: float = _left + 50.0 + _rng.randf_range(0.0, 30.0)
+	while x < _right - 30.0:
+		var cluster_n: int = _rng.randi_range(1, 4)
+		var cx: float = x
+		for i in range(cluster_n):
+			if cx >= _right - 20.0:
+				break
+			var frame: int = _rng.randi_range(0, FRAMES["stalactites"] - 1)
+			var flip: bool = _rng.randf() < 0.5
+			var sm: float = _rng.randf_range(0.5, 1.7)
+			var key: String = "%d_%s_%.2f" % [frame, str(flip), sm]
+			if key == last_key:
+				frame = (frame + 1) % FRAMES["stalactites"]
+				sm *= 0.85
+			last_key = "%d_%s_%.2f" % [frame, str(flip), sm]
+			var s := _strip("stalactites", frame, cx, _ceil_y(cx) - 1.0, 6, null, flip, sm, true)
+			if s:
+				s.modulate = tint.lerp(Color.WHITE, 0.3)
+			cx += _rng.randf_range(10.0, 26.0)
+		x = cx + _rng.randf_range(30.0, 90.0)
+	if _family == "mud" or _family == "grotto" or _family == "deep":
+		var rx: float = _left + 100.0 + _rng.randf_range(0.0, 70.0)
 		while rx < _right - 60.0:
-			_strip("roots", _rng.randi_range(0, FRAMES["roots"] - 1), rx, _ceil_y(rx) - 1.0, 6, null, _rng.randf() < 0.5, SCALE_STEPS[_rng.randi_range(0, 1)], true)
-			rx += _rng.randf_range(200.0, 340.0)
+			var r := _strip("roots", _rng.randi_range(0, FRAMES["roots"] - 1), rx, _ceil_y(rx) - 1.0, 6, null, _rng.randf() < 0.5, _rng.randf_range(0.65, 1.3), true)
+			if r:
+				r.modulate = tint.lerp(Color.WHITE, 0.45)
+			rx += _rng.randf_range(160.0, 280.0)
 
 # --- floor: boulders, stalagmites, crystals, mushrooms -----------------------
+# 2026-09-11 review: Mariana Trench / Coral Cavern / Collapsed Mine read as an empty
+# box — props were tiny and sparse. Denser clusters, more crystals in the "deep" and
+# "crystal" families (bioluminescence is their whole identity), a real chance of a
+# foreground prop overlapping the floor edge, and "deep" gets roots too (kelp).
 func _build_floor_props() -> void:
 	var span: float = _right - _left
-	# boulder clusters behind the player (z -2), a few small ones in front (z 3)
-	var n_clust: int = clampi(int(span / 300.0) + 1, 2, 8)
+	# boulder clusters behind the player (z -2), several in front overlapping the
+	# floor edge (z 3, bigger + closer to camera so the room doesn't read empty)
+	var n_clust: int = clampi(int(span / 170.0) + 2, 4, 14)
 	for i in range(n_clust):
-		var ax: float = _left + 60.0 + (float(i) + _rng.randf_range(0.2, 0.8)) * (span - 120.0) / float(n_clust)
-		if _in_pool(ax, 40.0):
+		var ax: float = _left + 50.0 + (float(i) + _rng.randf_range(0.15, 0.85)) * (span - 100.0) / float(n_clust)
+		if _in_pool(ax, 35.0):
 			continue
-		var children: int = _rng.randi_range(1, 3)
+		var children: int = _rng.randi_range(2, 4)
 		for j in range(children):
-			var bx: float = clampf(ax + _rng.randf_range(-40.0, 40.0), _left + 30.0, _right - 30.0)
-			if _in_pool(bx, 20.0):
+			var bx: float = clampf(ax + _rng.randf_range(-45.0, 45.0), _left + 25.0, _right - 25.0)
+			if _in_pool(bx, 18.0):
 				continue
-			var front: bool = j > 0 and _rng.randf() < 0.3
-			var s := _strip("boulders", _rng.randi_range(0, FRAMES["boulders"] - 1), bx, _floor_y(bx) + 1.0, 3 if front else -2, null, _rng.randf() < 0.5, 0.75 if front else SCALE_STEPS[_rng.randi_range(0, 2)])
+			var front: bool = j > 0 and _rng.randf() < 0.4
+			var s := _strip("boulders", _rng.randi_range(0, FRAMES["boulders"] - 1), bx, _floor_y(bx) + (3.0 if front else 1.0), 3 if front else -2, null, _rng.randf() < 0.5, _rng.randf_range(0.85, 1.3) if front else _rng.randf_range(0.6, 1.4))
 			if s:
-				var bt: Color = _norm(cave.rock_mid_color) * (0.75 if front else 0.9)
+				var bt: Color = _norm(cave.rock_mid_color) * (0.8 if front else 0.9)
 				bt.a = 1.0
 				s.modulate = bt
 	# stalagmites
-	var x: float = _left + 140.0 + _rng.randf_range(0.0, 60.0)
+	var x: float = _left + 110.0 + _rng.randf_range(0.0, 50.0)
 	while x < _right - 40.0:
 		if not _in_pool(x, 24.0):
-			var sm: float = SCALE_STEPS[_rng.randi_range(0, 2)]
+			var sm: float = _rng.randf_range(0.6, 1.5)
 			var s := _strip("stalagmites", _rng.randi_range(0, FRAMES["stalagmites"] - 1), x, _floor_y(x) + 1.0, -1 if sm > 1.0 else 3, null, _rng.randf() < 0.5, sm)
 			if s:
 				var st: Color = _norm(cave.ground_color) * 0.85
 				st.a = 1.0
 				s.modulate = st
-		x += _rng.randf_range(160.0, 300.0)
-	# crystals: overbright so HDR glow blooms them; lights join the cave's pulse list
-	var n_cry: int = clampi(int(span / 420.0) + 1, 2, 6)
+		x += _rng.randf_range(100.0, 190.0)
+	# crystals: overbright so HDR glow blooms them; lights join the cave's pulse list.
+	# "deep" and "crystal" families lean on bioluminescence for identity — more of them.
+	var cry_div: float = 260.0 if (_family == "deep" or _family == "crystal") else 420.0
+	var n_cry: int = clampi(int(span / cry_div) + 2, 4, 11)
 	var cc: Color = _norm(cave.crystal_color)
 	for i in range(n_cry):
-		var cx: float = _left + 100.0 + (float(i) + _rng.randf_range(0.15, 0.85)) * (span - 200.0) / float(n_cry)
+		var cx: float = _left + 80.0 + (float(i) + _rng.randf_range(0.1, 0.9)) * (span - 160.0) / float(n_cry)
 		var on_ceiling: bool = _rng.randf() < 0.3
 		if not on_ceiling and _in_pool(cx, 16.0):
 			on_ceiling = true
@@ -330,28 +408,40 @@ func _build_floor_props() -> void:
 		var ly: float
 		if on_ceiling:
 			ly = _ceil_y(cx)
-			s = _strip("crystals", _rng.randi_range(0, FRAMES["crystals"] - 1), cx, ly - 1.0, 6, null, _rng.randf() < 0.5, SCALE_STEPS[_rng.randi_range(0, 1)], true)
+			s = _strip("crystals", _rng.randi_range(0, FRAMES["crystals"] - 1), cx, ly - 1.0, 6, null, _rng.randf() < 0.5, _rng.randf_range(0.6, 1.15), true)
 			if s:
 				s.flip_v = true
 		else:
 			ly = _floor_y(cx)
-			s = _strip("crystals", _rng.randi_range(0, FRAMES["crystals"] - 1), cx, ly + 1.0, -1, null, _rng.randf() < 0.5, SCALE_STEPS[_rng.randi_range(0, 2)])
+			s = _strip("crystals", _rng.randi_range(0, FRAMES["crystals"] - 1), cx, ly + 1.0, -1, null, _rng.randf() < 0.5, _rng.randf_range(0.6, 1.4))
 		if s == null:
 			continue
 		s.modulate = cave._emit(cc.lerp(Color.WHITE, 0.25), 2.4)
 		var pl := _light(Vector2(cx, ly + (10.0 if on_ceiling else -10.0)), cave.crystal_color, 1.0, 0.7)
 		cave.crystal_lights.append(pl)
 		cave.crystal_phases.append(_rng.randf_range(0.0, TAU))
-	# glowing mushrooms: one or two clusters as focal points
-	var n_mush: int = clampi(int(span / 700.0) + 1, 1, 3)
+	# glowing mushrooms: several small clusters, not just one or two
+	var n_mush: int = clampi(int(span / 380.0) + 1, 2, 6)
 	for i in range(n_mush):
-		var mx: float = _left + 180.0 + (float(i) + _rng.randf_range(0.2, 0.8)) * (span - 360.0) / float(n_mush)
+		var mx: float = _left + 150.0 + (float(i) + _rng.randf_range(0.15, 0.85)) * (span - 300.0) / float(n_mush)
 		if _in_pool(mx, 24.0):
 			mx = cave.cave_pool_defs[0]["x_range"][0] - 60.0 if cave.cave_pool_defs.size() > 0 else mx
-		var s := _strip("mushrooms", _rng.randi_range(0, FRAMES["mushrooms"] - 1), mx, _floor_y(mx) + 1.0, 3, null, _rng.randf() < 0.5, SCALE_STEPS[_rng.randi_range(0, 1)])
+		var s := _strip("mushrooms", _rng.randi_range(0, FRAMES["mushrooms"] - 1), mx, _floor_y(mx) + 1.0, 3, null, _rng.randf() < 0.5, _rng.randf_range(0.7, 1.3))
 		if s:
 			s.modulate = cave._emit(Color.WHITE.lerp(cc, 0.45), 1.9)
 			_light(Vector2(mx, _floor_y(mx) - 8.0), cave.crystal_color.lerp(Color.WHITE, 0.3), 0.7, 0.45)
+	# "deep" reads as a flooded place: kelp-like roots reaching up off the floor too,
+	# not just hanging from the ceiling — tinted toward the crystal colour and lightly
+	# emissive so they read as bioluminescent kelp, not just more dark rock.
+	if _family == "deep":
+		var kx: float = _left + 90.0 + _rng.randf_range(0.0, 60.0)
+		while kx < _right - 60.0:
+			if not _in_pool(kx, 20.0):
+				var k := _strip("roots", _rng.randi_range(0, FRAMES["roots"] - 1), kx, _floor_y(kx) - 1.0, 0, null, _rng.randf() < 0.5, _rng.randf_range(0.7, 1.2))
+				if k:
+					k.flip_v = true
+					k.modulate = cave._emit(cc.lerp(Color.WHITE, 0.35), 1.3)
+			kx += _rng.randf_range(150.0, 260.0)
 
 # --- signature set-piece (same spot the old builder used: 62% across) --------
 func _build_signature() -> void:
@@ -377,18 +467,22 @@ func _build_signature() -> void:
 		_light(Vector2(fx, _floor_y(fx) - 14.0), Color(0.9, 0.75, 0.5), 0.45, 0.5)
 
 # --- foreground: two near-black framing rocks on a fast parallax ------------
+# 2026-09-11 review fix: the boulder's anchor was `_floor_y(bx) + 40.0` — 40 world
+# units BELOW the floor contour — which buried most of a 2x-scaled boulder in the
+# ground and read as a black blob sitting inside the rock. Floor strips anchor at
+# `_floor_y(x)` (bottom-aligned), same as every other floor prop; fixed here.
 func _build_foreground() -> void:
 	var layer := Parallax2D.new()
 	layer.scroll_scale = Vector2(1.25, 1.0)
 	layer.z_index = 11
 	add_child(layer)
 	var dark := Color(0.08, 0.07, 0.1, 1.0)
-	var bx: float = _left + 140.0 if _rng.randf() < 0.5 else _right - 140.0
-	var b := _strip("boulders", _rng.randi_range(0, FRAMES["boulders"] - 1), bx, _floor_y(bx) + 40.0, 11, layer, _rng.randf() < 0.5, 2.0)
+	var bx: float = _left + 60.0 if _rng.randf() < 0.5 else _right - 60.0
+	var b := _strip("boulders", _rng.randi_range(0, FRAMES["boulders"] - 1), bx, _floor_y(bx) + 1.0, 11, layer, _rng.randf() < 0.5, 1.8)
 	if b:
 		b.modulate = dark
 	var ox: float = lerpf(_left, _right, _rng.randf_range(0.3, 0.7))
-	var o := _strip("stalactites", _rng.randi_range(0, FRAMES["stalactites"] - 1), ox, _ceil_y(ox) - 50.0, 11, layer, _rng.randf() < 0.5, 2.5, true)
+	var o := _strip("stalactites", _rng.randi_range(0, FRAMES["stalactites"] - 1), ox, _ceil_y(ox) - 1.0, 11, layer, _rng.randf() < 0.5, 2.0, true)
 	if o:
 		o.modulate = dark
 

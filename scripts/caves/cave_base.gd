@@ -1121,8 +1121,11 @@ func _build_light_shafts() -> void:
 			Vector2(sx + drift + bot_w, ceil_y + beam_len),
 			Vector2(sx + drift - bot_w, ceil_y + beam_len),
 		])
-		var ray_col: Color = _emit(Color(0.92, 0.87, 0.72, randf_range(0.06, 0.11)), 1.8)
-		var ray_fade: Color = _emit(Color(0.92, 0.87, 0.72, 0.0), 1.8)
+		# 2026-09-11 review: HDR overbright here (>1.0 after boost) tripped the bloom
+		# threshold and the soft cone/beam bloomed into a hard-edged solid grey "pole"
+		# instead of a light shaft. No boost — additive blend alone is enough glow.
+		var ray_col: Color = Color(0.92, 0.87, 0.72, randf_range(0.05, 0.09))
+		var ray_fade: Color = Color(0.92, 0.87, 0.72, 0.0)
 		cone.vertex_colors = PackedColorArray([ray_col, ray_col, ray_fade, ray_fade])
 		cone.color = Color(1, 1, 1, 1)
 		var cone_mat := CanvasItemMaterial.new()
@@ -1133,8 +1136,8 @@ func _build_light_shafts() -> void:
 		light_shafts.append({"node": cone, "phase": randf_range(0.0, TAU), "speed": randf_range(0.4, 0.8)})
 		# Light beam Line2D (bright core)
 		var beam := Line2D.new()
-		beam.width = randf_range(4, 8)
-		beam.default_color = _emit(Color(0.9, 0.85, 0.7, randf_range(0.03, 0.06)), 2.2)
+		beam.width = randf_range(3, 5)
+		beam.default_color = Color(0.9, 0.85, 0.7, randf_range(0.03, 0.05))
 		beam.add_point(Vector2(sx, ceil_y))
 		beam.add_point(Vector2(sx + randf_range(-3, 3), ceil_y + beam_len))
 		beam.z_index = 6
@@ -2104,22 +2107,32 @@ func _setup_cave_ui() -> void:
 	unstuck_layer.layer = 15
 	add_child(unstuck_layer)
 	var unstuck_btn := Button.new()
-	unstuck_btn.text = "Unstuck"
-	unstuck_btn.add_theme_font_size_override("font_size", 10)
-	unstuck_btn.add_theme_color_override("font_color", Color(0.85, 0.75, 0.55))
+	unstuck_btn.text = "UNSTUCK"
+	# 2026-09-11 review: was the default smooth engine font. Silkscreen + a wood-toned
+	# blocky panel (no hud 9-slice asset exists yet to depend on; this is the "simple
+	# baked stylebox" fallback the rule allows).
+	const V3_FONT := "res://assets/fonts/Silkscreen-Regular.ttf"
+	if ResourceLoader.exists(V3_FONT):
+		unstuck_btn.add_theme_font_override("font", load(V3_FONT))
+	unstuck_btn.add_theme_font_size_override("font_size", 8)
+	unstuck_btn.add_theme_color_override("font_color", Color(0.95, 0.85, 0.62))
+	unstuck_btn.add_theme_color_override("font_hover_color", Color(1.0, 0.92, 0.7))
+	unstuck_btn.add_theme_color_override("font_pressed_color", Color(0.85, 0.75, 0.55))
 	var btn_style := StyleBoxFlat.new()
-	btn_style.bg_color = Color(0.15, 0.13, 0.1, 0.7)
-	btn_style.border_color = Color(0.4, 0.35, 0.25, 0.6)
-	btn_style.set_border_width_all(1)
-	btn_style.set_corner_radius_all(3)
-	btn_style.set_content_margin_all(4)
+	btn_style.bg_color = Color(0.30, 0.20, 0.11, 0.88)
+	btn_style.border_color = Color(0.58, 0.44, 0.24, 0.95)
+	btn_style.set_border_width_all(2)
+	btn_style.set_corner_radius_all(0)
+	btn_style.set_content_margin_all(5)
 	unstuck_btn.add_theme_stylebox_override("normal", btn_style)
 	var hover_style := btn_style.duplicate() as StyleBoxFlat
-	hover_style.bg_color = Color(0.22, 0.18, 0.12, 0.85)
+	hover_style.bg_color = Color(0.40, 0.27, 0.14, 0.92)
 	unstuck_btn.add_theme_stylebox_override("hover", hover_style)
-	unstuck_btn.add_theme_stylebox_override("pressed", hover_style)
+	var pressed_style := btn_style.duplicate() as StyleBoxFlat
+	pressed_style.bg_color = Color(0.22, 0.15, 0.08, 0.92)
+	unstuck_btn.add_theme_stylebox_override("pressed", pressed_style)
 	var vp_size: Vector2 = get_viewport_rect().size
-	unstuck_btn.position = Vector2(vp_size.x - 70, vp_size.y - 60)
+	unstuck_btn.position = Vector2(vp_size.x - 96, vp_size.y - 62)
 	unstuck_btn.pressed.connect(_on_unstuck_pressed)
 	unstuck_layer.add_child(unstuck_btn)
 
