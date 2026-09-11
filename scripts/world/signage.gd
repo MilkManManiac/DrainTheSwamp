@@ -21,11 +21,13 @@ const PLANK_INK := Color(0.93, 0.85, 0.62)    # cream paint on dark wood
 const OUTLINE := Color(0.06, 0.05, 0.04, 0.95)
 const DONE_GREEN := Color(0.45, 0.95, 0.5)
 
-# Board face rects in texture px (unflipped), measured off the baked sprites.
-const BILLBOARD_FACE := Rect2(20, 12, 262, 122)
-const POST_FACE := Rect2(8, 6, 136, 60)
-const STAKE_FACE := Rect2(4, 4, 56, 26)
-const STAKE_L_FACE := Rect2(6, 6, 116, 50)
+# Board face rects in texture px (unflipped), measured off the baked sprites
+# (billboard.png 528x300, sign_post.png 178x164, sign_stake.png 84x92,
+# sign_stake_l.png 152x140 — see assets/art/drainsville/).
+const BILLBOARD_FACE := Rect2(20, 15, 488, 160)
+const POST_FACE := Rect2(14, 10, 150, 70)
+const STAKE_FACE := Rect2(6, 6, 72, 42)
+const STAKE_L_FACE := Rect2(12, 10, 128, 70)
 
 # Story content (verbatim from the old _build_billboards): one board per ridge,
 # index = ridge between pool i and pool i+1. Odd ridges red (Swampsworth),
