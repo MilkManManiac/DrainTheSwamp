@@ -123,6 +123,29 @@ happens to show a frog sprite near the town-edge lamp post on a lily pad —
 the first direct confirmation of frog rendering in this session (turtle
 still unconfirmed).
 
+## Round 4 (coordinator review: pale rectangles in treeline/water line)
+
+Found in `_build_fog_patches()` (game_world.gd) — an atmospheric mist effect,
+1-4 `ColorRect` patches per pool, 20-50x6-14 world units (40-100x12-28 screen
+px), pale blue-white `(0.8,0.85,0.9)`, positioned just above each pool's
+`entry_top` (the treeline/ridge band). Never gated by V3_NIGHT, so it was
+still drawing hard-edged, overlapping translucent rectangles at night exactly
+where the coordinator pointed (treeline band and above the water line).
+
+Fix: gated `_build_fog_patches()` and its per-frame alpha update under
+`V3_NIGHT`, and — since the mist itself is worth keeping — replaced the flat
+`ColorRect` with the same soft-falloff recipe used for the lamp/moon glow:
+a `Sprite2D` using `night_mod.smooth_glow` (the `GradientTexture2D` radial,
+made public for this reuse), `TEXTURE_FILTER_LINEAR` set on the node only.
+Old `ColorRect` path quarantined under `else:`, untouched.
+
+Before/after crops (3x zoom) at the coordinator's exact coordinates:
+- `town_night.png` (260-335,400-430) and (1000-1200,530-560): hard rectangle
+  edges gone, replaced by a soft, barely-there wisp with no visible boundary.
+- `pools_night_d0.png` (810-870,345-360): same.
+- `pools_day_d0.png` (tod 0.3): fog alpha is 0 by day in the existing
+  formula (unchanged) — confirmed no similar patches show.
+
 ## Captures (read back)
 
 `_screenshots/revamp-2026-09-11/critters-night/`:

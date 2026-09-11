@@ -19,7 +19,7 @@ const LAMP_TEX: Texture2D = preload("res://assets/art/drainsville/street_lamp.pn
 # explicitly allows linear filtering there), so lamp/moon glow use a real
 # radial gradient at a smooth resolution instead, with LINEAR filtering set
 # on just those nodes (the module root stays NEAREST for everything else).
-var _smooth_glow: GradientTexture2D
+var smooth_glow: GradientTexture2D
 
 var _floor_wash: ColorRect
 var _lamps: Array[Dictionary] = []
@@ -38,13 +38,13 @@ func _build_smooth_glow_texture() -> void:
 	var g := Gradient.new()
 	g.colors = PackedColorArray([Color(1, 1, 1, 1), Color(1, 1, 1, 0)])
 	g.offsets = PackedFloat32Array([0.0, 1.0])
-	_smooth_glow = GradientTexture2D.new()
-	_smooth_glow.gradient = g
-	_smooth_glow.width = 128
-	_smooth_glow.height = 128
-	_smooth_glow.fill = GradientTexture2D.FILL_RADIAL
-	_smooth_glow.fill_from = Vector2(0.5, 0.5)
-	_smooth_glow.fill_to = Vector2(1.0, 0.5)
+	smooth_glow = GradientTexture2D.new()
+	smooth_glow.gradient = g
+	smooth_glow.width = 128
+	smooth_glow.height = 128
+	smooth_glow.fill = GradientTexture2D.FILL_RADIAL
+	smooth_glow.fill_from = Vector2(0.5, 0.5)
+	smooth_glow.fill_to = Vector2(1.0, 0.5)
 
 ## A soft, moderate cool-white glow that tracks the moon, biasing the sky and
 ## upper ground slightly brighter on the moon's side of the screen. Kept
@@ -52,7 +52,7 @@ func _build_smooth_glow_texture() -> void:
 ## cross-section on the deeper basins.
 func _build_moon_wash() -> void:
 	_moon_wash = Sprite2D.new()
-	_moon_wash.texture = _smooth_glow
+	_moon_wash.texture = smooth_glow
 	_moon_wash.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
 	_moon_wash.centered = true
 	_moon_wash.scale = Vector2(3.2, 1.4)
@@ -110,7 +110,7 @@ func _build_lamps() -> void:
 		# above the surface line (only a sliver below) -- it must not bleed
 		# down into the underground dirt cross-section on sloped terrain.
 		var glow := Sprite2D.new()
-		glow.texture = _smooth_glow
+		glow.texture = smooth_glow
 		glow.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
 		glow.centered = true
 		glow.modulate = Color(1.0, 0.78, 0.42, 0.0)
@@ -126,7 +126,7 @@ func _build_lamps() -> void:
 		light.position = Vector2(lx, ty - LAMP_TEX.get_height() * 0.42)
 		light.color = Color(1.0, 0.80, 0.45)
 		light.energy = 0.0
-		light.texture = _smooth_glow
+		light.texture = smooth_glow
 		light.texture_scale = 1.4
 		light.blend_mode = PointLight2D.BLEND_MODE_ADD
 		light.z_index = 3
