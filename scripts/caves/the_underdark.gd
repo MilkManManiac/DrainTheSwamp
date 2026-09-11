@@ -102,6 +102,9 @@ func _setup_loot_and_lore() -> void:
 	lore1.position = Vector2(1000, _get_cave_terrain_y_at(1000))
 	add_child(lore1)
 
+	if V3_CAVES:
+		return  # v3 pixel kit (cave_skin.gd) draws the decoration now; old ColorRect/Line2D clutter below is quarantined
+
 	# Ancient stone pillars on ridges (crumbling, alien)
 	var pillar_positions: Array[float] = [160.0, 940.0, 1060.0, 1720.0, 1840.0, 2500.0, 2650.0]
 	for px in pillar_positions:
