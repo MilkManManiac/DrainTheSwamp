@@ -22,6 +22,12 @@ var scoop_btn: TouchScreenButton
 var _container: Control
 var _touched: bool = false  # a real screen touch happened this session
 
+func has_touched() -> bool:
+	## True once this session has seen a real InputEventScreenTouch. Used by
+	## menu_panel.gd to decide whether the "Touch Controls" row belongs on
+	## screen at all (a desktop session never touches, so it never should).
+	return _touched
+
 const TEX := {
 	"<": ["res://assets/art/ui/touch_left.png", "res://assets/art/ui/touch_left_p.png"],
 	">": ["res://assets/art/ui/touch_right.png", "res://assets/art/ui/touch_right_p.png"],

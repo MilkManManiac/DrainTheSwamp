@@ -413,6 +413,85 @@ deleted this round.
 `tools/capture.py --check` clean throughout (only the known pre-existing
 `Parameter "t" is null` boot error).
 
+## Round 6: merge v3/integrate, then the menu gets the same system
+
+### Merge
+
+`git merge v3/integrate` into `v3/hud` (commit `d270917`) pulled in caves,
+player, title, props, critters-night, and water. Three conflicts, all in
+files this track shares with the caves track (both sides edited the same
+`hint_label`/`unstuck_btn` construction — caves reskinned the cave art
+around them in the same commits):
+
+- `scripts/caves/lore_wall.gd`, `scripts/caves/loot_node.gd` — kept
+  `PixelUI.prompt()` (this track's side); it's a strict superset of
+  integrate's inline `ResourceLoader.exists(V3_FONT)` + manual font/size
+  (same Silkscreen 8pt result, less code). Took integrate's slightly
+  different `hint_label.position` tuning on `loot_node.gd` (`-30` not
+  `-28`) since that's the caves track's own visual calibration.
+- `scripts/caves/cave_base.gd` — the Unstuck button: both sides
+  independently reskinned it (this track via `PixelUI.button()`, caves via
+  its own hand-rolled Silkscreen + `StyleBoxFlat`). Kept integrate's version
+  — it's a complete, already-reviewed implementation (hover/pressed states,
+  uppercase text, its own position tuning), and this track's investment in
+  `PixelUI.button()` is still very much present everywhere else it's used.
+  This track's `tag` label (line ~2006, "NA COURIER") and the `DTS_SHOT`/
+  `DTS_PROMPT` dev hooks in `_ready()` weren't touched by caves and merged
+  clean.
+- `scripts/player/player_skin.gd.uid` — took ours per instruction.
+
+Verified after merging: `capture.py --check` clean;
+`--scene res://scenes/caves/muddy_hollow.tscn --freeze` shows the caves
+track's painted pixel cave art (mud walls, roots, stalactites) fully
+intact, with the HUD air bar and the reskinned Unstuck button both present
+(`r6_cave_merge_check.png`); a second capture on `gator_den.tscn` with
+`DTS_PROMPT=1` (extended this round to also force any `hint_label` in the
+tree visible, not just the sell-basin tag) shows both a loot-node "[SPACE]"
+prompt and the "NA COURIER" tag live together, confirming `PixelUI.prompt()`
+survived the merge correctly (`r6_cave_prompts.png`). `lore_wall.gd`
+specifically remains unreachable for a live capture — `cave_base.gd`'s
+`_setup_loot_and_lore()` is still a `pass` stub even after the caves merge,
+so no `LoreWall` instance exists anywhere in the tree yet; the fix there is
+identical code to `loot_node.gd`'s (verified), just not independently
+capturable until that stub is filled in by whoever owns it.
+
+### Menu gets the frame/content/row-card system
+
+The one miss from round 5: `menu_panel.tscn`/`.gd` never got the shop's
+hierarchy — still one wood texture (`Box`'s default theme panel) behind
+every button, with a few leftover blue/purple-adjacent colors.
+
+- `menu_panel.tscn`: added a `ContentPanel` `PanelContainer` between the
+  title/separator and `ButtonList` (same shape as the shop's
+  `ContentPanel` wrapping its `ScrollContainer`).
+- `menu_panel.gd::_ready()`: `box` (was implicitly the theme's default wood
+  panel) → `PixelUI.frame()`; `content_panel` → `PixelUI.content()`.
+- New `_row(control)` helper wraps one control in `PixelUI.row()` — applied
+  to every individual button (Resume, Touch Controls, Fullscreen, Restart,
+  the Yes/Cancel confirm row) and every audio slider row, so each is its
+  own card sitting on the content backdrop, exactly the shop's language.
+- Colors: Resume green, Restart (+ its confirm "Yes, Restart") red, "Cancel"
+  and slider labels cream, Fullscreen/Touch Controls gold, "Audio" header
+  green — no blue or purple left in this panel.
+- **Touch Controls row**: was always present and could read "ON" on a
+  desktop build (reflecting a stale saved `GameManager.touch_controls_enabled`
+  even though the on-screen controls were correctly hidden per round 2's
+  fix). Added `TouchControls.has_touched()` (the same `_touched` /
+  `InputEventScreenTouch` gate `touch_controls.gd` already uses to decide
+  whether to actually show the controls). The row now only appears when
+  `TouchControls.has_touched() or TouchControls.enabled` — never on a
+  desktop session that hasn't touched and hasn't manually enabled it — and
+  when it does appear, its ON/OFF label reads the live `TouchControls.enabled`
+  flag instead of the stale saved preference, so it can never again say ON
+  while nothing is showing. Confirmed hidden in `r6_menu.png` (captured on
+  the desktop build, no touch this session).
+
+Capture: `_screenshots/revamp-2026-09-11/hud/r6_menu.png` (before:
+`r5_menu.png`) — frame border with brass rivets visible, lighter content
+backdrop, every row its own card, Touch Controls row gone. Read back and
+compared directly against `r5_menu.png` and the shop screenshots for
+consistency. `capture.py --check` clean.
+
 ## Gemini budget
 
 0 of 5 images used across every round. Everything came from the procedural

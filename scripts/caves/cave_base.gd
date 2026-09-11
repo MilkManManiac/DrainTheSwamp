@@ -79,7 +79,19 @@ func _ready() -> void:
 		# tag — otherwise unreachable without hours of real play.
 		if OS.get_environment("DTS_PROMPT") != "":
 			GameManager.prestige_count = maxi(GameManager.prestige_count, 3)
+			# Also force any loot_node/lore_wall hint_label visible so their
+			# PixelUI.prompt() can be captured without real play (they're
+			# normally hidden until the pool completes / the player walks up).
+			call_deferred("_debug_force_hint_prompts")
 	_setup_cave()
+
+func _debug_force_hint_prompts(node: Node = self) -> void:
+	for child in node.get_children():
+		var hint = child.get("hint_label")
+		if hint is Label:
+			child.visible = true
+			hint.visible = true
+		_debug_force_hint_prompts(child)
 
 func _setup_cave() -> void:
 	# CanvasModulate — moody but readable. Lifted further so the back wall + parallax
