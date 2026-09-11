@@ -244,6 +244,9 @@ const SWAMP_COUNT: int = 10
 # v3 pixel-art skin (scripts/world/skin.gd) replaces the procedural sky/ground/
 # vegetation; the builders below stay in the file but are not run when it is on.
 const V3_SKIN := true
+# v3 pixel water (scripts/world/water_skin.gd) draws over water_polygons; the
+# old sparkle / foam / shimmer / lily / crack builders below are skipped when on.
+const V3_WATER := true
 const WATER_SHADER = preload("res://shaders/water.gdshader")
 const POST_PROCESS_SHADER = preload("res://shaders/post_process.gdshader")
 const TERRAIN_SHADER = preload("res://shaders/terrain.gdshader")
@@ -600,6 +603,10 @@ func _ready() -> void:
 	var skin := preload("res://scripts/world/skin.gd").new()
 	skin.world = self
 	add_child(skin)
+	if V3_WATER:
+		var water_skin := preload("res://scripts/world/water_skin.gd").new()
+		water_skin.world = self
+		add_child(water_skin)
 	_build_shop()
 	town.build()
 	_build_water()
@@ -1824,6 +1831,8 @@ func _build_tree_trunks() -> void:
 
 # --- Lily Pads ---
 func _build_lily_pads() -> void:
+	if V3_WATER:
+		return
 	for i in range(SWAMP_COUNT):
 		var geo: Dictionary = _get_swamp_geometry(i)
 		var basin_left: Vector2 = geo["basin_left"]
@@ -1873,6 +1882,8 @@ func _build_depth_gradients() -> void:
 		_update_depth_gradient(i)
 
 func _update_depth_gradient(swamp_index: int) -> void:
+	if V3_WATER:
+		return
 	var fill: float = GameManager.get_swamp_fill_fraction(swamp_index)
 	if fill <= 0.001:
 		depth_polygons[swamp_index].polygon = PackedVector2Array()
@@ -1906,6 +1917,8 @@ func _build_shimmer_lines() -> void:
 		shimmer_lines.append(sl)
 
 func _update_shimmer_line(swamp_index: int, left_x: float, right_x: float, water_y: float) -> void:
+	if V3_WATER:
+		return
 	var line: Line2D = shimmer_lines[swamp_index]
 	line.clear_points()
 	var segments: int = maxi(int((right_x - left_x) / 8.0), 3)
@@ -2132,6 +2145,8 @@ func _build_foam_lines() -> void:
 		foam_lines.append(fl)
 
 func _update_foam_line(swamp_index: int, left_x: float, right_x: float, water_y: float) -> void:
+	if V3_WATER:
+		return
 	var line: Line2D = foam_lines[swamp_index]
 	line.clear_points()
 	var segments: int = maxi(int((right_x - left_x) / 6.0), 3)
@@ -2225,6 +2240,8 @@ func _build_dragonflies() -> void:
 
 # --- Water Reflection Highlights ---
 func _build_water_highlights() -> void:
+	if V3_WATER:
+		return
 	for i in range(SWAMP_COUNT):
 		var geo: Dictionary = _get_swamp_geometry(i)
 		var basin_left: Vector2 = geo["basin_left"]
@@ -2367,6 +2384,8 @@ func _spawn_pollen() -> void:
 	})
 
 func _spawn_ripple(rx: float, ry: float) -> void:
+	if V3_WATER:
+		return
 	var rp_line := Line2D.new()
 	rp_line.width = 1.5
 	rp_line.default_color = Color(0.6, 0.8, 0.7, 0.4)
@@ -3594,6 +3613,8 @@ func _spawn_bank_drips(swamp_index: int, from_y: float, to_y: float) -> void:
 
 # --- R2 interactive ripples ---
 func _spawn_water_ripple(swamp_index: int, world_x: float) -> void:
+	if V3_WATER:
+		return
 	if swamp_index < 0 or swamp_index >= SWAMP_COUNT:
 		return
 	if swamp_index >= water_polygons.size():
@@ -5669,6 +5690,8 @@ func _spawn_pool_debris(swamp_index: int) -> void:
 		add_child(rock)
 
 func _spawn_pool_cracks(swamp_index: int) -> void:
+	if V3_WATER:
+		return
 	# Draw cracked earth lines on exposed pool edges
 	var geo: Dictionary = _get_swamp_geometry(swamp_index)
 	var left_x: float = geo["basin_left"].x
@@ -5779,6 +5802,8 @@ func _spawn_scoop_splash(x: float, y: float, gallons: float) -> void:
 
 # --- Drained Pool Beds (Phase 8C) ---
 func _build_drained_pool_beds() -> void:
+	if V3_WATER:
+		return
 	for i in range(SWAMP_COUNT):
 		var bed := Node2D.new()
 		bed.z_index = 1
