@@ -13,7 +13,24 @@ func _ready() -> void:
 	_build_visual()
 	_build_interaction()
 
+# v3 pixel kit (2026-09-11): the lore wall is the rune-slab frame of the baked
+# loot_props strip; the old ColorRect carving stays as the fallback.
+const V3_LOOT_TEX := "res://assets/art/caves/loot_props.png"
+const V3_FONT := "res://assets/fonts/Silkscreen-Regular.ttf"
+var v3_sprite: Sprite2D = null
+
 func _build_visual() -> void:
+	if ResourceLoader.exists(V3_LOOT_TEX):
+		v3_sprite = Sprite2D.new()
+		v3_sprite.texture = load(V3_LOOT_TEX)
+		v3_sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+		v3_sprite.hframes = 3
+		v3_sprite.frame = 2
+		v3_sprite.scale = Vector2(0.5, 0.5)
+		v3_sprite.position = Vector2(0, -v3_sprite.texture.get_height() * 0.25)
+		v3_sprite.z_index = 3
+		add_child(v3_sprite)
+		return
 	# Wall marking background
 	marking_rect = ColorRect.new()
 	marking_rect.size = Vector2(16, 20)
@@ -80,6 +97,9 @@ func _process(delta: float) -> void:
 	# Subtle shimmer on marking
 	if marking_rect:
 		marking_rect.color.a = lerpf(0.5, 0.7, (sin(shimmer_time * 1.5) + 1.0) * 0.5)
+	if v3_sprite:
+		var k: float = lerpf(0.9, 1.35, (sin(shimmer_time * 1.5) + 1.0) * 0.5)
+		v3_sprite.modulate = Color(k, k, k)
 
 	if player_in_range and Input.is_action_just_pressed("scoop"):
 		_read_lore()
