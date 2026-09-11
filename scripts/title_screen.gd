@@ -417,7 +417,7 @@ func _build_newspaper() -> void:
 
 	newspaper_prompt = Label.new()
 	newspaper_prompt.text = "[PRESS ANY KEY]"
-	_paper_label(newspaper_prompt, 8, Color(0.55, 0.32, 0.12))
+	_paper_label(newspaper_prompt, 8, Color(0.22, 0.15, 0.08))
 	newspaper_prompt.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	vbox.add_child(newspaper_prompt)
 
@@ -541,7 +541,7 @@ func _process(delta: float) -> void:
 		s["node"].modulate.a = clampf(night * 1.3, 0.0, 1.0) * tw
 
 	if showing_newspaper and newspaper_prompt:
-		newspaper_prompt.modulate.a = 0.5 + 0.5 * sin(elapsed * 2.0)
+		newspaper_prompt.modulate.a = 0.65 + 0.35 * sin(elapsed * 2.0)
 
 	if post_rect and post_rect.material:
 		var mat := post_rect.material as ShaderMaterial
@@ -632,6 +632,7 @@ func _show_newspaper() -> void:
 	newspaper_index = 0
 	menu_vbox.visible = false
 	confirm_container.visible = false
+	logo.visible = false
 	newspaper_overlay.visible = true
 	_set_newspaper_content(0)
 
