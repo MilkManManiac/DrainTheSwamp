@@ -77,7 +77,7 @@ var terrain_points: Array[Vector2] = [
 	Vector2(1518, 372),  # lower slope (~27°)
 	Vector2(1536, 378),  # ledge (~18°)
 	Vector2(1555, 384),  # basin left (~17°)
-	Vector2(1555, 386),  # deep basin
+	Vector2(1568, 387),  # deep basin (was x=1555: a vertical 2-unit step that trapped the player walking west once drained)
 	Vector2(1582, 390),  # deepest (far off-center right)
 	Vector2(1608, 388),  # slight rise
 	Vector2(1632, 384),  # gradual slope
@@ -168,7 +168,7 @@ var terrain_points: Array[Vector2] = [
 	Vector2(3910, 484),  # mid slope (~28°)
 	Vector2(3930, 494),  # lower slope (~27°)
 	Vector2(3950, 500),  # collapsed section (~17°)
-	Vector2(3955, 494),  # bump
+	Vector2(3962, 497),  # bump (was 3955,494: 50 deg, blocked walking east)
 	Vector2(3978, 502),  # deeper
 	Vector2(4002, 508),  # basin
 	Vector2(4028, 512),  # deep
@@ -198,7 +198,7 @@ var terrain_points: Array[Vector2] = [
 	Vector2(4660, 516),  # steep drop begins
 	Vector2(4692, 534),  # cliff (smoothed)
 	Vector2(4722, 552),  # deep drop (smoothed)
-	Vector2(4735, 572),  # trench approach
+	Vector2(4742, 566),  # trench approach (was 4735,572: 57 deg, blocked walking west)
 	Vector2(4762, 582),  # trench
 	Vector2(4790, 590),  # deep trench
 	Vector2(4820, 596),  # deeper
