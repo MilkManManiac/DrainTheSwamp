@@ -39,22 +39,32 @@ const HAND := {
 		"scoop": [Vector2(5, 27), Vector2(20, 31), Vector2(15, 33)],
 	},
 }
-# Tool sprites: texture (x2 baked) and the grip point in art px of that texture.
-# Filled in from tools/bake/bake_tools.py output (see docs/plans/revamp-tracks/player.md).
+# Tool sprites: texture (x2 baked) and the grip point in art px of that texture
+# (includes the 1px outline border bake_tools.py pads on, so grip is already
+# +1,+1 from the raw art). Filled in from tools/bake/bake_tools.py output
+# (see docs/plans/revamp-tracks/player.md). Outlined in the player's own dark
+# colour and brightened/saturated so they separate from dark ground/shadow —
+# 2026-09-11 review: the un-outlined, un-lifted first bake was unreadable.
 const TOOLS := {
-	"spoon": {"tex": "tool_spoon.png", "grip": Vector2(0, 1)},
-	"cup": {"tex": "tool_cup.png", "grip": Vector2(2, 0)},
-	"bucket": {"tex": "tool_bucket.png", "grip": Vector2(2, 0)},
-	"shovel": {"tex": "tool_shovel.png", "grip": Vector2(4, 5)},
-	"wheelbarrow": {"tex": "tool_wheelbarrow.png", "grip": Vector2(16, 2)},
-	"barrel": {"tex": "tool_barrel.png", "grip": Vector2(4, 0)},
-	"water_wagon": {"tex": "tool_water_wagon.png", "grip": Vector2(6, 1)},
-	"hose": {"tex": "tool_hose.png", "grip": Vector2(2, 2)},
+	"spoon": {"tex": "tool_spoon.png", "grip": Vector2(3, 3)},
+	"cup": {"tex": "tool_cup.png", "grip": Vector2(3, 1)},
+	"bucket": {"tex": "tool_bucket.png", "grip": Vector2(3, 1)},
+	"shovel": {"tex": "tool_shovel.png", "grip": Vector2(5, 6)},
+	"hose": {"tex": "tool_hose.png", "grip": Vector2(4, 4)},
 }
+# Ground-set tools: too big for the hand overlay, so they plant beside/in
+# front of the player's feet instead of following the hand anchor — grip is
+# bottom-centre (where the sprite meets the ground), not a hand hold point.
+const GROUND_TOOLS := {
+	"wheelbarrow": {"tex": "tool_wheelbarrow.png", "grip": Vector2(19, 20)},
+	"barrel": {"tex": "tool_barrel.png", "grip": Vector2(7, 16)},
+	"water_wagon": {"tex": "tool_water_wagon.png", "grip": Vector2(11, 20)},
+}
+const GROUND_OFFSET := Vector2(-16.0, 0.0)  # world px in front of the feet, root-local (sheet faces left)
 # Baked 2026-09-11 from assets/gen/tools-row.jpg via tools/bake/bake_tools.py.
 const LANTERN_TEX := "tool_lantern.png"
-const LANTERN_GRIP := Vector2(2, 0)   # handle top, art px (4x9 sprite)
-const LANTERN_FLAME := Vector2(2, 6)  # glass centre, art px
+const LANTERN_GRIP := Vector2(3, 1)   # handle top, art px (6x11 sprite incl. outline pad)
+const LANTERN_FLAME := Vector2(3, 6)  # glass centre, art px
 
 var player: CharacterBody2D = null
 var _which: String = "a"
@@ -69,6 +79,7 @@ var _t: float = 0.0
 var _was_walking: bool = false
 var _scoop_t: float = -1.0       # >= 0 while the scoop strip plays
 var _lantern_flame: Sprite2D = null
+var _tool_ground: bool = false
 var _dbg_walk: int = -1
 var _dbg_scoop: bool = false
 var _dbg_scoop_t: float = 0.0
@@ -154,15 +165,17 @@ func _tool_id_now() -> String:
 
 func _refresh_tool() -> void:
 	_tool_id = _tool_id_now()
-	if not TOOLS.has(_tool_id):
+	_tool_ground = GROUND_TOOLS.has(_tool_id)
+	var entry: Dictionary = GROUND_TOOLS.get(_tool_id, TOOLS.get(_tool_id, {}))
+	if entry.is_empty():
 		_tool.visible = false
 		return
-	var tex: Texture2D = load(ART + TOOLS[_tool_id]["tex"]) as Texture2D
+	var tex: Texture2D = load(ART + entry["tex"]) as Texture2D
 	if tex == null:
 		_tool.visible = false
 		return
 	_tool.texture = tex
-	_tool.offset = -(TOOLS[_tool_id]["grip"] as Vector2) * 2.0
+	_tool.offset = -(entry["grip"] as Vector2) * 2.0
 	_tool.visible = true
 
 func _hand_anchor(strip: String, frame: int) -> Vector2:
@@ -220,10 +233,16 @@ func _process(dt: float) -> void:
 	_sprite.frame = frame
 
 	# Tool follows the hand; the hidden ToolSprite still carries the swing/pop tweens.
+	# Ground tools (wheelbarrow/barrel/water_wagon) are too big to hold: they plant
+	# beside the feet, ignoring the hand swing/scoop rotation (still pop in on equip).
 	if _tool.visible:
-		_tool.position = _hand_anchor(strip, frame)
 		var old_tool: Node2D = player.tool_sprite
-		_tool.rotation = -old_tool.rotation
+		if _tool_ground:
+			_tool.position = GROUND_OFFSET
+			_tool.rotation = 0.0
+		else:
+			_tool.position = _hand_anchor(strip, frame)
+			_tool.rotation = -old_tool.rotation
 		_tool.scale = old_tool.scale * 0.5
 	_update_lantern(dt)
 
