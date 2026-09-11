@@ -22,9 +22,9 @@ const ISLAND_CX := 5660.0
 const ISLAND_Y := 484.0
 # frames per strip, written by the bake step (see docs/plans/revamp-tracks/props.md)
 const FRAMES := {
-	"prop_pump_small": 3, "prop_pump_big": 3,
+	"prop_pump_small": 3, "prop_pump_big": 2,
 	"prop_camel": 4, "prop_camel_loaded": 4,
-	"prop_politicians_a": 7, "prop_politicians_b": 7,
+	"prop_politicians_a": 5, "prop_politicians_b": 5,
 	"prop_helicopter": 2,
 }
 const PUMP_BIG_LEVEL := 5           # level >= this swaps to the industrial pump
@@ -32,6 +32,13 @@ const CAMEL_WALK_FPS := 7.0
 const HELI_ROTOR_FPS := 14.0
 const POLI_IDLE_FPS := 1.5
 const POLI_SPACING := 14.0          # old roots sit 8 apart; sprites are ~14 wide
+# Only render 3 of the old 7 politician_nodes (index 3 is Jeff, kept for the
+# interaction Area2D) so the porch reads as a small cluster of distinct
+# suits instead of a packed crowd. Wide extra spread on top of the old
+# roots' native 8-apart spacing, and pulled forward off the porch shadow.
+const POLI_VISIBLE := [0, 3, 6]
+const POLI_EXTRA_SPACING := 30.0
+const POLI_FORWARD_Y := 9.0
 
 var world: Node2D = null
 var _pumps: Dictionary = {}          # swamp_index -> {sprite, t, level}
@@ -117,10 +124,6 @@ func build_pump(swamp_index: int, level: int) -> void:
 	var spr: Sprite2D = _strip(name, root)
 	if spr == null:
 		return
-	# The bake keeps the source's dark rust palette, which all but disappears
-	# against the pit's near-black interior; lift it a little so the housing
-	# reads at a glance without breaking the palette.
-	spr.modulate = Color(1.35, 1.28, 1.18)
 	var w: float = spr.texture.get_width() / float(spr.hframes) * SCALE
 	var h: float = spr.texture.get_height() * SCALE
 	# Intake hose: outlet on the basin side of the housing, arcing over the rim
@@ -189,18 +192,37 @@ func _tick_pumps(dt: float) -> void:
 func _build_island() -> void:
 	var t: Texture2D = _tex("prop_mansion")
 	if t:
-		# The island's flat top is only 40 wide; fill dark earth under the wider
-		# foundation down to the shore slopes so it never floats (fill, not art).
+		# The island's flat top is only 40 wide; the mansion foundation is wider
+		# and its outer edges hang past the flat top, over the sloped shoulders
+		# of the island hill. Fill just that wedge (flat baseline down to the
+		# real terrain contour), textured like the rest of the ground, instead
+		# of a flat-color rectangle that reads as a slab stuck on top of the hill.
 		var mw: float = t.get_width() * SCALE
+		var left_x: float = ISLAND_CX - mw * 0.5 + 6.0
+		var right_x: float = ISLAND_CX + mw * 0.5 - 6.0
+		var base_y: float = ISLAND_Y + 2.0
+		var dirt_tex: Texture2D = _tex("ground_dirt")
 		var fill := Polygon2D.new()
 		fill.name = "V3_island_fill"
+		var top_pts := PackedVector2Array()
+		var bottom_pts := PackedVector2Array()
+		var x: float = left_x
+		while x <= right_x + 0.01:
+			top_pts.append(Vector2(x, base_y))
+			var gy: float = maxf(world._get_terrain_y_at(x), base_y) + 2.0
+			bottom_pts.append(Vector2(x, gy))
+			x += 8.0
 		var poly := PackedVector2Array()
-		poly.append(Vector2(ISLAND_CX - mw * 0.5 + 6.0, ISLAND_Y + 1.0))
-		poly.append(Vector2(ISLAND_CX + mw * 0.5 - 6.0, ISLAND_Y + 1.0))
-		poly.append(Vector2(ISLAND_CX + mw * 0.5 - 6.0, ISLAND_Y + 40.0))
-		poly.append(Vector2(ISLAND_CX - mw * 0.5 + 6.0, ISLAND_Y + 40.0))
+		for p in top_pts:
+			poly.append(p)
+		for i in range(bottom_pts.size() - 1, -1, -1):
+			poly.append(bottom_pts[i])
 		fill.polygon = poly
-		fill.color = Color(0.20, 0.15, 0.10)
+		if dirt_tex:
+			fill.texture = dirt_tex
+			fill.texture_repeat = CanvasItem.TEXTURE_REPEAT_MIRROR
+			fill.texture_scale = Vector2(2.0, 2.0)
+		fill.color = Color(0.34, 0.26, 0.18)
 		fill.z_index = -3
 		add_child(fill)
 		var s := Sprite2D.new()
@@ -252,18 +274,33 @@ func _skin_politicians() -> void:
 		return
 	var b: Texture2D = _tex("prop_politicians_b")
 	var nodes: Array = world.politician_nodes
-	for i in range(nodes.size()):
+	var mid: float = (float(POLI_VISIBLE.size()) - 1.0) * 0.5
+	for vi in range(POLI_VISIBLE.size()):
+		var i: int = POLI_VISIBLE[vi]
+		if i >= nodes.size():
+			continue
 		var pn: Node2D = nodes[i]
 		if not is_instance_valid(pn):
 			continue
 		_hide_old(pn)
 		var fi: int = i % FRAMES["prop_politicians_a"]
-		var off := Vector2((float(i) - float(nodes.size() - 1) * 0.5) * (POLI_SPACING - 8.0), 0.0)
+		# Spread wide around the node's own (tightly-packed) native position, and
+		# step forward off the porch's shadow line onto the lawn in front of it.
+		var off := Vector2((float(vi) - mid) * POLI_EXTRA_SPACING, POLI_FORWARD_Y)
 		var s: Sprite2D = _strip("prop_politicians_a", pn, -pn.z_index - 1, off)
 		s.frame = fi
-		if i % 2 == 1:
+		if vi % 2 == 1:
 			s.flip_h = true
 		_poli.append({"sprite": s, "a": a, "b": b, "frame": fi, "phase": randf() * 2.0})
+	# The other 4 old politician_nodes stay in the scene (jeff_area / jeff_node
+	# and any other code that indexes politician_nodes keeps working) but with
+	# no visual — _hide_old() already stripped the procedural figures on all 7.
+	for i in range(nodes.size()):
+		if i in POLI_VISIBLE:
+			continue
+		var pn2: Node2D = nodes[i]
+		if is_instance_valid(pn2):
+			_hide_old(pn2)
 
 func _tick_politicians(dt: float) -> void:
 	if _poli.is_empty():

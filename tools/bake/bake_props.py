@@ -23,14 +23,17 @@ ART = ROOT / "assets" / "art" / "drainsville"
 
 # name -> (source stem, mode, row, height in art px, colors, frames)
 JOBS = {
-    "prop_pump_small": ("prop-pump-small", "sheet", 0, 34, 24, 3),
-    "prop_pump_big": ("prop-pump-big", "sheet", 0, 44, 28, 3),
+    "prop_pump_small": ("prop-pump-small-v2", "sheet", 0, 34, 28, 3),
+    "prop_pump_big": ("prop-pump-big-v2", "sheet", 0, 40, 32, 2),
     "prop_camel": ("prop-camel-sheet", "sheet", 0, 44, 24, 4),
     "prop_camel_loaded": ("prop-camel-sheet", "sheet", 1, 44, 28, 4),
     "prop_mansion": ("prop-mansion", "sprite", 0, 96, 32, 1),
-    "prop_politicians_a": ("prop-politicians", "sheet", 0, 36, 32, 7),
-    "prop_politicians_b": ("prop-politicians", "sheet", 1, 36, 32, 7),
-    "prop_helicopter": ("prop-helicopter", "sheet", 0, 28, 24, 2),
+    "prop_politicians_a": ("prop-politicians-v2", "sheet", 0, 36, 32, 5),
+    "prop_politicians_b": ("prop-politicians-v2", "sheet", 1, 36, 32, 5),
+    # row 1 (not 0): row 0's second pose has a stray rotor-strut fragment that
+    # the connected-component frame split merges in at the wrong angle; row 1
+    # gives a clean "blade" -> "spinning X" pair instead.
+    "prop_helicopter": ("prop-helicopter", "sheet", 1, 28, 24, 2),
     "prop_wanted": ("prop-wanted", "sprite", 0, 26, 16, 1),
 }
 
