@@ -69,6 +69,7 @@ func _ready() -> void:
 	add_to_group("signage")
 	_font = _pixel_font(FONT_PATH)
 	_lamp_tex = _make_lamp_texture()
+	_night_boost = _compute_night_boost()
 	get_tree().node_added.connect(_on_node_added)
 	RenderingServer.frame_pre_draw.connect(_snap_labels)
 	call_deferred("_build")
@@ -192,20 +193,32 @@ func _glow_t() -> float:
 		return 1.0 - (t - 0.18) / 0.07
 	return 0.0
 
-# The world's night tint (game_world.gd::_get_cycle_color's "night" constant,
-# applied to the whole scene via CanvasModulate) — used to compute an exact
-# inverse boost so a "lit" node reads at its full daylight brightness even
-# while everything around it is night-dark, instead of guessing at an
-# additive glow that may or may not show up against the multiply.
-const NIGHT_CANVAS := Color(0.38, 0.42, 0.66)
-const NIGHT_BOOST := Color(1.0 / 0.38, 1.0 / 0.42, 1.0 / 0.66)
+# The world's night tint, applied to the whole scene via CanvasModulate —
+# read live from game_world.gd::_get_cycle_color(1.0) rather than hardcoded,
+# since other tracks own and tune that curve (it moved once already, from
+# (0.38,0.42,0.66) pre-merge to (0.60,0.62,0.82) under night.gd's V3_NIGHT).
+# Used to compute an exact inverse boost so a "lit" node reads at its full
+# daylight brightness even while everything around it is night-dark, instead
+# of guessing at an additive glow that may or may not show up against the
+# multiply.
+var _night_boost: Color = Color(1, 1, 1, 1)
+
+func _compute_night_boost() -> Color:
+	var night_tint := Color(0.6, 0.62, 0.82)  # fallback if _get_cycle_color ever goes away
+	if world.has_method("_get_cycle_color"):
+		night_tint = world._get_cycle_color(1.0)
+	return Color(
+		1.0 / maxf(night_tint.r, 0.05),
+		1.0 / maxf(night_tint.g, 0.05),
+		1.0 / maxf(night_tint.b, 0.05),
+	)
 
 # Registers a CanvasItem so _process fades its modulate from its normal
 # day_col up to a night-boosted (lamp-lit) version as _glow_t() rises.
 # strength 1.0 = fully counter the night tint (reads exactly as bright as
 # daytime); lower values stay partway dim.
 func _register_glow(node: CanvasItem, day_col: Color, strength: float = 1.0) -> void:
-	var boost := Color(1, 1, 1, 1).lerp(NIGHT_BOOST, strength)
+	var boost := Color(1, 1, 1, 1).lerp(_night_boost, strength)
 	var night_col := Color(day_col.r * boost.r, day_col.g * boost.g, day_col.b * boost.b, day_col.a)
 	node.modulate = day_col
 	_glow_layers.append({"node": node, "day": day_col, "night": night_col})

@@ -161,19 +161,103 @@ and called five fixes before merge. All five addressed:
    2.2`, deliberately pushing "THE ATLANTIC" post toward the bottom edge)
    showing it held clear of the bottom bar instead of sliding under it.
 
+## Round 3 (2026-09-11, same day) — layout bugs + merge with v3/integrate
+
+Wes's round 3 review, all visible in round 2's own captures:
+
+1. **Text overflowing the board** (LOBBYTON spilling into the sky, the
+   Swampsworth board's text running into the bottom frame with the top half
+   empty). Root cause: `Control.size` is clamped **up** to
+   `get_minimum_size()` the instant it's assigned, and `_face_label` was
+   setting `lbl.size` *before* `autowrap_mode`/`clip_text` — so at that
+   instant the minimum was the width/height of the text laid out on one
+   unwrapped line per explicit `\n`, which is routinely bigger than the
+   board, and the box silently grew to match instead of staying the size we
+   asked for. Reordered so autowrap/clip_text/clip_contents/
+   custom_minimum_size are all set *before* `.size`. Added
+   `_fit_billboard_text()`, which measures the actual wrapped block with
+   `Font.get_multiline_string_size()` against the real board width and
+   tightens `line_spacing` just enough to fit (still Silkscreen 8 — there's
+   no smaller size in the 8/16 rule to step down to), with `clip_contents`
+   as a hard backstop so text can never draw outside the plank either way.
+   The same set-size-before-autowrap bug was in the cave name plank label;
+   fixed there too.
+2. **Basin post text truncation** ("BOG [DONE] 0.0% DRAINE"). Turned out
+   not to be a label bug at all (basin labels never had `clip_text` set) —
+   it was fix #3's overlap, the COLLAPSED MINE cave sign drawing over the
+   last letter. Also dropped the redundant "[DONE]" suffix per Wes's
+   suggestion (the green tint + "DRAINED" already say it), which was
+   genuinely too wide for the post on longer names.
+3. **Sign-on-sign overlap** (cave signs weren't in the billboard/post
+   overlap system). Generalized `_billboard_spans` into `_sign_spans`,
+   shared by billboards, basin posts, and cave planks — every sign this
+   track places registers its `{x, half_w}` span. `_clear_of_signs()` was
+   rewritten from a single sweep-and-nudge (which could oscillate between
+   two nearby obstacles, verified by dumping the actual resolved positions
+   and finding them flip-flopping between two values pass after pass) into
+   a closed-form solve: try every span's exclusion-zone boundary plus the
+   original x, keep whichever candidate is both valid and closest — no
+   iteration, no oscillation. A global "every post clears every cave mound
+   in the level" pass turned out geometrically impossible in the tighter
+   pools (billboards ~176 wide, mounds ~221 wide, posts ~89 wide, spaced as
+   close as ~240–400 apart) and was throwing some posts hundreds of units
+   from their basin; narrowed cave-mound clearance to a single targeted
+   nudge against the post's **own** basin's cave only, which is what the
+   two reported overlaps actually were (Sinkhole/Marsh, Collapsed
+   Mine/Bog — both same-basin pairs).
+4. **Cave entrance hint** ("Press SPACE to enter") still the default smooth
+   font. Cave entrances are this track's scope — set explicitly to
+   Silkscreen 8 with a 1px outline in `_build_cave_mouths` rather than
+   relying on the generic adoption pass.
+5. **Cave signs unreadable at night.** Plank + hint now get the same
+   `_register_glow()` night self-brighten as billboards and basin posts.
+6. **Saturated blue squares at night** (~(88,432)/(957,500) in a 1300-camx
+   capture). Not this track's code — grepped and found
+   `game_world.gd::_build_atlantic_features()`'s "abyssal glow spots"
+   (`glow_color := Color(0.2, 0.4, 0.9)`, 3x3 ColorRects), pre-existing
+   baseline decoration for the deepest basin, unrelated to any V3 track.
+   Named per the ask, not touched.
+
+**Merge with `v3/integrate`** (water, title, caves, critters-night, props,
+player all landed there): `git merge v3/integrate` into `v3/signage`.
+Conflicts, both in `scripts/game_world.gd` (kept both sides — my
+`V3_SIGNAGE` const/instantiation block alongside integrate's
+`V3_WATER`/`V3_CRITTERS`/`V3_NIGHT`/`V3_PROPS` ones, and both `if
+not V3_SIGNAGE:`-guarded legacy SELL-label sites, picking up props' z_index
+fix for the camel-occlusion bug on the way — see below); `player.gd` merged
+cleanly on its own (verified both the player track's `_skin` reference /
+splash-anchor code and this track's `spawn_gal_float()` call site survived).
+`player_skin.gd.uid`: no conflict, merged clean.
+
+Re-running the full capture set on the merged branch caught one real
+regression from the merge: **night.gd (the critters-night track) raised the
+night `CanvasModulate` floor** from `(0.38, 0.42, 0.66)` to
+`(0.60, 0.62, 0.82)` (their own fix for a different problem — the old floor
+crushed ground/trees to near-black). My `_register_glow()` night boost was
+a hardcoded inverse of the *old* value, so post-merge it overcorrected by
+~60%, blowing every billboard/post out into a flat white glow at night.
+Fixed by computing the boost live from `world._get_cycle_color(1.0)` in
+`_ready()` instead of a hardcoded constant, so it tracks whatever the
+night-owning track's curve actually is. Re-verified night captures are
+readable, not blown out, after the fix.
+
+Also (while already in this merge conflict, and directly related to a note
+in this track's own round-2 report): bumped signage's own SELL plank to
+`z_index 6`, matching the fix props round 3 applied to the legacy inline
+SELL label — camels (z 5) converge on the player, who's often standing
+right at the sell point, and were drawing over the sign.
+
 ## What is still old / out of scope here
 
-- Nothing left in signage's own scope. All five "done when" items (wooden
-  billboards, name posts, float text, SELL label, cave mouths) are built and
-  wired, and all seven of Wes's round-2 notes are addressed.
+- Nothing left in signage's own scope. All "done when" items are built and
+  wired, and all of Wes's round-2 and round-3 notes are addressed.
 - Cave interior art, the HUD, critters, and general night lighting are other
-  tracks. Cave name planks (`_build_cave_mouths`) were not in scope of
-  Wes's night-legibility note (only "billboards and posts") and are still
-  dim at night — flagging in case that's wanted later.
-- Dusk (`--tod 0.62`) blows the billboard out white in a full-screen sun
-  bloom when the sun sits directly behind it — pre-existing lighting/bloom
-  behavior (present before this round too), not something this track
-  controls.
+  tracks. Cave name planks were not in scope of round 2's night-legibility
+  note but got the same treatment in round 3 anyway (item 5 above).
+- Dusk (`--tod 0.62`) no longer blows out white on the merged branch — the
+  water/night tracks' lighting changes appear to have addressed the
+  sun-glare bloom that round 2's captures showed; not something this track
+  touched either way.
 
 ## Notes for the integrator
 
@@ -181,8 +265,10 @@ and called five fixes before merge. All five addressed:
   one instantiation block next to `skin`, and `if V3_SIGNAGE: return` /
   `if not V3_SIGNAGE:` guards around the four old builders
   (`_build_swamp_labels`, the two inline "SELL" Label blocks in
-  `_build_shop`/`_build_east_tower`, `_build_billboards`). Unchanged this
-  round.
+  `_build_shop`/`_build_east_tower`, `_build_billboards`). Round 3 also
+  merged in the other tracks' consts/instantiation blocks (`V3_WATER`,
+  `V3_CRITTERS`, `V3_NIGHT`, `V3_PROPS`) and the props track's `z_index`
+  fix on the legacy (guarded-off) SELL label — see the merge notes above.
 - **`scripts/player/player.gd` was touched** (not this track's file) — one
   call site only (`_on_scoop` / the gallons-float-text block), swapped for a
   `get_tree().get_first_node_in_group("signage")` lookup + call to the new
@@ -190,10 +276,12 @@ and called five fixes before merge. All five addressed:
   fallback when signage isn't present. No gallon math changed. Flagging for
   the player track to review; happy to move the routing helper if they'd
   rather own the call site differently.
-- Props track: the camel (or whatever prop parks near the hardware store)
-  stands in front of the SELL stake at world x≈24, permanently in this save
-  state (not just passing through). Not fixed here — positions/AI are
-  props' file; worth a look from that track before ship.
+- Props track: the camel used to stand in front of the SELL stake at world
+  x≈24. Fixed in round 3 by bumping our SELL plank to `z_index 6` (matching
+  the props track's own fix for the same bug on the legacy label) — not
+  re-verified with a live camel in frame since this worktree can't easily
+  force one to path there on demand, but the fix is the identical one props
+  already validated for the same overlap.
 - `sign_stake_l.png` reuses the `sign-post.jpg` Gemini source at a different
   bake size rather than spending a Gemini call; flagging in case another
   track wants a visually distinct long-stake asset later.
