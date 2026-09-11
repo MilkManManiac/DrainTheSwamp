@@ -22,20 +22,20 @@ If you want to set size, change the anchors or consider using set_deferred().
 ERROR: Condition "format != FORMAT_RGB8 && format != FORMAT_RGBA8" is true.
    at: linear_to_srgb (core/io/image.cpp:4196)
    GDScript backtrace (most recent call first):
-       [0] _save_debug_shot (res://scripts/game_world.gd:6257)
+       [0] _save_debug_shot (res://scripts/game_world.gd:6304)
 ERROR: Condition "format != FORMAT_RGB8 && format != FORMAT_RGBA8" is true.
    at: linear_to_srgb (core/io/image.cpp:4196)
    GDScript backtrace (most recent call first):
-       [0] _save_debug_shot (res://scripts/game_world.gd:6257)
+       [0] _save_debug_shot (res://scripts/game_world.gd:6304)
 ERROR: Condition "format != FORMAT_RGB8 && format != FORMAT_RGBA8" is true.
    at: linear_to_srgb (core/io/image.cpp:4196)
    GDScript backtrace (most recent call first):
-       [0] _save_debug_shot (res://scripts/game_world.gd:6257)
+       [0] _save_debug_shot (res://scripts/game_world.gd:6304)
 ERROR: Condition "format != FORMAT_RGB8 && format != FORMAT_RGBA8" is true.
    at: linear_to_srgb (core/io/image.cpp:4196)
    GDScript backtrace (most recent call first):
-       [0] _save_debug_shot (res://scripts/game_world.gd:6257)
+       [0] _save_debug_shot (res://scripts/game_world.gd:6304)
 ERROR: Condition "format != FORMAT_RGB8 && format != FORMAT_RGBA8" is true.
    at: linear_to_srgb (core/io/image.cpp:4196)
    GDScript backtrace (most recent call first):
-       [0] _save_debug_shot (res://scripts/game_world.gd:6257)
+       [0] _save_debug_shot (res://scripts/game_world.gd:6304)

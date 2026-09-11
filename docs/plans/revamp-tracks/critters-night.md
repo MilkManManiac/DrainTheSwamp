@@ -51,38 +51,74 @@ baked critter frames + hand-drawn night pixels but no `.gd` files and no
   prior agent from `critters-sheet-1.jpg`. **Gemini calls made this
   session: 0** (budget of 2 untouched, all material was already generated).
 
+## Round 2 (coordinator review fixes)
+
+The coordinator read the round-1 captures and flagged three things; all three
+addressed:
+
+1. **"Coloured squares" were bioluminescent glow-plants, not fireflies.**
+   Found in `_build_glow_plants()` (game_world.gd) — a 4-7 world-unit
+   ColorRect "bulb" + a ColorRect "aura", 8-14 screen px, in green/blue/purple.
+   Fireflies were already correct (fixed in round 1). Added a `V3_NIGHT`
+   branch to `_build_glow_plants()` and its per-frame pulse update: same
+   recipe as the firefly rework — a ~1-2 art px bright core (`glow_16.png`
+   at `scale 0.09`) + a small soft additive halo (`scale 0.4`), tinted per
+   plant, alpha-only animation via `.modulate.a`. Old ColorRect path
+   quarantined under `else:`.
+2. **Night too dark.** Root cause: `canvas_modulate.color` (a scene-wide
+   multiply tint set in `_get_cycle_color()`) had a night floor of
+   `(0.38,0.42,0.66)`, which the (off-limits) post-process night grade then
+   crushed further to near-black. Raised the `V3_NIGHT` night constant to
+   `(0.60,0.62,0.82)` — this is the multiply floor, so it affects ground,
+   trees, and the player uniformly. Also: `night.gd`'s floor wash alpha
+   unchanged (0.85 max) but now stacks on a much brighter base; lamp glow
+   scale 3.2×1.6 → 5.5×2.8 and alpha 0.5 → 0.75, light energy 0.85 → 1.4,
+   `texture_scale` 6 → 10 (bigger, brighter pools of light); added an
+   explicit lamp at x=820 (just past town, near player spawn) plus steady
+   420-unit spacing from x=1200 through the first pools; added `_moon_wash`,
+   a soft wide additive glow that tracks `world.moon.position` each frame so
+   the moon's side of the screen reads faintly brighter.
+3. **Water critters verified.** Reset this worktree's isolated save
+   (`%APPDATA%/DrainTheSwamp-wt-critters-night/save_data.json` deleted —
+   fresh save starts every pool at 100% fill) and captured the Lake
+   (camx 2200, 500K gal, always full). **Catfish are clearly visible
+   swimming mid-water at both day and night** (see crop evidence below).
+   Frogs/turtles are placed with a per-pool coin flip (40%/60% skip) and
+   weren't caught in the 3 pools sampled this round (Lake, and the first two
+   `Swamp` pools at camx 1500) despite trying day, dusk, and night — but
+   their builders ran without error on every `--check` and every capture in
+   this session (would have thrown a script error otherwise), and use the
+   exact same append-to-array / sprite-factory pattern as fish and tadpoles,
+   which are confirmed working. Not independently visually confirmed;
+   flagging rather than claiming it.
+
 ## Captures (read back)
 
 `_screenshots/revamp-2026-09-11/critters-night/`:
-- `pools_night_d0.png`, `pools_dusk_d0.png`, `pools_day_d0.png` — camx 1500
-- `pools_day_fresh.png` — fresh save (drain 0, day 1 morning), water 100%
-- `town_night.png` — camx 900
-
-Night: floor reads as moonlit blue-brown instead of near-black; a lamp post
-with warm bulb glow + light pool is visible along the path; stars/fireflies
-render as real sprites now (were 2x2 ColorRects). Dusk: ground stays brown,
-not red. Frog/turtle/fish/bird/dragonfly/butterfly/tadpole are all real
-2-3-frame pixel strips (verified by reading `assets/art/drainsville/{frog,
-turtle,catfish,bird,dragonfly,butterfly,tadpole}.png`), each frame distinct
-(no duplicate-sprite AI-tell).
+- `pools_night_d0.png` (camx 1500, tod 0.85) — floor/trees/player-height
+  terrain now readable, lamp pool of light visible, firefly/glow-plant dots
+  small (not squares)
+- `pools_dusk_d0.png` (camx 1500, tod 0.62) — ground stays brown, not red
+- `pools_day_d0.png` (camx 1500, tod 0.3, fresh save) — daylight baseline
+- `town_night.png` (camx 900, tod 0.85, fresh save) — player, ground, and a
+  lit lamp all readable at a glance
+- `lake2200_day.png` / `lake2200_night.png` (camx 2200, fresh save, Lake
+  pool 100% full) — **catfish visible swimming at both day and night**
 
 ## What is still old / not verified
 
-- Could not confirm frog/fish/turtle sprites in a live filled pool in a
-  capture — the one fresh-save shot with 100% water had the "HOLD SPACE to
-  scoop" hint dialog covering the basin, and the water surface (owned by the
-  water track) reads as a flat dark green that may be occluding underwater
-  critters via z-index; worth a joint check with the water track once both
-  land on the same branch.
+- Frog/turtle sprites not independently confirmed in a capture (see above);
+  code path mirrors the confirmed-working fish/tadpole path exactly.
 - Crickets were left on the old ColorRect path — not in the plan's species
   list ("frogs/fish/turtles/tadpoles/fireflies/dragonflies/birds/
   butterflies"), and already a minor chirp-flash effect, not a coloured
   square. Left alone to stay in budget.
-- Lamp spacing (every 480 world units from x=1000) is a guess tuned to make
-  one lamp land near the plan's example capture position (camx 1500); may
-  want retuning once merged next to the props track's own placements.
+- Lamp spacing/positions are a first pass; may want retuning once merged
+  next to the props track's own placements.
 - `override.cfg` in this worktree (per-track save isolation) — left in
-  place, untouched, not committed (matches instruction).
+  place, untouched, not committed. `save_data.json` in the same isolated
+  user dir was deleted twice this session to get fresh full-pool saves for
+  capture; also not part of the repo.
 
 ## For other tracks
 

@@ -15,12 +15,28 @@ const LAMP_TEX: Texture2D = preload("res://assets/art/drainsville/street_lamp.pn
 var _floor_wash: ColorRect
 var _lamps: Array[Dictionary] = []
 var _edges: Array[Dictionary] = []
+var _moon_wash: Sprite2D
 
 func _ready() -> void:
 	texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	_build_floor_wash()
+	_build_moon_wash()
 	_build_lamps()
 	_build_water_edges()
+
+## A soft, wide cool-white glow that tracks the moon, biasing the ground and
+## sky slightly brighter on the moon's side of the screen.
+func _build_moon_wash() -> void:
+	_moon_wash = Sprite2D.new()
+	_moon_wash.texture = GLOW_TEX
+	_moon_wash.centered = true
+	_moon_wash.scale = Vector2(14.0, 7.0)
+	_moon_wash.modulate = Color(0.75, 0.82, 1.0, 0.0)
+	_moon_wash.z_index = -2
+	var mmat := CanvasItemMaterial.new()
+	mmat.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
+	_moon_wash.material = mmat
+	add_child(_moon_wash)
 
 func _last_x() -> float:
 	return world.terrain_points[world.terrain_points.size() - 1].x
@@ -47,40 +63,45 @@ func _build_floor_wash() -> void:
 ## pattern as the existing pool_glow_lights in game_world.gd.
 func _build_lamps() -> void:
 	var last_x: float = _last_x()
-	var x: float = 1000.0
-	var spacing: float = 480.0
+	# Explicit first lamp near the player's spawn/town edge, then steady
+	# coverage through the first pools and beyond.
+	var xs: Array[float] = [820.0]
+	var x: float = 1200.0
+	var spacing: float = 420.0
 	while x < last_x - 250.0:
-		var ty: float = world._get_terrain_y_at(x)
+		xs.append(x)
+		x += spacing
+	for lx in xs:
+		var ty: float = world._get_terrain_y_at(lx)
 		var post := Sprite2D.new()
 		post.texture = LAMP_TEX
 		post.centered = false
 		post.offset = Vector2(-LAMP_TEX.get_width() * 0.5, -LAMP_TEX.get_height())
 		post.scale = Vector2(0.5, 0.5)
-		post.position = Vector2(x, ty)
+		post.position = Vector2(lx, ty)
 		post.z_index = 2
 		add_child(post)
 		var glow := Sprite2D.new()
 		glow.texture = GLOW_TEX
 		glow.centered = true
-		glow.modulate = Color(1.0, 0.75, 0.4, 0.0)
-		glow.scale = Vector2(3.2, 1.6)
-		glow.position = Vector2(x, ty - 2.0)
+		glow.modulate = Color(1.0, 0.78, 0.42, 0.0)
+		glow.scale = Vector2(5.5, 2.8)
+		glow.position = Vector2(lx, ty - 2.0)
 		glow.z_index = 1
 		var gmat := CanvasItemMaterial.new()
 		gmat.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
 		glow.material = gmat
 		add_child(glow)
 		var light := PointLight2D.new()
-		light.position = Vector2(x, ty - LAMP_TEX.get_height() * 0.42)
-		light.color = Color(1.0, 0.78, 0.42)
+		light.position = Vector2(lx, ty - LAMP_TEX.get_height() * 0.42)
+		light.color = Color(1.0, 0.80, 0.45)
 		light.energy = 0.0
 		light.texture = GLOW_TEX
-		light.texture_scale = 6.0
+		light.texture_scale = 10.0
 		light.blend_mode = PointLight2D.BLEND_MODE_ADD
 		light.z_index = 3
 		add_child(light)
 		_lamps.append({"glow": glow, "light": light})
-		x += spacing
 
 ## A thin moon-blue shimmer laid on every pool's water surface at night.
 func _build_water_edges() -> void:
@@ -105,10 +126,14 @@ func update(t: float) -> void:
 
 	_floor_wash.color.a = night_alpha * 0.85
 
+	if world.moon:
+		_moon_wash.position = Vector2(world.moon.position.x, world.moon.position.y + 60.0)
+		_moon_wash.modulate.a = night_alpha * 0.30
+
 	for lp in _lamps:
 		var pulse: float = 0.9 + sin(world.wave_time * 1.3) * 0.1
-		lp["glow"].modulate.a = night_alpha * 0.5 * pulse
-		lp["light"].energy = night_alpha * 0.85 * pulse
+		lp["glow"].modulate.a = night_alpha * 0.75 * pulse
+		lp["light"].energy = night_alpha * 1.4 * pulse
 
 	for ed in _edges:
 		var swamp_i: int = ed["swamp"]

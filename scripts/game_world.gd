@@ -2852,6 +2852,53 @@ func _build_glow_plants() -> void:
 		for pos in positions:
 			if pos.y <= 0:
 				continue
+			if V3_NIGHT:
+				var plant0 := Node2D.new()
+				plant0.z_index = 4
+				plant0.position = pos
+				add_child(plant0)
+				var stem0 := ColorRect.new()
+				var stem_h0: float = randf_range(8, 16)
+				stem0.size = Vector2(1, stem_h0)
+				stem0.position = Vector2(-0.5, -stem_h0)
+				stem0.color = Color(0.1, 0.3, 0.15, 0.8)
+				plant0.add_child(stem0)
+				var color_roll0: float = randf()
+				var glow_color0: Color
+				if color_roll0 < 0.4:
+					glow_color0 = Color(0.35, 1.0, 0.55)   # Green
+				elif color_roll0 < 0.7:
+					glow_color0 = Color(0.45, 0.7, 1.0)    # Blue
+				else:
+					glow_color0 = Color(0.85, 0.5, 1.0)    # Purple
+				# 1-2 art px bright core + a small soft additive halo, same
+				# recipe as the firefly rework -- not a solid coloured square.
+				var core0 := Sprite2D.new()
+				core0.texture = load("res://assets/art/drainsville/glow_16.png")
+				core0.centered = true
+				core0.position = Vector2(0, -stem_h0)
+				core0.scale = Vector2(0.09, 0.09)
+				core0.modulate = Color(glow_color0.r, glow_color0.g, glow_color0.b, 0.0)
+				plant0.add_child(core0)
+				var aura0 := Sprite2D.new()
+				aura0.texture = core0.texture
+				aura0.centered = true
+				aura0.position = core0.position
+				aura0.scale = Vector2(0.4, 0.4)
+				aura0.modulate = Color(glow_color0.r, glow_color0.g, glow_color0.b, 0.0)
+				var amat0 := CanvasItemMaterial.new()
+				amat0.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
+				aura0.material = amat0
+				plant0.add_child(aura0)
+				glow_plants.append({
+					"node": plant0,
+					"bulb": core0,
+					"aura": aura0,
+					"glow_color": glow_color0,
+					"phase": randf() * TAU,
+					"pulse_speed": randf_range(1.2, 2.5),
+				})
+				continue
 			var plant := Node2D.new()
 			plant.z_index = 4
 			add_child(plant)
@@ -7295,8 +7342,12 @@ func _process(delta: float) -> void:
 		var pulse: float = (sin(wave_time * gp["pulse_speed"] + gp["phase"]) + 1.0) * 0.5
 		var gc: Color = gp["glow_color"]
 		var intensity: float = glow_alpha * lerpf(0.4, 1.0, pulse)
-		gp["bulb"].color = Color(gc.r, gc.g, gc.b, intensity)
-		gp["aura"].color = Color(gc.r, gc.g, gc.b, intensity * 0.25)
+		if V3_NIGHT:
+			gp["bulb"].modulate.a = intensity
+			gp["aura"].modulate.a = intensity * 0.6
+		else:
+			gp["bulb"].color = Color(gc.r, gc.g, gc.b, intensity)
+			gp["aura"].color = Color(gc.r, gc.g, gc.b, intensity * 0.25)
 
 	# Seaweed sway underwater
 	for sw in seaweed:
@@ -7507,7 +7558,12 @@ func _get_cycle_color(t: float) -> Color:
 	# together through dusk so the ground stays readable as brown, not red.
 	var sunset: Color = Color(0.90, 0.68, 0.56) if V3_NIGHT else Color(0.95, 0.55, 0.4)
 	var dusk: Color = Color(0.58, 0.54, 0.66) if V3_NIGHT else Color(0.65, 0.35, 0.5)
-	var night := Color(0.38, 0.42, 0.66)
+	# V3_NIGHT: the old night floor (0.38,0.42,0.66) crushed ground/trees/player
+	# to near-black once multiplied through the post-process night grade
+	# (off-limits to touch). Raised so the multiply floor alone gets ground
+	# luminance into the ~35-45% of daytime the coordinator asked for; the
+	# night.gd floor wash + lamps add the rest on top.
+	var night: Color = Color(0.60, 0.62, 0.82) if V3_NIGHT else Color(0.38, 0.42, 0.66)
 
 	if t < 0.1:
 		return night.lerp(pre_dawn, t / 0.1)
