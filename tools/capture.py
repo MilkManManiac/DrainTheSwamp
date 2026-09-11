@@ -38,8 +38,16 @@ def needs_import() -> bool:
     if not (ROOT / ".godot" / "imported").exists():
         return True
     for p in (ROOT / "assets").rglob("*.png"):
-        if not p.with_name(p.name + ".import").exists():
+        imp = p.with_name(p.name + ".import")
+        if not imp.exists():
             return True
+        # .import committed by another branch but never imported here (merge,
+        # fresh worktree): its cached texture is missing from .godot/imported.
+        for line in imp.read_text(encoding="utf-8", errors="replace").splitlines():
+            if line.startswith("path=") and line[5:].strip('"').startswith("res://"):
+                if not (ROOT / line[5:].strip('"')[len("res://"):]).exists():
+                    return True
+                break
     return False
 
 
