@@ -11,7 +11,7 @@ const DEFAULT_CHAR := "a"
 const WALK_FPS := 8.0
 const IDLE_FPS := 4.0
 # frames per strip, written by bake_char.py
-const FRAMES := {"a": [5, 6], "b": [4, 8], "c": [6, 7]}
+const FRAMES := {"a": [5, 4], "b": [4, 8], "c": [6, 7]}
 
 var player: CharacterBody2D = null
 var _idle: Texture2D = null
