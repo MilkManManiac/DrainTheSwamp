@@ -40,9 +40,15 @@ def main() -> None:
     src = Path(sys.argv[1]) if len(sys.argv) > 1 else next((ROOT / "assets" / "gen").glob("tools-row.*"))
     img = key_out(Image.open(src), "magenta", 70, True)
     rows = split_rows(img)
-    row = max(rows, key=lambda r: r.getchannel("A").getbbox()[2] - r.getchannel("A").getbbox()[0])
-    frames = split_frames(row, min_gap=6)
-    print(f"[tools] {len(frames)} items found in {src.name} (want {len(ORDER)})")
+    # 5-across x2 grid (row0: spoon/cup/bucket/shovel/wheelbarrow, row1: barrel/barrel
+    # dup/water_wagon/hose/lantern) — Gemini repeated the barrel, so drop row1 item 1.
+    frames = []
+    for r in rows:
+        frames.extend(split_frames(r, min_gap=6))
+    print(f"[tools] {len(frames)} items found in {src.name} across {len(rows)} rows (want {len(ORDER)})")
+    if len(rows) == 2 and len(frames) == 10:
+        frames = frames[:5] + frames[6:]
+        print("[tools] dropped duplicate barrel at row1 slot 0")
     if len(frames) < len(ORDER):
         sys.exit("too few items; check the magenta split")
     frames = frames[: len(ORDER)]

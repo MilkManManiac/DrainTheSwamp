@@ -36,24 +36,25 @@ const HAND := {
 	"a": {
 		"idle": [Vector2(3, 26), Vector2(4, 26), Vector2(3, 26), Vector2(3, 26), Vector2(3, 26)],
 		"walk": [Vector2(6, 26), Vector2(11, 27), Vector2(8, 27), Vector2(9, 26)],
-		"scoop": [Vector2(3, 26), Vector2(3, 26), Vector2(3, 26)],
+		"scoop": [Vector2(5, 27), Vector2(20, 31), Vector2(15, 33)],
 	},
 }
 # Tool sprites: texture (x2 baked) and the grip point in art px of that texture.
 # Filled in from tools/bake/bake_tools.py output (see docs/plans/revamp-tracks/player.md).
 const TOOLS := {
-	"spoon": {"tex": "tool_spoon.png", "grip": Vector2(2, 1)},
-	"cup": {"tex": "tool_cup.png", "grip": Vector2(3, 1)},
-	"bucket": {"tex": "tool_bucket.png", "grip": Vector2(4, 0)},
-	"shovel": {"tex": "tool_shovel.png", "grip": Vector2(2, 5)},
-	"wheelbarrow": {"tex": "tool_wheelbarrow.png", "grip": Vector2(11, 3)},
+	"spoon": {"tex": "tool_spoon.png", "grip": Vector2(0, 1)},
+	"cup": {"tex": "tool_cup.png", "grip": Vector2(2, 0)},
+	"bucket": {"tex": "tool_bucket.png", "grip": Vector2(2, 0)},
+	"shovel": {"tex": "tool_shovel.png", "grip": Vector2(4, 5)},
+	"wheelbarrow": {"tex": "tool_wheelbarrow.png", "grip": Vector2(16, 2)},
 	"barrel": {"tex": "tool_barrel.png", "grip": Vector2(4, 0)},
-	"water_wagon": {"tex": "tool_water_wagon.png", "grip": Vector2(8, 1)},
+	"water_wagon": {"tex": "tool_water_wagon.png", "grip": Vector2(6, 1)},
 	"hose": {"tex": "tool_hose.png", "grip": Vector2(2, 2)},
 }
+# Baked 2026-09-11 from assets/gen/tools-row.jpg via tools/bake/bake_tools.py.
 const LANTERN_TEX := "tool_lantern.png"
-const LANTERN_GRIP := Vector2(4, 0)   # handle top, art px
-const LANTERN_FLAME := Vector2(4, 6)  # glass centre, art px
+const LANTERN_GRIP := Vector2(2, 0)   # handle top, art px (4x9 sprite)
+const LANTERN_FLAME := Vector2(2, 6)  # glass centre, art px
 
 var player: CharacterBody2D = null
 var _which: String = "a"
