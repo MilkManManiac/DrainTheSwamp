@@ -2238,12 +2238,33 @@ func _build_fog_patches() -> void:
 		var basin_w: float = basin_right.x - basin_left.x
 		var count: int = clampi(int(basin_w / 40.0), 1, 4)
 		for j in range(count):
-			var fog := ColorRect.new()
 			var fw: float = randf_range(20, 50)
 			var fh: float = randf_range(6, 14)
-			fog.size = Vector2(fw, fh)
 			var fx: float = basin_left.x + randf_range(0, basin_w - fw)
 			var fy: float = entry_top.y - randf_range(8, 24)
+			if V3_NIGHT and night_mod:
+				# Old ColorRect mist patches (hard rectangular edges, several
+				# overlapping per pool) read as pale translucent squares
+				# floating in the treeline/water line at night. Same fix as
+				# the lamp/moon glow: a soft GradientTexture2D wisp instead
+				# of a flat-alpha rect, LINEAR filtered (mist isn't art).
+				var fog0 := Sprite2D.new()
+				fog0.texture = night_mod.smooth_glow
+				fog0.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
+				fog0.centered = true
+				fog0.scale = Vector2(fw / 128.0 * 1.6, fh / 128.0 * 1.6)
+				fog0.position = Vector2(fx + fw * 0.5, fy + fh * 0.5)
+				fog0.modulate = Color(0.8, 0.85, 0.9, 0.0)
+				fog0.z_index = 5
+				add_child(fog0)
+				fog_patches.append({
+					"node": fog0,
+					"base_x": fog0.position.x,
+					"phase": randf() * TAU,
+				})
+				continue
+			var fog := ColorRect.new()
+			fog.size = Vector2(fw, fh)
 			fog.position = Vector2(fx, fy)
 			fog.color = Color(0.8, 0.85, 0.9, 0.0)
 			fog.z_index = 5
@@ -7129,9 +7150,13 @@ func _process(delta: float) -> void:
 	elif t < 0.25:
 		fog_alpha = lerpf(0.25, 0.0, (t - 0.2) / 0.05)
 	for fp in fog_patches:
-		var fnode: ColorRect = fp["node"]
+		var fnode = fp["node"]
 		fnode.position.x = fp["base_x"] + sin(wave_time * 0.3 + fp["phase"]) * 8.0
-		fnode.color.a = fog_alpha * (0.6 + sin(wave_time * 0.5 + fp["phase"]) * 0.4)
+		var fog_a: float = fog_alpha * (0.6 + sin(wave_time * 0.5 + fp["phase"]) * 0.4)
+		if V3_NIGHT and night_mod:
+			fnode.modulate.a = fog_a
+		else:
+			fnode.color.a = fog_a
 
 	# Phase 4C: Distance fog — atmospheric perspective based on camera position
 	if distance_fog_rect:
