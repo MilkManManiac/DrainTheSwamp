@@ -25,6 +25,23 @@ func _ready() -> void:
 		GameManager.exit_cave()
 		SceneManager.fade_in()
 
+	# Dev-only capture hook (v3 hud track): DTS_UI=shop|menu|touch opens that
+	# panel / shows the touch controls so tools/capture.py can photograph them.
+	# Inert without the env var; nothing here is saved.
+	var ui_dbg: String = OS.get_environment("DTS_UI")
+	if ui_dbg != "":
+		_debug_open_ui.call_deferred(ui_dbg)
+
+func _debug_open_ui(which: String) -> void:
+	match which:
+		"shop":
+			_on_shop_pressed()
+		"menu":
+			_on_menu_pressed()
+			get_tree().paused = false  # keep the DTS_SHOT timer ticking
+		"touch":
+			TouchControls.set_enabled(true)
+
 func _close_all_panels() -> void:
 	shop_panel.visible = false
 	player.ui_panel_open = false

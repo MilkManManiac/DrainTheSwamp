@@ -32,7 +32,7 @@ func _build_buttons() -> void:
 	var resume_btn := Button.new()
 	resume_btn.add_theme_font_size_override("font_size", 16)
 	resume_btn.text = "Resume"
-	resume_btn.custom_minimum_size = Vector2(160, 28)
+	resume_btn.custom_minimum_size = Vector2(160, 22)
 	resume_btn.add_theme_color_override("font_color", Color(0.3, 1.0, 0.4))
 	resume_btn.pressed.connect(func() -> void: _close())
 	_style_button(resume_btn, Color(0.08, 0.22, 0.1))
@@ -42,7 +42,7 @@ func _build_buttons() -> void:
 	touch_btn.add_theme_font_size_override("font_size", 16)
 	var touch_on: bool = GameManager.touch_controls_enabled
 	touch_btn.text = "Touch Controls: " + ("ON" if touch_on else "OFF")
-	touch_btn.custom_minimum_size = Vector2(160, 28)
+	touch_btn.custom_minimum_size = Vector2(160, 22)
 	touch_btn.add_theme_color_override("font_color", Color(0.7, 0.85, 1.0))
 	touch_btn.pressed.connect(func() -> void:
 		GameManager.touch_controls_enabled = not GameManager.touch_controls_enabled
@@ -62,18 +62,18 @@ func _build_buttons() -> void:
 		var reset_btn := Button.new()
 		reset_btn.add_theme_font_size_override("font_size", 16)
 		reset_btn.text = "Restart Game"
-		reset_btn.custom_minimum_size = Vector2(160, 28)
+		reset_btn.custom_minimum_size = Vector2(160, 22)
 		reset_btn.add_theme_color_override("font_color", Color(1.0, 0.6, 0.5))
 		reset_btn.pressed.connect(func() -> void: confirming_reset = true; _build_buttons())
 		_style_button(reset_btn, Color(0.25, 0.1, 0.08))
 		button_list.add_child(reset_btn)
 	else:
 		var warn_label := Label.new()
-		warn_label.add_theme_font_size_override("font_size", 14)
+		warn_label.add_theme_font_size_override("font_size", 8)
 		warn_label.add_theme_color_override("font_color", Color(1.0, 0.5, 0.4))
-		warn_label.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.7))
-		warn_label.add_theme_constant_override("shadow_offset_x", 2)
-		warn_label.add_theme_constant_override("shadow_offset_y", 2)
+		warn_label.add_theme_color_override("font_shadow_color", Color(0.1, 0.06, 0.04, 0.75))
+		warn_label.add_theme_constant_override("shadow_offset_x", 1)
+		warn_label.add_theme_constant_override("shadow_offset_y", 1)
 		warn_label.text = "All progress will be lost!"
 		warn_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		button_list.add_child(warn_label)
@@ -83,7 +83,7 @@ func _build_buttons() -> void:
 		confirm_row.add_theme_constant_override("separation", 16)
 
 		var yes_btn := Button.new()
-		yes_btn.add_theme_font_size_override("font_size", 14)
+		yes_btn.add_theme_font_size_override("font_size", 8)
 		yes_btn.text = "Yes, Restart"
 		yes_btn.add_theme_color_override("font_color", Color(1.0, 0.4, 0.4))
 		yes_btn.pressed.connect(func() -> void: reset_confirmed.emit(); _close())
@@ -91,7 +91,7 @@ func _build_buttons() -> void:
 		confirm_row.add_child(yes_btn)
 
 		var no_btn := Button.new()
-		no_btn.add_theme_font_size_override("font_size", 14)
+		no_btn.add_theme_font_size_override("font_size", 8)
 		no_btn.text = "Cancel"
 		no_btn.add_theme_color_override("font_color", Color(0.8, 0.85, 0.9))
 		no_btn.pressed.connect(func() -> void: confirming_reset = false; _build_buttons())
@@ -106,7 +106,7 @@ func _build_settings_section() -> void:
 
 	var audio_header := Label.new()
 	audio_header.text = "Audio"
-	audio_header.add_theme_font_size_override("font_size", 14)
+	audio_header.add_theme_font_size_override("font_size", 8)
 	audio_header.add_theme_color_override("font_color", Color(0.6, 0.8, 1.0))
 	audio_header.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	button_list.add_child(audio_header)
@@ -119,7 +119,7 @@ func _build_settings_section() -> void:
 	var fs_btn := Button.new()
 	fs_btn.add_theme_font_size_override("font_size", 16)
 	fs_btn.text = "Fullscreen: " + ("ON" if AudioManager.is_fullscreen() else "OFF")
-	fs_btn.custom_minimum_size = Vector2(160, 28)
+	fs_btn.custom_minimum_size = Vector2(160, 22)
 	fs_btn.add_theme_color_override("font_color", Color(0.7, 0.85, 1.0))
 	fs_btn.pressed.connect(func() -> void:
 		AudioManager.set_fullscreen(not AudioManager.is_fullscreen())
@@ -135,7 +135,7 @@ func _add_volume_slider(label_text: String, channel: String) -> void:
 
 	var lbl := Label.new()
 	lbl.text = label_text
-	lbl.add_theme_font_size_override("font_size", 13)
+	lbl.add_theme_font_size_override("font_size", 8)
 	lbl.add_theme_color_override("font_color", Color(0.8, 0.85, 0.9))
 	lbl.custom_minimum_size = Vector2(64, 0)
 	row.add_child(lbl)
@@ -155,27 +155,5 @@ func _add_volume_slider(label_text: String, channel: String) -> void:
 	button_list.add_child(row)
 
 func _style_button(btn: Button, bg_color: Color) -> void:
-	var style := StyleBoxFlat.new()
-	style.bg_color = bg_color
-	style.border_width_left = 2
-	style.border_width_top = 2
-	style.border_width_right = 2
-	style.border_width_bottom = 2
-	style.border_color = bg_color.lightened(0.4)
-	style.corner_radius_top_left = 4
-	style.corner_radius_top_right = 4
-	style.corner_radius_bottom_left = 4
-	style.corner_radius_bottom_right = 4
-	style.content_margin_left = 8
-	style.content_margin_right = 8
-	style.content_margin_top = 4
-	style.content_margin_bottom = 4
-	btn.add_theme_stylebox_override("normal", style)
-
-	var hover_style := style.duplicate()
-	hover_style.bg_color = bg_color.lightened(0.15)
-	btn.add_theme_stylebox_override("hover", hover_style)
-
-	var pressed_style := style.duplicate()
-	pressed_style.bg_color = bg_color.darkened(0.1)
-	btn.add_theme_stylebox_override("pressed", pressed_style)
+	# Wood pixel button from the theme; the old bg colour survives as a light tint.
+	PixelUI.button(btn, bg_color)
