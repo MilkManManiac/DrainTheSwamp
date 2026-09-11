@@ -45,6 +45,12 @@ const MENU_SCENE = preload("res://scenes/ui/menu_panel.tscn")
 const WATER_SHADER = preload("res://shaders/water.gdshader")
 const POST_PROCESS_SHADER = preload("res://shaders/post_process.gdshader")
 const ROCK_SHADER = preload("res://shaders/cave_rock.gdshader")
+# v3 pixel-art revamp (2026-09-11): the procedural rock/crystal/clutter builders below are
+# quarantined behind this switch and scripts/caves/cave_skin.gd draws the cave instead.
+# Collision, pools, loot, lore, lights, cameras, exits and the DTS_* hooks are untouched.
+const V3_CAVES := true
+const CAVE_SKIN = preload("res://scripts/caves/cave_skin.gd")
+var skin: Node2D = null
 
 # Post-processing
 var cave_post_process_rect: ColorRect = null
@@ -73,6 +79,10 @@ func _setup_cave() -> void:
 
 	_setup_cave_hdr()
 	_build_rock_material()
+	if V3_CAVES:
+		skin = CAVE_SKIN.new()
+		skin.cave = self
+		add_child(skin)
 	_build_fog_backdrop()
 	_build_back_wall()
 	_build_floor()
@@ -288,6 +298,7 @@ func _build_floor() -> void:
 	floor_poly.vertex_colors = _vertical_gradient_colors(floor_points, ground_color.lightened(0.18), ground_color.darkened(0.45))
 	floor_poly.material = rock_material
 	floor_poly.z_index = 1
+	floor_poly.visible = not V3_CAVES
 	add_child(floor_poly)
 
 	# Floor collision
@@ -321,6 +332,7 @@ func _build_ceiling() -> void:
 	ceil_poly.vertex_colors = _vertical_gradient_colors(ceil_points, ceiling_color.darkened(0.4), ceiling_color.lightened(0.12))
 	ceil_poly.material = rock_material
 	ceil_poly.z_index = 5
+	ceil_poly.visible = not V3_CAVES
 	add_child(ceil_poly)
 
 	# Ceiling collision
@@ -356,6 +368,7 @@ func _build_walls() -> void:
 	left_wall.vertex_colors = _vertical_gradient_colors(left_wall_pts, wall_color.lightened(0.15), wall_color.darkened(0.35))
 	left_wall.material = rock_material
 	left_wall.z_index = 4
+	left_wall.visible = not V3_CAVES
 	add_child(left_wall)
 
 	var right_x: float = cave_terrain_points[cave_terrain_points.size() - 1].x
@@ -371,6 +384,7 @@ func _build_walls() -> void:
 	right_wall.vertex_colors = _vertical_gradient_colors(right_wall_pts, wall_color.lightened(0.15), wall_color.darkened(0.35))
 	right_wall.material = rock_material
 	right_wall.z_index = 4
+	right_wall.visible = not V3_CAVES
 	add_child(right_wall)
 
 	var wall_body := StaticBody2D.new()
@@ -394,6 +408,8 @@ func _build_walls() -> void:
 
 # --- Rock Layers ---
 func _build_rock_layers() -> void:
+	if V3_CAVES:
+		return
 	if cave_terrain_points.size() < 2 or cave_ceiling_points.size() < 2:
 		return
 
@@ -472,6 +488,8 @@ func _build_rock_layers() -> void:
 
 # --- Stalactites (Polygon2D triangles) ---
 func _build_stalactites() -> void:
+	if V3_CAVES:
+		return
 	for i in range(cave_ceiling_points.size()):
 		if randf() < 0.5:
 			var pt: Vector2 = cave_ceiling_points[i]
@@ -491,6 +509,8 @@ func _build_stalactites() -> void:
 
 # --- Stalagmites (floor triangles) ---
 func _build_stalagmites() -> void:
+	if V3_CAVES:
+		return
 	var left_x: float = cave_terrain_points[0].x
 	var right_x: float = cave_terrain_points[cave_terrain_points.size() - 1].x
 	for i in range(randi_range(10, 15)):
@@ -511,6 +531,8 @@ func _build_stalagmites() -> void:
 
 # --- Glowing Crystals ---
 func _build_crystals() -> void:
+	if V3_CAVES:
+		return
 	var left_x: float = cave_terrain_points[0].x
 	var right_x: float = cave_terrain_points[cave_terrain_points.size() - 1].x
 	var num_clusters: int = randi_range(8, 13)
@@ -592,6 +614,8 @@ func _build_crystals() -> void:
 
 # --- Moss & Lichen ---
 func _build_moss_lichen() -> void:
+	if V3_CAVES:
+		return
 	var left_x: float = cave_terrain_points[0].x
 	var right_x: float = cave_terrain_points[cave_terrain_points.size() - 1].x
 
@@ -784,6 +808,8 @@ func _build_cave_pools() -> void:
 		})
 
 func _build_decorative_puddles() -> void:
+	if V3_CAVES:
+		return
 	var left_x: float = cave_terrain_points[0].x
 	var right_x: float = cave_terrain_points[cave_terrain_points.size() - 1].x
 	for i in range(randi_range(2, 4)):
@@ -929,6 +955,8 @@ func _on_cave_pool_completed(completed_cave_id: String, pool_index: int) -> void
 
 # --- Cracks & Fissures ---
 func _build_cracks() -> void:
+	if V3_CAVES:
+		return
 	var left_x: float = cave_terrain_points[0].x
 	var right_x: float = cave_terrain_points[cave_terrain_points.size() - 1].x
 	for i in range(randi_range(8, 15)):
@@ -964,6 +992,8 @@ func _build_cracks() -> void:
 
 # --- Roots & Cobwebs ---
 func _build_roots_cobwebs() -> void:
+	if V3_CAVES:
+		return
 	var left_x: float = cave_terrain_points[0].x
 	var right_x: float = cave_terrain_points[cave_terrain_points.size() - 1].x
 
@@ -1153,6 +1183,8 @@ func _fog_palette() -> Dictionary:
 # air column (ceiling contour -> floor contour) that was previously unpainted void.
 # This is what makes the space behind the player read as solid rock, not open haze.
 func _build_back_wall() -> void:
+	if V3_CAVES:
+		return
 	if cave_terrain_points.size() < 2 or cave_ceiling_points.size() < 2:
 		return
 	# Top edge follows the ceiling contour (dropped slightly so a sliver of fog/parallax
@@ -1180,6 +1212,8 @@ func _build_back_wall() -> void:
 # density gradient leaves deliberate calm gaps; one glowing focal point per area.
 # =====================================================================================
 func _build_midground_clutter() -> void:
+	if V3_CAVES:
+		return
 	if cave_terrain_points.size() < 2 or cave_ceiling_points.size() < 2:
 		return
 	var left_x: float = cave_terrain_points[0].x
@@ -1373,6 +1407,8 @@ func _make_hanging_vine(x: float, ceil_y: float) -> void:
 # storytelling: object arrangement implies a history). Placed ~62% across, on the floor.
 # =====================================================================================
 func _build_signature() -> void:
+	if V3_CAVES:
+		return
 	if signature == "" or cave_terrain_points.size() < 2:
 		return
 	var left_x: float = cave_terrain_points[0].x
@@ -1637,6 +1673,8 @@ func _sig_coral(base: Vector2) -> void:
 # everything (z=-20). Brighter through the mid band so the wall behind the player
 # reads as lit rock haze instead of black. This is the single biggest "not a void" fix.
 func _build_fog_backdrop() -> void:
+	if V3_CAVES:
+		return
 	if cave_terrain_points.size() < 2 or cave_ceiling_points.size() < 2:
 		return
 	var fog: Dictionary = _fog_palette()
@@ -1698,6 +1736,8 @@ func _build_fog_backdrop() -> void:
 # Three silhouette planes scroll at decreasing speed for genuine parallax; far planes
 # are hazed + desaturated (atmospheric perspective) so depth reads instantly.
 func _build_parallax_bg() -> void:
+	if V3_CAVES:
+		return
 	if cave_terrain_points.size() < 2 or cave_ceiling_points.size() < 2:
 		return
 	var fog: Dictionary = _fog_palette()
@@ -1764,6 +1804,8 @@ func _build_parallax_bg() -> void:
 # --- Foreground silhouettes: near-black framing rock that fast-parallaxes past the
 # camera edges, adding the depth anchor INSIDE/Limbo use. ---
 func _build_foreground_silhouettes() -> void:
+	if V3_CAVES:
+		return
 	if cave_terrain_points.size() < 2 or cave_ceiling_points.size() < 2:
 		return
 	var left_x: float = cave_terrain_points[0].x
@@ -1872,6 +1914,7 @@ func _build_exit_glow() -> void:
 	cover.vertex_colors = _vertical_gradient_colors(cover.polygon, cov_col.darkened(0.25), cov_col.lightened(0.08))
 	cover.material = rock_material
 	cover.z_index = -9
+	cover.visible = not V3_CAVES
 	add_child(cover)
 
 	# Warm "daylight from the surface" gradient filling the opening itself.
