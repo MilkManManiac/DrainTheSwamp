@@ -114,6 +114,30 @@ capture, touch controls confirmed hidden — no arrow/scoop buttons drawn).
 `tools/capture.py --check` and `DTS_UI=shop python tools/capture.py --check`
 both clean.
 
+## Review round 3 (coordinator): menu regression
+
+Round 2's tighter menu still stretched to the full anchored rect (now
+`offset_top=20 .. offset_bottom=-20`, 20 UI units = 40px, above the top bar's
+actual bottom edge at y=66px), so it overlapped the top HUD bar and had two
+dead bands (VBoxContainer content centered by `alignment=1` inside a
+container taller than its content).
+
+Fixed by no longer letting the wood panel *be* the anchored rect. Restructured
+`scenes/ui/menu_panel.tscn`: `MenuPanel` is now an invisible full-band
+container (`theme_override_styles/panel` = empty stylebox,
+`mouse_filter = IGNORE`, offsets `33 .. -31` in UI units — measured directly
+from a clean capture: top bar bottom edge at screen y=66 = UI y=33, bottom
+bar top edge at y=658 = UI y=329 = offset -31 from 360) holding a
+`CenterContainer` that centers a new `Box` `PanelContainer` (the actual wood
+panel, `custom_minimum_size.x = 340` to keep the same width as before,
+height now shrink-wrapped to content). `scripts/ui/menu_panel.gd`'s
+`@onready` paths updated to the new `CenterContainer/Box/...` nesting; no
+other logic changed.
+
+Re-captured `menu_open.png`: box now sits y=148..572, clear of the top bar
+(0..66) and bottom bar (658..720), tight around its content with no dead
+space.
+
 ## What is still old / out of scope
 
 - The billboard sprite and floating basin labels ("MARSH 100.0%", "BOG...")

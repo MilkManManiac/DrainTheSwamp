@@ -5,8 +5,8 @@ signal reset_confirmed
 
 var confirming_reset: bool = false
 
-@onready var button_list: VBoxContainer = $MarginContainer/VBoxContainer/ButtonList
-@onready var close_button: Button = $MarginContainer/VBoxContainer/TopBar/CloseButton
+@onready var button_list: VBoxContainer = $CenterContainer/Box/MarginContainer/VBoxContainer/ButtonList
+@onready var close_button: Button = $CenterContainer/Box/MarginContainer/VBoxContainer/TopBar/CloseButton
 
 func _ready() -> void:
 	close_button.pressed.connect(func() -> void: _close())

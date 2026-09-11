@@ -1,37 +1,49 @@
-[gd_scene load_steps=3 format=3 uid="uid://bmenupanel01"]
+[gd_scene load_steps=4 format=3 uid="uid://bmenupanel01"]
 
 [ext_resource type="Script" path="res://scripts/ui/menu_panel.gd" id="1_script"]
 [ext_resource type="Theme" path="res://assets/ui_theme.tres" id="2_theme"]
 
+[sub_resource type="StyleBoxEmpty" id="sb_empty_outer"]
+
 [node name="MenuPanel" type="PanelContainer"]
-texture_filter = 1
 theme = ExtResource("2_theme")
+theme_override_styles/panel = SubResource("sb_empty_outer")
 process_mode = 3
-clip_contents = true
+mouse_filter = 2
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
-offset_left = 150.0
-offset_top = 20.0
-offset_right = -150.0
-offset_bottom = -20.0
+offset_top = 33.0
+offset_bottom = -31.0
 script = ExtResource("1_script")
 
-[node name="MarginContainer" type="MarginContainer" parent="."]
+[node name="CenterContainer" type="CenterContainer" parent="."]
+layout_mode = 2
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+
+[node name="Box" type="PanelContainer" parent="CenterContainer"]
+texture_filter = 1
+layout_mode = 2
+clip_contents = true
+custom_minimum_size = Vector2(340, 0)
+
+[node name="MarginContainer" type="MarginContainer" parent="CenterContainer/Box"]
 layout_mode = 2
 theme_override_constants/margin_left = 14
 theme_override_constants/margin_top = 6
 theme_override_constants/margin_right = 14
 theme_override_constants/margin_bottom = 6
 
-[node name="VBoxContainer" type="VBoxContainer" parent="MarginContainer"]
+[node name="VBoxContainer" type="VBoxContainer" parent="CenterContainer/Box/MarginContainer"]
 layout_mode = 2
 theme_override_constants/separation = 4
 
-[node name="TopBar" type="HBoxContainer" parent="MarginContainer/VBoxContainer"]
+[node name="TopBar" type="HBoxContainer" parent="CenterContainer/Box/MarginContainer/VBoxContainer"]
 layout_mode = 2
 
-[node name="TitleLabel" type="Label" parent="MarginContainer/VBoxContainer/TopBar"]
+[node name="TitleLabel" type="Label" parent="CenterContainer/Box/MarginContainer/VBoxContainer/TopBar"]
 layout_mode = 2
 size_flags_horizontal = 3
 theme_override_colors/font_color = Color(1, 0.9, 0.3, 1)
@@ -42,16 +54,15 @@ theme_override_font_sizes/font_size = 16
 text = "MENU"
 horizontal_alignment = 1
 
-[node name="CloseButton" type="Button" parent="MarginContainer/VBoxContainer/TopBar"]
+[node name="CloseButton" type="Button" parent="CenterContainer/Box/MarginContainer/VBoxContainer/TopBar"]
 layout_mode = 2
 theme_override_font_sizes/font_size = 8
 text = "X"
 
-[node name="HSeparator" type="HSeparator" parent="MarginContainer/VBoxContainer"]
+[node name="HSeparator" type="HSeparator" parent="CenterContainer/Box/MarginContainer/VBoxContainer"]
 layout_mode = 2
 
-[node name="ButtonList" type="VBoxContainer" parent="MarginContainer/VBoxContainer"]
+[node name="ButtonList" type="VBoxContainer" parent="CenterContainer/Box/MarginContainer/VBoxContainer"]
 layout_mode = 2
-size_flags_vertical = 3
 theme_override_constants/separation = 4
 alignment = 1
