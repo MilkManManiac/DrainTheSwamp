@@ -1,4 +1,4 @@
-[gd_resource type="Theme" load_steps=24 format=3 uid="uid://buitheme0001"]
+[gd_resource type="Theme" load_steps=26 format=3 uid="uid://buitheme0001"]
 
 [ext_resource type="FontFile" path="res://assets/fonts/Silkscreen-Regular.ttf" id="1_font"]
 [ext_resource type="Texture2D" path="res://assets/art/ui/panel_wood.png" id="t_wood"]
@@ -10,6 +10,8 @@
 [ext_resource type="Texture2D" path="res://assets/art/ui/btn_disabled.png" id="t_btn_d"]
 [ext_resource type="Texture2D" path="res://assets/art/ui/bar_frame.png" id="t_bar_frame"]
 [ext_resource type="Texture2D" path="res://assets/art/ui/bar_fill.png" id="t_bar_fill"]
+[ext_resource type="Texture2D" path="res://assets/art/ui/slider_grabber.png" id="t_grab"]
+[ext_resource type="Texture2D" path="res://assets/art/ui/slider_grabber_hi.png" id="t_grab_hi"]
 
 [sub_resource type="StyleBoxTexture" id="sb_wood"]
 content_margin_left = 8.0
@@ -162,6 +164,9 @@ HSeparator/styles/separator = SubResource("sb_empty")
 HSlider/styles/grabber_area = SubResource("slider_fill")
 HSlider/styles/grabber_area_highlight = SubResource("slider_fill")
 HSlider/styles/slider = SubResource("slider_track")
+HSlider/icons/grabber = ExtResource("t_grab")
+HSlider/icons/grabber_highlight = ExtResource("t_grab_hi")
+HSlider/icons/grabber_disabled = ExtResource("t_grab")
 HSlider/constants/center_grabber = 0
 HSlider/constants/grabber_offset = 0
 Label/colors/font_color = Color(0.94, 0.88, 0.72, 1)

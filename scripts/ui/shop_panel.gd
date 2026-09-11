@@ -169,10 +169,12 @@ func _build_tools_tab() -> void:
 		var owned_data: Dictionary = GameManager.tools_owned[tid]
 
 		var row_panel := PanelContainer.new()
-		var row_style: StyleBoxTexture = PixelUI.inset(Color(0.12, 0.12, 0.16, 0.6))
-		if GameManager.current_tool_id == tid:
-			row_style.border_width_left = 2
-			row_style.border_color = Color(0.3, 0.9, 0.4, 0.5)
+		# StyleBoxTexture has no border_width_left/border_color (StyleBoxFlat-only
+		# properties — setting them threw a script error every time the shop
+		# opened). Equipped state now reads through a brighter green tint plus
+		# the label colour instead.
+		var equipped: bool = GameManager.current_tool_id == tid
+		var row_style: StyleBoxTexture = PixelUI.inset(Color(0.35, 0.95, 0.45) if equipped else Color(0.12, 0.12, 0.16))
 		row_panel.add_theme_stylebox_override("panel", row_style)
 
 		var entry := HBoxContainer.new()
@@ -201,7 +203,7 @@ func _build_tools_tab() -> void:
 				info_label.add_theme_color_override("font_color", Color(0.85, 0.85, 0.9))
 		else:
 			info_label.text = "%s [LOCKED]" % defn["name"]
-			info_label.add_theme_color_override("font_color", Color(0.45, 0.45, 0.5))
+			info_label.add_theme_color_override("font_color", Color(0.68, 0.68, 0.74))
 
 		entry.add_child(info_label)
 
@@ -311,7 +313,7 @@ func _build_stats_tab() -> void:
 			info_label.add_theme_color_override("font_color", Color(0.7, 0.85, 1.0))
 		else:
 			info_label.text = "%s (%s)" % [defn["name"], value_str]
-			info_label.add_theme_color_override("font_color", Color(0.5, 0.55, 0.65))
+			info_label.add_theme_color_override("font_color", Color(0.72, 0.76, 0.86))
 		row.add_child(info_label)
 
 		# Upgrade button
@@ -379,7 +381,7 @@ func _build_stats_tab() -> void:
 			u_info.add_theme_color_override("font_color", Color(0.6, 0.95, 0.6))
 		else:
 			u_info.text = "%s" % udefn["name"]
-			u_info.add_theme_color_override("font_color", Color(0.55, 0.6, 0.55))
+			u_info.add_theme_color_override("font_color", Color(0.76, 0.8, 0.76))
 		u_row.add_child(u_info)
 
 		if is_maxed:
@@ -578,7 +580,7 @@ func _build_prestige_tab() -> void:
 			perk_lbl.add_theme_color_override("font_color", Color(0.6, 0.95, 0.7))
 		else:
 			perk_lbl.text = "[P%d] Sell out %d times to unlock" % [perk["p"], perk["p"]]
-			perk_lbl.add_theme_color_override("font_color", Color(0.45, 0.48, 0.5))
+			perk_lbl.add_theme_color_override("font_color", Color(0.68, 0.7, 0.72))
 		perk_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD
 		perk_panel.tooltip_text = "%s\n%s\n\n%s" % [perk["name"], perk["desc"], perk["na"]] if unlocked else "Unlocks at %d sell-outs" % perk["p"]
 		perk_panel.mouse_filter = Control.MOUSE_FILTER_PASS
@@ -607,7 +609,7 @@ func _build_prestige_upgrade_row(key: String, display_name: String, effect: Stri
 		info_label.add_theme_color_override("font_color", Color(0.8, 0.7, 1.0))
 	else:
 		info_label.text = display_name
-		info_label.add_theme_color_override("font_color", Color(0.6, 0.55, 0.7))
+		info_label.add_theme_color_override("font_color", Color(0.8, 0.76, 0.88))
 	row.add_child(info_label)
 
 	var buy_btn := Button.new()
@@ -799,7 +801,7 @@ func _build_pump_section() -> void:
 			info.add_theme_color_override("font_color", Color(0.55, 0.85, 0.95))
 		else:
 			info.text = "%s Pump" % d["name"]
-			info.add_theme_color_override("font_color", Color(0.45, 0.6, 0.68))
+			info.add_theme_color_override("font_color", Color(0.7, 0.82, 0.88))
 		row.add_child(info)
 
 		if level >= GameManager.PUMP_MAX_LEVEL:
@@ -863,7 +865,7 @@ func _build_camel_section() -> void:
 		camel_info.add_theme_color_override("font_color", Color(0.85, 0.7, 0.4))
 	else:
 		camel_info.text = "Camel (auto-sell carrier)"
-		camel_info.add_theme_color_override("font_color", Color(0.6, 0.5, 0.35))
+		camel_info.add_theme_color_override("font_color", Color(0.78, 0.7, 0.54))
 	camel_buy_row.add_child(camel_info)
 
 	if GameManager.camel_count >= GameManager.get_camel_max_count():

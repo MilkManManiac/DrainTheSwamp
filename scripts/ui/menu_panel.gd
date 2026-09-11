@@ -32,7 +32,7 @@ func _build_buttons() -> void:
 	var resume_btn := Button.new()
 	resume_btn.add_theme_font_size_override("font_size", 16)
 	resume_btn.text = "Resume"
-	resume_btn.custom_minimum_size = Vector2(160, 22)
+	resume_btn.custom_minimum_size = Vector2(160, 18)
 	resume_btn.add_theme_color_override("font_color", Color(0.3, 1.0, 0.4))
 	resume_btn.pressed.connect(func() -> void: _close())
 	_style_button(resume_btn, Color(0.08, 0.22, 0.1))
@@ -42,7 +42,7 @@ func _build_buttons() -> void:
 	touch_btn.add_theme_font_size_override("font_size", 16)
 	var touch_on: bool = GameManager.touch_controls_enabled
 	touch_btn.text = "Touch Controls: " + ("ON" if touch_on else "OFF")
-	touch_btn.custom_minimum_size = Vector2(160, 22)
+	touch_btn.custom_minimum_size = Vector2(160, 18)
 	touch_btn.add_theme_color_override("font_color", Color(0.7, 0.85, 1.0))
 	touch_btn.pressed.connect(func() -> void:
 		GameManager.touch_controls_enabled = not GameManager.touch_controls_enabled
@@ -62,7 +62,7 @@ func _build_buttons() -> void:
 		var reset_btn := Button.new()
 		reset_btn.add_theme_font_size_override("font_size", 16)
 		reset_btn.text = "Restart Game"
-		reset_btn.custom_minimum_size = Vector2(160, 22)
+		reset_btn.custom_minimum_size = Vector2(160, 18)
 		reset_btn.add_theme_color_override("font_color", Color(1.0, 0.6, 0.5))
 		reset_btn.pressed.connect(func() -> void: confirming_reset = true; _build_buttons())
 		_style_button(reset_btn, Color(0.25, 0.1, 0.08))
@@ -111,15 +111,22 @@ func _build_settings_section() -> void:
 	audio_header.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	button_list.add_child(audio_header)
 
-	_add_volume_slider("Master", "master")
-	_add_volume_slider("SFX", "sfx")
-	_add_volume_slider("Music", "music")
-	_add_volume_slider("Ambient", "ambient")
+	# 2x2 grid (not 4 stacked rows) so the panel fits between the HUD bars
+	# at 720p without scrolling.
+	var grid := GridContainer.new()
+	grid.columns = 2
+	grid.add_theme_constant_override("h_separation", 12)
+	grid.add_theme_constant_override("v_separation", 2)
+	button_list.add_child(grid)
+	_add_volume_slider(grid, "Master", "master")
+	_add_volume_slider(grid, "SFX", "sfx")
+	_add_volume_slider(grid, "Music", "music")
+	_add_volume_slider(grid, "Ambient", "ambient")
 
 	var fs_btn := Button.new()
 	fs_btn.add_theme_font_size_override("font_size", 16)
 	fs_btn.text = "Fullscreen: " + ("ON" if AudioManager.is_fullscreen() else "OFF")
-	fs_btn.custom_minimum_size = Vector2(160, 22)
+	fs_btn.custom_minimum_size = Vector2(160, 18)
 	fs_btn.add_theme_color_override("font_color", Color(0.7, 0.85, 1.0))
 	fs_btn.pressed.connect(func() -> void:
 		AudioManager.set_fullscreen(not AudioManager.is_fullscreen())
@@ -128,16 +135,16 @@ func _build_settings_section() -> void:
 	_style_button(fs_btn, Color(0.1, 0.15, 0.22))
 	button_list.add_child(fs_btn)
 
-func _add_volume_slider(label_text: String, channel: String) -> void:
+func _add_volume_slider(grid: GridContainer, label_text: String, channel: String) -> void:
 	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 8)
-	row.custom_minimum_size = Vector2(160, 0)
+	row.add_theme_constant_override("separation", 6)
+	row.custom_minimum_size = Vector2(78, 0)
 
 	var lbl := Label.new()
 	lbl.text = label_text
 	lbl.add_theme_font_size_override("font_size", 8)
 	lbl.add_theme_color_override("font_color", Color(0.8, 0.85, 0.9))
-	lbl.custom_minimum_size = Vector2(64, 0)
+	lbl.custom_minimum_size = Vector2(46, 0)
 	row.add_child(lbl)
 
 	var slider := HSlider.new()
@@ -147,12 +154,12 @@ func _add_volume_slider(label_text: String, channel: String) -> void:
 	slider.value = AudioManager.get_volume(channel)
 	slider.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	slider.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	slider.custom_minimum_size = Vector2(80, 0)
+	slider.custom_minimum_size = Vector2(56, 0)
 	var ch: String = channel
 	slider.value_changed.connect(func(v: float) -> void: AudioManager.set_volume(ch, v))
 	row.add_child(slider)
 
-	button_list.add_child(row)
+	grid.add_child(row)
 
 func _style_button(btn: Button, bg_color: Color) -> void:
 	# Wood pixel button from the theme; the old bg colour survives as a light tint.

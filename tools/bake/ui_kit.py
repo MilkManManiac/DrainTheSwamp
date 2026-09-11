@@ -21,10 +21,12 @@ W_MID = (88, 60, 36)
 W_BASE = (112, 78, 46)
 W_LIGHT = (150, 110, 70)
 W_HI = (176, 136, 90)
-# inset slot (dark, warm)
-S_BASE = (44, 32, 26)
-S_DARK = (34, 24, 20)
-S_LIGHT = (66, 48, 38)
+# inset slot (dark, warm) — lightened from the original (44,32,26) base so
+# cream/parchment row text has real contrast against it (Wes: "PUDDLE PUMP"
+# / "BUY $12.50" were dim blue-grey on near-black)
+S_BASE = (70, 52, 40)
+S_DARK = (52, 38, 30)
+S_LIGHT = (96, 74, 58)
 # parchment
 P_BASE = (214, 190, 142)
 P_DARK = (190, 164, 116)
@@ -87,6 +89,21 @@ def panel_inset(size=12):
     d.line((1, 1, 1, size - 2), fill=S_DARK)
     d.line((1, size - 2, size - 2, size - 2), fill=S_LIGHT)
     d.line((size - 2, 1, size - 2, size - 2), fill=S_LIGHT)
+    return img
+
+
+def slider_grabber(size=8, highlight=False):
+    """Small brass/wood knob for HSlider (replaces the default smooth white
+    circle, which read as programmer art next to the baked wood panels)."""
+    img = new(size, size)
+    d = ImageDraw.Draw(img)
+    if highlight:
+        base, light, dark = (214, 176, 100), (238, 210, 144), (150, 112, 58)
+    else:
+        base, light, dark = (176, 140, 70), (206, 172, 102), (110, 82, 40)
+    d.ellipse((0, 0, size - 1, size - 1), fill=base, outline=OUTLINE)
+    d.point([(2, 2), (3, 2), (2, 3)], fill=light)
+    d.point([(size - 3, size - 2), (size - 2, size - 3), (size - 3, size - 3)], fill=dark)
     return img
 
 
@@ -310,6 +327,8 @@ def main():
         "btn_disabled.png": button("disabled"),
         "bar_frame.png": bar_frame(8),
         "bar_fill.png": bar_fill(),
+        "slider_grabber.png": slider_grabber(8, False),
+        "slider_grabber_hi.png": slider_grabber(8, True),
         "touch_left.png": touch_button("left", 40, False),
         "touch_left_p.png": touch_button("left", 40, True),
         "touch_right.png": touch_button("right", 40, False),

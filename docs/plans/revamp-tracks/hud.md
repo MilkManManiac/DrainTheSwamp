@@ -59,6 +59,61 @@ town art (`_screenshots/lookdev-2026-09-10/fix_town.png`). `tools/capture.py
 --check` prints only the known pre-existing `Parameter "t" is null` boot
 error, otherwise clean.
 
+## Review round 2 (coordinator, read shop_open/menu_open/touch/verify_day)
+
+Four fixes, all addressed this round:
+
+1. **Slider grabbers were smooth AA circles.** Added `slider_grabber()` to
+   `tools/bake/ui_kit.py` (small brass/wood knob, PIL `ellipse` — no
+   anti-aliasing at this size, so it comes out crisp pixel-block like
+   everything else) and wired `HSlider/icons/grabber`,
+   `grabber_highlight`, `grabber_disabled` in `assets/ui_theme.tres`. Baked
+   `assets/art/ui/slider_grabber.png` + `slider_grabber_hi.png`.
+2. **Menu overflowed at 720p** ("RESTART GAME" cut off, bottom bar overlap).
+   Root cause: too much stacked content (8 rows incl. 4 separate audio-slider
+   rows) for the panel's vertical budget. Fixed in `scenes/ui/menu_panel.tscn`
+   (tighter anchors 20/-20 instead of 50/-50, margins 14/6 instead of 16/12,
+   `ButtonList` separation 4 instead of 8, `clip_contents = true` as a
+   safety net) and `scripts/ui/menu_panel.gd` (button height 18 instead of 22,
+   audio sliders now a 2x2 `GridContainer` instead of 4 stacked rows). Fits
+   fully inside the top/bottom bars at 720p now with room to spare.
+3. **Shop row text was dim blue-grey on near-black.** Two causes: the baked
+   `panel_inset.png` was very dark (`S_BASE` (44,32,26)), and
+   `PixelUI.inset()`'s category-tint blend (0.35) was actually *darkening*
+   low-saturation tints further (multiplying a near-black texture by a dim
+   hue drives it darker, not lighter). Lightened the inset bake palette,
+   dropped the tint blend to 0.15 so it reads as a faint hue wash instead of
+   the main value source, and brightened the specific dim label colours in
+   `scripts/ui/shop_panel.gd` (locked tools, unbought pumps/stats/upgrades,
+   prestige rows) toward cream/parchment while keeping them visibly dimmer
+   than owned/equipped rows (still distinguishable).
+4. **Shop panel covered ~88% of the screen, sliver on the right.** Traced to
+   a real bug, not just a layout choice: `open()`/`close()` tween
+   `position.x` from `vp_w` to `0.0`, but the panel's anchors held a 40px
+   margin on *both* sides (`offset_left=40, offset_right=-40`). For a
+   full-rect-anchored Control, setting `position.x` only moves
+   `offset_left` — the tween's rest value of `0.0` overwrote the left margin
+   but left `offset_right=-40` alone, so the panel ballooned flush to the
+   left edge with only the right margin surviving. **Chose full-width
+   between the bars** (`offset_left = offset_right = 0.0` in
+   `scenes/ui/shop_panel.tscn`) over re-centering: it fixes the slide
+   animation for free (the tween's rest position now matches the anchor
+   layout exactly, no distortion), and the shop's scrollable row list
+   benefits from the extra width more than a centered dialog would.
+
+Also found and fixed a real script error while re-verifying: `shop_panel.gd`
+was setting `border_width_left` / `border_color` on a `StyleBoxTexture`
+(StyleBoxFlat-only properties) to highlight the equipped tool row — this
+threw a script error on every shop open (`tools/capture.py --check` with
+`DTS_UI=shop` was not clean before this fix). Replaced with a brighter green
+`PixelUI.inset()` tint for the equipped row instead.
+
+New captures at 1280x720 (`_screenshots/revamp-2026-09-11/hud/`):
+`shop_open.png`, `menu_open.png`, `desktop_touch_off.png` (plain desktop
+capture, touch controls confirmed hidden — no arrow/scoop buttons drawn).
+`tools/capture.py --check` and `DTS_UI=shop python tools/capture.py --check`
+both clean.
+
 ## What is still old / out of scope
 
 - The billboard sprite and floating basin labels ("MARSH 100.0%", "BOG...")

@@ -47,6 +47,10 @@ static func icon(name: String, min_size: int = 9) -> TextureRect:
 static func inset(tint: Color = Color.WHITE, pad_x: int = 6, pad_y: int = 4) -> StyleBoxTexture:
 	## Dark wood slot (shop rows, sections). `tint` is blended in lightly so the
 	## old category colours still read without turning the wood into plastic.
+	## Low blend amount: a saturated-but-dark tint (e.g. a dim blue-grey category
+	## colour) multiplies the texture DARKER, not lighter — the baked inset
+	## texture is already lightened for contrast, so the tint only needs to be
+	## a faint hue wash, not the main source of value.
 	var sb := StyleBoxTexture.new()
 	sb.texture = TEX_INSET
 	sb.texture_margin_left = 3
@@ -57,7 +61,7 @@ static func inset(tint: Color = Color.WHITE, pad_x: int = 6, pad_y: int = 4) -> 
 	sb.content_margin_right = pad_x
 	sb.content_margin_top = pad_y
 	sb.content_margin_bottom = pad_y
-	sb.modulate_color = _tint_mod(tint, 0.35)
+	sb.modulate_color = _tint_mod(tint, 0.15)
 	return sb
 
 
