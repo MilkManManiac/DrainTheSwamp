@@ -68,6 +68,7 @@ var tool_visuals: Array[ColorRect] = []
 var _hdr_glow: bool = false  # Forward+/Mobile: lantern emits overbright to bloom under HDR glow
 var _shot_camx: float = NAN  # debug: env DTS_CAMX parks the player at a world X for screenshots
 var _dbg_lantern: bool = false  # debug: env DTS_LANTERN=1 lights the lantern without the upgrade (captures)
+var _skin: Node = null  # v3 skin — queried for the tool's on-screen anchor (splash origin)
 
 func _ready() -> void:
 	add_to_group("player")
@@ -82,6 +83,7 @@ func _ready() -> void:
 	var skin := preload("res://scripts/player/player_skin.gd").new()
 	skin.player = self
 	add_child(skin)
+	_skin = skin
 
 func _unhandled_input(event: InputEvent) -> void:
 	# Dev cheats (F4/F5) only available in debug builds — never in Steam/app releases
@@ -484,12 +486,19 @@ func _spawn_splash() -> void:
 			shake_tw.tween_property(cam, "offset", Vector2(randf_range(-shake_amount, shake_amount), randf_range(-shake_amount, shake_amount)), 0.05)
 			shake_tw.tween_property(cam, "offset", Vector2.ZERO, 0.1)
 
+	# Origin: the tool's actual on-screen grip point this frame (hand tool or
+	# scoop overlay), not a fixed player-local offset — 2026-09-11 review:
+	# the old fixed "-4" plus the rise arc's "-spread_y" read as head height.
+	var origin: Vector2 = Vector2(0.0, -8.0)
+	if _skin != null and _skin.has_method("get_tool_anchor_world"):
+		origin = to_local(_skin.get_tool_anchor_world())
+
 	for i in range(count):
 		var dot := ColorRect.new()
 		var sz: float = dot_size if randf() > 0.35 else maxf(1.0, dot_size - 1.0)
 		dot.size = Vector2(sz, sz)
 		dot.color = SPLASH_HI if randf() < 0.2 else (SPLASH_MAIN if randf() < 0.7 else SPLASH_DEEP)
-		var start: Vector2 = Vector2(randf_range(-spread_x * 0.5, spread_x * 0.5), -4)
+		var start: Vector2 = origin + Vector2(randf_range(-spread_x * 0.5, spread_x * 0.5), randf_range(-1.0, 1.0))
 		dot.position = start
 		dot.z_index = 8
 		add_child(dot)

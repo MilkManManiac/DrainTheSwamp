@@ -36,7 +36,7 @@ const HAND := {
 	"a": {
 		"idle": [Vector2(3, 26), Vector2(4, 26), Vector2(3, 26), Vector2(3, 26), Vector2(3, 26)],
 		"walk": [Vector2(6, 26), Vector2(11, 27), Vector2(8, 27), Vector2(9, 26)],
-		"scoop": [Vector2(5, 27), Vector2(20, 31), Vector2(15, 33)],
+		"scoop": [Vector2(3, 26), Vector2(1, 29), Vector2(1, 32)],
 	},
 }
 # Tool sprites: texture (x2 baked) and the grip point in art px of that texture
@@ -286,3 +286,15 @@ func _update_lantern(_dt: float) -> void:
 	var boost: float = 2.2 if player._hdr_glow else 1.0
 	_lantern_flame.modulate = Color(boost, 0.9 * boost * flicker, 0.35 * boost * flicker)
 	_lantern_flame.scale.y = 1.0 + sin(t * 12.0) * 0.25
+
+# World-space position of the currently-held tool's grip/anchor point — where
+# a hand tool or the scoop is actually drawn this frame. player.gd's splash
+# spawns from here (2026-09-11 review: it was spawning from a fixed
+# player-local offset that read as head height, not the tool/water line).
+# Falls back to a chest-height guess if there is no tool overlay yet.
+func get_tool_anchor_world() -> Vector2:
+	if _tool != null and _tool.visible:
+		return _tool.global_position
+	if player != null:
+		return player.global_position + Vector2(0, -14)
+	return global_position

@@ -1,8 +1,8 @@
 # Track 8 — player
 
-Owner files: `scripts/player/player_skin.gd`, `scripts/player/player.gd`, `assets/art/drainsville/player_*`, `tools/bake/bake_tools.py`, `tools/bake/paint_out_bucket.py`.
+Owner files: `scripts/player/player_skin.gd`, `scripts/player/player.gd`, `assets/art/drainsville/player_*`, `tools/bake/bake_tools.py`, `tools/bake/paint_out_bucket.py`, `tools/bake/build_scoop_from_idle.py`.
 
-## Status: done (round 2, after coordinator review)
+## Status: done (round 3, after second coordinator review)
 
 ### Round 1 — resumed from usage-limit WIP
 
@@ -95,6 +95,65 @@ Fixed all four:
      a HUD-language choice, not a sprite; flagged, not changed here to
      avoid stepping on that track's font pass.
 
+### Round 3 — tools approved; scoop rejected and rebuilt
+
+The coordinator approved round 2's tools ("the ground-planted wagon/barrel/
+wheelbarrow and the outlined hand tools read well") but rejected the scoop:
+in `scoop_bend.png`/`scoop_splash.png` the bend frame read as a **different
+character** (a large red mass over the head/shoulder, face and hat lost,
+blurrier than idle/walk), and splash dots spawned at head height instead of
+the tool/water line.
+
+**(a) Rebuilt the bend frame from the approved idle frame, not Gemini.**
+New `tools/bake/build_scoop_from_idle.py`: takes `player_a_idle.png` frame 0
+at art resolution and produces 3 frames by **pixel-translating**, not
+regenerating:
+- Frame 0: idle, unchanged (a clean transition frame `SCOOP_ORDER` never
+  actually plays).
+- Frame 1 ("bend"): the whole head/hat/torso/arms block (everything above
+  `LEG_SPLIT_Y = 30` art px, i.e. above the knee — the overalls are one
+  continuous garment with no natural waist seam) shifts down 3px, forward
+  (toward -x, the direction the sheet faces) 2px; the legs/boots below the
+  split stay planted.
+- Frame 2 ("low"): a deeper version of the same shift (down 5, forward 3).
+- In both frames, a front arm/hand sub-region (`ARM_BOX`, the tool-holding
+  hand `HAND["a"]["idle"]` already anchors to) gets an *extra* shift beyond
+  the torso's, so the arm leads the bend and reads as reaching down, not
+  just the whole body sinking uniformly.
+
+Every output pixel is a translated idle pixel — no new colours, no second
+generation — so the palette and character are guaranteed identical; the
+`scoop_idle_vs_bend.png` side-by-side confirms it (same face, same hat,
+same palette, no red blob). It is visibly *stiff* (pure translation, no
+rotation/reshaping), which is the known tradeoff of this approach, but it
+reads unmistakably as the same character mid-crouch, which is what was
+broken. Given that, this did **not** spend the remaining Gemini image —
+the result didn't need the fallback the coordinator allowed for ("only if
+that looks stiff may you spend your 1 remaining image, and then only if
+the result matches idle side by side"); stiff-but-correct beat spending the
+shared budget on a re-roll with no guarantee of a better match.
+
+Also updated `HAND["a"]["scoop"]` in `player_skin.gd` for the new frames'
+geometry (measured the same way as before — grid overlay + pixel read of
+the front hand's tip per frame): `[(3,26), (1,29), (1,32)]`.
+
+**(b) Splash origin.** `player.gd::_spawn_splash()` was spawning from a
+fixed player-local offset (`Vector2(x, -4)`) plus a rise arc of up to
+`-spread_y` (20 for water_wagon) — nowhere near the tool. Added
+`player_skin.gd::get_tool_anchor_world()`, which returns the currently
+visible tool overlay's actual world-space grip point (`_tool.global_position`
+— already tracks the hand anchor every frame, including mid-bend), with a
+chest-height fallback when no tool is shown. `player.gd` now holds a
+reference to the skin node (`_skin`, set in `_ready()` alongside
+`add_child(skin)`) and spawns every splash dot from
+`to_local(_skin.get_tool_anchor_world())` instead of the fixed offset.
+
+Verified in `scoop_default_pool.png` (default zoom, `DTS_SCOOP=1`, standing
+at the edge of the "Bog" basin — 0.0% drained in this worktree's override
+save, i.e. still full, so the scoop and splash are against real water, not
+a dry basin) and in the tight crop in the report: the splash now spawns
+right at hand/tool height next to the water_wagon prop, not above the hat.
+
 ## What now works
 
 - Every tool (spoon/cup/bucket/shovel/hose = hand-held; wheelbarrow/
@@ -102,8 +161,10 @@ Fixed all four:
   outlined, brightened baked sprite — no tool draws as a bucket, and it's
   identifiable at both default zoom and zoom 3 (see captures).
 - Scoop: the 3-frame bend/low strip plays bend→low→low→bend off the
-  `scooped` signal, colour-matched to idle/walk, with a matching small
-  water-coloured splash arc that fades out cleanly.
+  `scooped` signal, built by translating the approved idle sprite's own
+  pixels (guaranteed same character/palette), with a matching small
+  water-coloured splash arc that spawns at the tool tip and fades out
+  cleanly.
 - Lantern: baked sprite + overbright flame pixel + unchanged
   `PointLight2D` glow/flicker/sway; confirmed nothing from the old
   ColorRect draw leaks through.
@@ -112,14 +173,18 @@ Fixed all four:
 ## Assets
 
 - Source (Gemini, generated by the round-1 agent before this track's own
-  session): `assets/gen/tools-row.jpg`, `assets/gen/scoop-sheet-a.jpg`.
-  **Gemini budget: 1 image left**, still unused (no new Gemini calls any
-  round — round 2's colour fix used a local `ImageEnhance` pass on the
-  existing source, not a regeneration).
-- Baked/rebaked this round: all 9 `assets/art/drainsville/tool_*.png`
-  (bigger + outlined + lifted), `assets/art/drainsville/player_a_scoop.png`
-  (colour-corrected).
-- Unchanged from round 1: `player_a_idle.png`, `player_a_walk.png`.
+  session): `assets/gen/tools-row.jpg` (still used, baked into the tools),
+  `assets/gen/scoop-sheet-a.jpg` (**no longer used** — round 3 replaced the
+  Gemini-sourced scoop bake with a pixel-edit of the idle sprite; the file
+  is left in `assets/gen/` in case a future round wants it, but nothing
+  reads it anymore).
+  **Gemini budget: 1 image left**, still unused across all 3 rounds.
+- Baked/rebaked round 2: all 9 `assets/art/drainsville/tool_*.png` (bigger
+  + outlined + lifted).
+- Rebuilt round 3: `assets/art/drainsville/player_a_scoop.png`, now
+  generated by `tools/bake/build_scoop_from_idle.py` from
+  `player_a_idle.png` instead of baked from the Gemini scoop sheet.
+- Unchanged since round 1: `player_a_idle.png`, `player_a_walk.png`.
 
 ## Captures (read back, `_screenshots/revamp-2026-09-11/player/`)
 
@@ -133,13 +198,24 @@ billboard and the first pools' unfixed water murk):
   `DTS_TOOL=<id>` — every one reads as a distinct, outlined shape at both
   zoom levels; wheelbarrow/barrel/water_wagon visibly plant on the ground
   next to him rather than in his hand.
-- `scoop_bend.png` — bent scoop pose with the ground-set water_wagon prop
-  unaffected by the pose, small teal splash dots arcing above.
-- `scoop_splash.png` — timed closer to the burst's start; individual 1-2px
-  water-coloured squares, not a block.
 - `lantern_night.png` — the three-artifact scene from the coordinator's
   review (billboard rectangle, lantern glow, pool-glow orb), re-captured
   and re-confirmed against the current code.
+- **Round 3 proof:**
+  - `r3_idle.png` / `r3_bend.png` — raw zoom-3 captures, same `--camx 1050`
+    spot, idle vs. mid-scoop (`DTS_SCOOP=1`, `--interval 3.15`).
+  - `scoop_idle_vs_bend.png` — cropped side-by-side built from the two
+    above: same face, same hat, same palette, unmistakably the same
+    character in a crouched pose; no red blob, no blur.
+  - `scoop_default_pool.png` — default zoom (no `--zoom`), `DTS_SCOOP=1`,
+    standing at the "Bog" basin (labelled 0.0% drained in this worktree's
+    override save, i.e. still full — a real, if not yet visually
+    water-textured, pool). Splash now spawns at hand/tool height next to
+    the water_wagon prop, not above the hat.
+
+Superseded/removed this round: the old `scoop_bend.png`/`scoop_splash.png`
+showed the round-2 Gemini-sourced bend the coordinator rejected; deleted
+rather than kept as stale evidence.
 
 `python tools/capture.py --check` prints only the known pre-existing
 `ERROR: Parameter "t" is null.` boot line — clean per the track rules.
@@ -148,11 +224,12 @@ billboard and the first pools' unfixed water murk):
 
 - Only character A has a measured `HAND` table; B/C fall back to a
   hip-guess anchor if ever selected via `DTS_CHAR`.
-- The scoop bend frame's hat/skin tone is still very slightly cooler than
-  idle's even after the colour-match pass — the two Gemini generations
-  genuinely differ in lighting, and a channel-shift correction can only
-  get so close without hand-editing pixels. Readable and no longer
-  "washed out," not a perfect match.
+- The scoop bend/low frames are a pure pixel translation (no rotation or
+  reshaping), so the pose is a bit stiff up close — the overalls visibly
+  compress at the knee where the shifted upper body overlaps the planted
+  legs. Reads correctly and unmistakably as the same character; a future
+  pass could soften the knee overlap or add a slight rotation if it's
+  worth the effort against a 0.4s animation.
 - `assets/gen/tools-row.jpg` still has Gemini's duplicate barrel frame;
   `bake_tools.py` drops it programmatically, but if that source image is
   ever regenerated, re-check the row layout still matches (5x2 grid,
@@ -168,4 +245,6 @@ billboard and the first pools' unfixed water murk):
   called from `_scoop_feedback`) is in the default Noto font at a large
   size, not Silkscreen — all flagged, none fixed here.
 - **water**: the first pools (camx 1300-2000) are still visibly dark/murky
-  by day.
+  by day — including the "Bog" basin used for the round-3 splash-over-a-
+  full-pool capture: it's mechanically full (0.0% drained) but still
+  renders as dark mud, not blue water.
