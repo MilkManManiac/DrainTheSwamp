@@ -61,6 +61,10 @@ var _snap: Array = []        # adopted Labels, pixel-snapped before every draw
 var _basin: Array = []       # per basin {name: Label, pct: Label, gal: Label, fx, fy, fw: float}
 var _caves: Array = []       # {ce: Dictionary, sealed: Sprite2D, mouth: Sprite2D, plank: Node2D}
 var _sign_spans: Array = []  # [{x: float, half_w: float}] — every world sign built so far, for overlap avoidance
+var _billboard_rects: Array = []  # [Rect2] — full board footprint (frame included), for the 2D post/board check
+var _mound_rects: Array = []  # [{name: String, rect: Rect2}] — every cave mound's footprint (round 4: a post can
+                               # land on a NEIGHBORING basin's mound, not just its own — see _compute_mound_rects)
+var _plank_rects: Array = []  # [{name: String, rect: Rect2}] — cave name plank footprints, for the same check
 var _glow_layers: Array = []  # [{node: CanvasItem, day: Color, night: Color}], driven by _glow_t() each frame
 var _tower_sell_built: bool = false
 
@@ -180,17 +184,22 @@ func _make_lamp_texture() -> ImageTexture:
 			up.set_pixel(x * 2 + 1, y * 2 + 1, col)
 	return ImageTexture.create_from_image(up)
 
-# Time-of-day → glow strength, mirrored from game_world.gd's town-light curve
-# (GameManager.cycle_progress is written there every frame); off in daylight,
-# warm from dusk through dawn.
+# Time-of-day → glow strength for THIS file's self-brighten (signs only —
+# not the same curve as game_world.gd's town lamps). Round 3 mirrored the
+# lamps' curve, which reaches 1.0 exactly at t=0.62 (dusk) — fine for small
+# window/lamp glow, but full night-boost on a whole billboard reads as a
+# flat, saturated, backlit-emissive panel at dusk, when it should still just
+# look sunlit-warm (Wes, round 4). Starts ramping only once actual night
+# begins (t=0.68, matching _get_cycle_color's dusk->night blend start) and
+# is fully on by t=0.78; zero anywhere in the 0.25-0.68 day/dusk band.
 func _glow_t() -> float:
 	var t: float = GameManager.cycle_progress
-	if t > 0.62 or t < 0.18:
+	if t > 0.78 or t < 0.12:
 		return 1.0
-	elif t >= 0.55 and t <= 0.62:
-		return (t - 0.55) / 0.07
-	elif t >= 0.18 and t <= 0.25:
-		return 1.0 - (t - 0.18) / 0.07
+	elif t >= 0.68 and t <= 0.78:
+		return (t - 0.68) / 0.10
+	elif t >= 0.12 and t <= 0.18:
+		return 1.0 - (t - 0.12) / 0.06
 	return 0.0
 
 # The world's night tint, applied to the whole scene via CanvasModulate —
@@ -235,6 +244,16 @@ func _add_lamp(x: float, top_y: float, z: int) -> void:
 	add_child(fixture)
 	_register_glow(fixture, Color(1, 1, 1, 1), 1.0)
 
+# A basin post's full occupied footprint at world x, INCLUDING its lamp
+# (the lamp sits above the post's own top edge, which is exactly what was
+# sneaking into a billboard's bottom text line).
+func _post_rect(x: float, post: Sprite2D) -> Rect2:
+	var half_w: float = post.texture.get_width() * SCALE * 0.5
+	var lamp_h: float = _lamp_tex.get_height() * SCALE
+	var top: float = post.position.y - lamp_h
+	var bottom: float = post.position.y + post.texture.get_height() * SCALE
+	return Rect2(x - half_w, top, half_w * 2.0, bottom - top)
+
 # Builds the billboard face label sized/wrapped to fit, verified by actually
 # measuring the wrapped text against the font (per Wes: "measure with
 # get_multiline_string_size, wrap to the inner width, center vertically").
@@ -260,12 +279,33 @@ func _outline(lbl: Label, px: int = 1) -> void:
 	lbl.add_theme_constant_override("shadow_offset_x", 1)
 	lbl.add_theme_constant_override("shadow_offset_y", 1)
 
+# Every cave mound's world footprint, computed from world.cave_entrances
+# (already built by game_world before this deferred call runs) rather than
+# from _caves (which isn't populated until _build_cave_mouths, AFTER basin
+# signs — a basin post needs this list while it's still placing itself).
+# Uses cave_mouth.png's size, the larger of the sealed/open sprite pair
+# (see CAVE_MOUND_HALF_W), so the rect is the true worst-case mound bounds
+# regardless of lock state.
+func _compute_mound_rects() -> void:
+	_mound_rects.clear()
+	var mouth_h: float = _tex("cave_mouth").get_height() * SCALE
+	for ce in world.cave_entrances:
+		var root: Node2D = ce["root"]
+		var cx: float = ce["x"]
+		var cy: float = root.position.y
+		var name: String = GameManager.CAVE_DEFINITIONS[ce["cave_id"]]["name"]
+		_mound_rects.append({"name": name, "rect": Rect2(cx - CAVE_MOUND_HALF_W, cy - mouth_h, CAVE_MOUND_HALF_W * 2.0, mouth_h + 1.0)})
+
 func _build() -> void:
 	_sign_spans.clear()
+	_billboard_rects.clear()
+	_plank_rects.clear()
+	_compute_mound_rects()
 	_build_billboards()
 	_build_basin_signs()
 	_build_shop_sell()
 	_build_cave_mouths()
+	_verify_signage_overlaps()
 	GameManager.water_level_changed.connect(_on_water_level_changed)
 	GameManager.swamp_completed.connect(_on_swamp_completed)
 
@@ -290,6 +330,8 @@ func _build_billboards() -> void:
 		var text_lbl := _fit_billboard_text(board, face, BILLBOARD_TEXTS[ridge_i])
 		var half_w: float = board.texture.get_width() * SCALE * 0.5
 		_sign_spans.append({"x": mid_x, "half_w": half_w})
+		var board_h: float = board.texture.get_height() * SCALE
+		_billboard_rects.append(Rect2(mid_x - half_w, board.position.y, half_w * 2.0, board_h))
 		# Small gooseneck lamp on top; board + ink both self-brighten at night
 		# so the whole face reads regardless of the CanvasModulate night tint.
 		_add_lamp(mid_x, board.position.y, board.z_index)
@@ -297,10 +339,16 @@ func _build_billboards() -> void:
 		_register_glow(text_lbl, Color(1, 1, 1, 1), 1.0)
 
 # Nudge a sign's x away from every other sign registered so far (billboards,
-# basin posts, cave planks — everything in this file shares one span list),
-# sliding it further along whichever side it already leans toward.
-func _clear_of_signs(x: float, half_w: float) -> float:
+# basin posts, cave planks — everything in this file shares one span list)
+# PLUS any one-off extra spans (e.g. a basin's own cave mound) passed in for
+# this call only — solved together in one pass, not sequentially, so
+# resolving the extra constraint can't walk the sign back into a billboard
+# that an earlier, separate pass already cleared (round 3's bug: clearing
+# the post from its billboard, then a second unconditional nudge away from
+# its basin's cave mound, with no re-check against the billboard).
+func _clear_of_signs(x: float, half_w: float, extra_spans: Array = []) -> float:
 	var margin := 8.0
+	var spans: Array = _sign_spans + extra_spans
 	# The valid (non-overlapping) region is what's left of the number line
 	# after subtracting every span's exclusion interval — a union of gaps.
 	# The closest point in that union to the desired x is always either x
@@ -310,22 +358,22 @@ func _clear_of_signs(x: float, half_w: float) -> float:
 	# overlap can walk straight into a different span, and can oscillate
 	# between two nearby obstacles forever instead of settling.)
 	var candidates: Array = [x]
-	for span in _sign_spans:
+	for span in spans:
 		var min_sep: float = (span["half_w"] as float) + half_w + margin
 		candidates.append((span["x"] as float) - min_sep)
 		candidates.append((span["x"] as float) + min_sep)
 	var best: float = x
 	var best_dist: float = INF
 	for c in candidates:
-		if _is_clear_of_signs(c, half_w, margin):
+		if _is_clear_of(c, half_w, margin, spans):
 			var d: float = absf(c - x)
 			if d < best_dist:
 				best_dist = d
 				best = c
 	return best
 
-func _is_clear_of_signs(x: float, half_w: float, margin: float) -> bool:
-	for span in _sign_spans:
+func _is_clear_of(x: float, half_w: float, margin: float, spans: Array) -> bool:
+	for span in spans:
 		var min_sep: float = (span["half_w"] as float) + half_w + margin
 		if absf(x - (span["x"] as float)) < min_sep - 0.01:
 			return false
@@ -334,12 +382,15 @@ func _is_clear_of_signs(x: float, half_w: float, margin: float) -> bool:
 # --- basin name posts: name + percent + gallons on a plank at the near rim ---
 func _build_basin_signs() -> void:
 	_basin.clear()
-	# Map swamp_index -> its cave entry, so a post can be nudged clear of its
-	# OWN basin's mound specifically. (A full "clear of every mound in the
-	# level" pass is geometrically impossible in the tighter pools — mounds,
-	# billboards and posts are all wider now than the gaps between ridges —
-	# and pushes some posts wildly off; the two overlaps Wes actually saw
-	# were both same-basin pairs, so this targets just that.)
+	# Map swamp_index -> its cave entry, so a post can be pre-seeded clear of
+	# its OWN basin's mound before the general belt-and-suspenders loop below
+	# even runs (cheap, and it's the overlap that happens almost every time).
+	# Round 4 (Wes): a post also landed on a NEIGHBORING basin's mound (the
+	# Sinkhole's mound sits under the Swamp basin's post) — seeding only the
+	# own-basin mound missed that entirely. The loop below now re-checks the
+	# real 2D rect against EVERY mound (via _mound_rects) and every billboard,
+	# same as the billboard fix, so any actual overlap gets its own explicit
+	# constraint instead of relying on a single pre-seeded guess.
 	var cave_by_swamp: Dictionary = {}
 	for ce in world.cave_entrances:
 		var defn: Dictionary = GameManager.CAVE_DEFINITIONS[ce["cave_id"]]
@@ -348,17 +399,49 @@ func _build_basin_signs() -> void:
 		var geo: Dictionary = world._get_swamp_geometry(i)
 		var et: Vector2 = geo["entry_top"]
 		# Just inside the entry rim (same side as before), then nudged clear
-		# of any billboard so the two never overlap — pushing it deeper into
-		# the pool instead risks colliding with that pool's cave entrance.
+		# of any billboard AND this basin's own cave mound — solved together
+		# (see _clear_of_signs) so satisfying one can't silently break the
+		# other, pushing it deeper into the pool instead risks colliding with
+		# that pool's cave entrance.
 		var post_half_w := 44.5
-		var x: float = _clear_of_signs(et.x - 34.0, post_half_w)
+		var pre_x: float = et.x - 34.0
+		var extra: Array = []
 		if cave_by_swamp.has(i):
-			var mound_x: float = cave_by_swamp[i]["x"]
-			var min_sep: float = CAVE_MOUND_HALF_W + post_half_w + 8.0
-			if absf(x - mound_x) < min_sep:
-				x = mound_x + (min_sep if x >= mound_x else -min_sep)
+			extra.append({"x": cave_by_swamp[i]["x"], "half_w": CAVE_MOUND_HALF_W})
+		var x: float = _clear_of_signs(pre_x, post_half_w, extra)
 		var gy: float = world._get_terrain_y_at(x)
 		var post := _sprite("sign_post", x, gy + 2.0, -1)
+		# Belt-and-suspenders: verify the actual 2D footprint (post + its
+		# lamp, which sticks up above the post's own top edge) against every
+		# billboard's AND every cave mound's real rect, not just the 1D
+		# half-width math above. If anything still overlaps, add that
+		# specific obstacle as another explicit constraint and re-solve,
+		# rather than trust the arithmetic blindly (Wes, round 4: the post's
+		# lamp landed on a board's bottom text line, and separately a
+		# neighboring basin's mound buried a status panel — both fixed the
+		# same way here).
+		var tries := 0
+		while tries < 8:
+			var prect: Rect2 = _post_rect(x, post)
+			var hit_span: Dictionary = {}
+			for bi in range(_billboard_rects.size()):
+				var br: Rect2 = _billboard_rects[bi]
+				if prect.intersects(br):
+					hit_span = {"x": br.position.x + br.size.x * 0.5, "half_w": br.size.x * 0.5}
+					break
+			if hit_span.is_empty():
+				for m in _mound_rects:
+					var mr: Rect2 = m["rect"]
+					if prect.intersects(mr):
+						hit_span = {"x": mr.position.x + mr.size.x * 0.5, "half_w": mr.size.x * 0.5}
+						break
+			if hit_span.is_empty():
+				break
+			extra.append(hit_span)
+			x = _clear_of_signs(pre_x, post_half_w, extra)
+			gy = world._get_terrain_y_at(x)
+			post.position = Vector2(x - post.texture.get_width() * SCALE * 0.5, gy + 2.0 - post.texture.get_height() * SCALE).round()
+			tries += 1
 		_sign_spans.append({"x": x, "half_w": post_half_w})
 		var face := POST_FACE
 		var fw: float = face.size.x * SCALE
@@ -374,12 +457,23 @@ func _build_basin_signs() -> void:
 		pct_lbl.size = Vector2(fw, 9.0)
 		pct_lbl.z_index = -1
 		add_child(pct_lbl)
-		var gal_lbl := _label("", 8, Color(0.62, 0.78, 0.92))
+		# Font size fit to the WORST-CASE string this label will ever show —
+		# both sides full (drained=0, remaining=total) — so it's picked once
+		# and never has to shrink/grow again as the numbers drain down
+		# (remaining only ever gets shorter than total, never longer). Wes,
+		# round 4: "500.0K / 500.0K gal" ran past the Lake panel's edge at
+		# size 8; measured against the actual font (see _fit_gal_font_size)
+		# instead of guessing a size that "should" fit.
+		var worst_gal: String = _format_gal_compact(GameManager.swamp_definitions[i]["total_gallons"])
+		var worst_text: String = "%s/%s gal" % [worst_gal, worst_gal]
+		var gal_size: int = _fit_gal_font_size(worst_text, fw)
+		var gal_lbl := _label("", gal_size, Color(0.62, 0.78, 0.92))
 		gal_lbl.position = Vector2(fx, fy + 20.0).round()
 		gal_lbl.size = Vector2(fw, 9.0)
 		gal_lbl.z_index = -1
 		add_child(gal_lbl)
-		_basin.append({"name": name_lbl, "pct": pct_lbl, "gal": gal_lbl, "fx": fx, "fy": fy, "fw": fw})
+		_basin.append({"name": name_lbl, "pct": pct_lbl, "gal": gal_lbl, "fx": fx, "fy": fy, "fw": fw,
+			"swamp_name": GameManager.swamp_definitions[i]["name"], "rect": _post_rect(x, post)})
 		_refresh_basin(i)
 		if GameManager.swamp_states[i]["completed"]:
 			_mark_basin_done(i)
@@ -389,6 +483,36 @@ func _build_basin_signs() -> void:
 		_register_glow(name_lbl, Color(1, 1, 1, 1), 0.85)
 		_register_glow(pct_lbl, Color(1, 1, 1, 1), 0.85)
 		_register_glow(gal_lbl, Color(1, 1, 1, 1), 0.85)
+
+# Compact gallons format for the narrow basin post panel: whole numbers only
+# (no ".0") and no spaces around the slash — world._format_gallons (used by
+# the HUD, which has room) keeps its decimal. Wes, round 4: "500.0K / 500.0K
+# gal" ran past the panel edge; "500K/500K gal" measures ~26% narrower for
+# the same information and comfortably fits at font size 8 (see
+# _fit_gal_font_size, which still checks the real measured width rather
+# than assuming that's enough for every basin).
+func _format_gal_compact(gal: float) -> String:
+	if gal >= 1e9:
+		return "%.0fB" % (gal / 1e9)
+	elif gal >= 1e6:
+		return "%.0fM" % (gal / 1e6)
+	elif gal >= 1e3:
+		return "%.0fK" % (gal / 1e3)
+	elif gal >= 10.0:
+		return "%.0f" % gal
+	else:
+		return "%.1f" % gal
+
+# Steps the font size down (8 -> 7 -> 6) until `text` measures inside
+# `max_w` at the real font, per Wes's "measure, don't guess" rule (same
+# spirit as _fit_billboard_text). Floors at 6 — clip_contents on the label
+# is the last-resort backstop if even that doesn't fit.
+func _fit_gal_font_size(text: String, max_w: float) -> int:
+	for size in [8, 7, 6]:
+		var w: float = _font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, size).x
+		if w <= max_w - 2.0:  # small safety margin so rounding never grazes the panel edge
+			return size
+	return 6
 
 func _refresh_basin(i: int) -> void:
 	if i < 0 or i >= _basin.size():
@@ -401,7 +525,7 @@ func _refresh_basin(i: int) -> void:
 	var total_gal: float = GameManager.swamp_definitions[i]["total_gallons"]
 	var drained: float = GameManager.swamp_states[i]["gallons_drained"]
 	var remaining: float = maxf(total_gal - drained, 0.0)
-	(b["gal"] as Label).text = "%s / %s gal" % [world._format_gallons(remaining), world._format_gallons(total_gal)]
+	(b["gal"] as Label).text = "%s/%s gal" % [_format_gal_compact(remaining), _format_gal_compact(total_gal)]
 
 func _mark_basin_done(i: int) -> void:
 	if i < 0 or i >= _basin.size():
@@ -483,6 +607,10 @@ func _build_cave_mouths() -> void:
 		stake.scale = Vector2(SCALE, SCALE)
 		stake.position = Vector2(-stake.texture.get_width() * SCALE * 0.5, 1.0 - stake.texture.get_height() * SCALE).round()
 		plank.add_child(stake)
+		var plank_world_y: float = root.position.y
+		_plank_rects.append({"name": cave_name + " plank", "rect": Rect2(
+			plank_x + stake.position.x, plank_world_y + stake.position.y,
+			stake.texture.get_width() * SCALE, stake.texture.get_height() * SCALE)})
 		var lbl := _label(cave_name, 8, PLANK_INK)
 		# Autowrap/clip BEFORE size — Control.size is clamped up to
 		# get_minimum_size() the instant it's assigned, and with autowrap
@@ -535,6 +663,41 @@ func _sync_caves() -> void:
 		if open_vis:
 			var pulse: float = (sin(world.wave_time * 2.0 + ce["x"] * 0.1) + 1.0) * 0.5
 			(c["glow"] as PointLight2D).energy = lerpf(0.35, 0.8, pulse)
+
+# Numeric proof (Wes, round 4): log every basin post's, billboard's and cave
+# mound's real 2D world rect and assert zero intersections between a post
+# and anything it must stay clear of. Round 3 only checked posts vs
+# billboards; round 4 added posts landing on a cave mound (the basin's own
+# AND a neighbor's — Wes: the Sinkhole's mound buried the Swamp basin's
+# status panel), so this now checks posts against mounds too.
+#
+# Billboards-vs-mounds and mounds-vs-their-own-plank are printed for the
+# record but NOT asserted: billboards stand on tall legs well above the
+# mounds behind them (the board rect is just the panel, not the legs, so a
+# bounding-box brush against a tall mound reads as an "overlap" that isn't
+# visible in-game — confirmed by eye in r4b_300_day.png), and a cave's plank
+# is deliberately staked flush against its own mound's entrance. Neither is
+# the failure mode Wes reported.
+func _verify_signage_overlaps() -> void:
+	print("[signage] rects: %d billboards, %d posts, %d mounds, %d planks" % [
+		_billboard_rects.size(), _basin.size(), _mound_rects.size(), _plank_rects.size()])
+	var all_clear := true
+	for b in _basin:
+		var prect: Rect2 = b["rect"]
+		for bi in range(_billboard_rects.size()):
+			var brect: Rect2 = _billboard_rects[bi]
+			if prect.intersects(brect):
+				all_clear = false
+				print("[signage] OVERLAP post=%s rect=%s vs billboard[%d] rect=%s" % [b["swamp_name"], prect, bi, brect])
+		for m in _mound_rects:
+			var mrect: Rect2 = m["rect"]
+			if prect.intersects(mrect):
+				all_clear = false
+				print("[signage] OVERLAP post=%s rect=%s vs %s mound rect=%s" % [b["swamp_name"], prect, m["name"], mrect])
+	print("[signage] post/billboard + post/mound 2D overlap check: %s (%d posts x %d billboards x %d mounds)" % [
+		"PASS - zero intersections" if all_clear else "FAIL - see OVERLAP lines above",
+		_basin.size(), _billboard_rects.size(), _mound_rects.size(),
+	])
 
 # --- public: pixel-art gallons float text ----------------------------------
 # Called by player.gd (owned by the player track) instead of it building its
