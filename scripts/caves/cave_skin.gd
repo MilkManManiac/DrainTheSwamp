@@ -117,7 +117,7 @@ func _strip(name: String, frame: int, x: float, y: float, z: int, parent: Node =
 	(parent if parent else self).add_child(s)
 	return s
 
-func _light(pos: Vector2, col: Color, energy: float, radius: float, z: int = 0) -> PointLight2D:
+func _light(pos: Vector2, col: Color, energy: float, radius: float, z: int = 0, parent: Node = null) -> PointLight2D:
 	var pl := PointLight2D.new()
 	pl.position = pos
 	pl.color = col
@@ -127,8 +127,23 @@ func _light(pos: Vector2, col: Color, energy: float, radius: float, z: int = 0) 
 	pl.texture = cave._make_radial_light_texture()
 	pl.texture_scale = radius
 	pl.z_index = z
-	add_child(pl)
+	(parent if parent else self).add_child(pl)
 	return pl
+
+# Cheap idle sway for a hanging/standing prop (kelp, roots): a looping tween
+# rocking rotation a couple degrees around its anchor. Anchor a hanging sprite's
+# pivot at its top (offset -= half height) first if the rotation should read as
+# swaying from a fixed point rather than spinning about its center.
+func _sway(node: Node2D, amp_deg: float, period: float) -> void:
+	if node == null:
+		return
+	var amp: float = deg_to_rad(amp_deg)
+	var base: float = node.rotation
+	var tw := create_tween()
+	tw.set_loops()
+	tw.tween_property(node, "rotation", base + amp, period).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+	tw.tween_property(node, "rotation", base - amp, period * 2.0).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+	tw.tween_property(node, "rotation", base, period).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
 
 # Rock-filled polygon: the tile repeats on the art grid (texture px = 2 x world
 # units) and the tint multiplies it; vertex colours add a top-to-bottom shade.
@@ -200,9 +215,9 @@ func _build_backdrop() -> void:
 	var py: float = (top_y + bot_y) * 0.5 - h * 0.5 - 10.0
 	# 2026-09-11 review: plates read too dark/muddy under the cave lights (Coral's
 	# crystal plate was barely visible). Lean much closer to the plate's own colour.
-	# "deep" plate's own source art is unusually dark (near-black ocean-floor rock)
-	# even after that, so it gets an extra lift or Mariana reads as an empty void.
-	var base_mul: float = 1.18 if _family == "deep" else 0.95
+	# (2026-09-11 round 3: bg_deep.png was replaced with a brighter, detailed abyssal-
+	# trench plate — the old family-specific brightness hack is no longer needed.)
+	var base_mul: float = 0.95
 	var tint: Color = Color.WHITE.lerp(_norm(cave.rock_mid_color), 0.3) * base_mul
 	tint.a = 1.0
 	for i in range(2):
@@ -351,12 +366,19 @@ func _build_ceiling_props() -> void:
 			cx += _rng.randf_range(10.0, 26.0)
 		x = cx + _rng.randf_range(30.0, 90.0)
 	if _family == "mud" or _family == "grotto" or _family == "deep":
+		# "deep" kelp reads as the room's main content (2026-09-11 round 3: was too
+		# small/dark to register against the new trench plate) — bigger, lighter,
+		# denser, and swaying like it's hanging in water instead of rigid roots.
+		var is_kelp: bool = _family == "deep"
 		var rx: float = _left + 100.0 + _rng.randf_range(0.0, 70.0)
 		while rx < _right - 60.0:
-			var r := _strip("roots", _rng.randi_range(0, FRAMES["roots"] - 1), rx, _ceil_y(rx) - 1.0, 6, null, _rng.randf() < 0.5, _rng.randf_range(0.65, 1.3), true)
+			var rsm: float = _rng.randf_range(1.1, 1.9) if is_kelp else _rng.randf_range(0.65, 1.3)
+			var r := _strip("roots", _rng.randi_range(0, FRAMES["roots"] - 1), rx, _ceil_y(rx) - 1.0, 6, null, _rng.randf() < 0.5, rsm, true)
 			if r:
-				r.modulate = tint.lerp(Color.WHITE, 0.45)
-			rx += _rng.randf_range(160.0, 280.0)
+				r.modulate = tint.lerp(Color.WHITE, 0.6 if is_kelp else 0.45)
+				if is_kelp:
+					_sway(r, _rng.randf_range(2.0, 4.0), _rng.randf_range(1.6, 2.6))
+			rx += _rng.randf_range(90.0, 170.0) if is_kelp else _rng.randf_range(160.0, 280.0)
 
 # --- floor: boulders, stalagmites, crystals, mushrooms -----------------------
 # 2026-09-11 review: Mariana Trench / Coral Cavern / Collapsed Mine read as an empty
@@ -437,11 +459,12 @@ func _build_floor_props() -> void:
 		var kx: float = _left + 90.0 + _rng.randf_range(0.0, 60.0)
 		while kx < _right - 60.0:
 			if not _in_pool(kx, 20.0):
-				var k := _strip("roots", _rng.randi_range(0, FRAMES["roots"] - 1), kx, _floor_y(kx) - 1.0, 0, null, _rng.randf() < 0.5, _rng.randf_range(0.7, 1.2))
+				var k := _strip("roots", _rng.randi_range(0, FRAMES["roots"] - 1), kx, _floor_y(kx) - 1.0, 0, null, _rng.randf() < 0.5, _rng.randf_range(1.2, 2.1))
 				if k:
 					k.flip_v = true
-					k.modulate = cave._emit(cc.lerp(Color.WHITE, 0.35), 1.3)
-			kx += _rng.randf_range(150.0, 260.0)
+					k.modulate = cave._emit(cc.lerp(Color.WHITE, 0.55), 1.5)
+					_sway(k, _rng.randf_range(2.5, 5.0), _rng.randf_range(1.4, 2.4))
+			kx += _rng.randf_range(90.0, 170.0)
 
 # --- signature set-piece (same spot the old builder used: 62% across) --------
 func _build_signature() -> void:
@@ -466,21 +489,30 @@ func _build_signature() -> void:
 		# small warm light so the set-piece reads as the room's landmark
 		_light(Vector2(fx, _floor_y(fx) - 14.0), Color(0.9, 0.75, 0.5), 0.45, 0.5)
 
-# --- foreground: two near-black framing rocks on a fast parallax ------------
-# 2026-09-11 review fix: the boulder's anchor was `_floor_y(bx) + 40.0` — 40 world
+# --- foreground: two dark framing rocks on a fast parallax ------------------
+# 2026-09-11 round 2 fix: the boulder's anchor was `_floor_y(bx) + 40.0` — 40 world
 # units BELOW the floor contour — which buried most of a 2x-scaled boulder in the
 # ground and read as a black blob sitting inside the rock. Floor strips anchor at
-# `_floor_y(x)` (bottom-aligned), same as every other floor prop; fixed here.
+# `_floor_y(x)` (bottom-aligned), same as every other floor prop; fixed there.
+# 2026-09-11 round 3 fix: even grounded, a near-black flat modulate (0.08,0.07,0.1)
+# crushed the baked boulder's own shading to nothing and read as a flat black
+# silhouette, not a rock. Lightened the tint (still clearly darker/desaturated
+# than a normal floor boulder, so it still reads as background) so the baked
+# facets stay visible, and added a faint cool rim light behind each so the edge
+# catches light instead of sitting as a pure cutout.
 func _build_foreground() -> void:
 	var layer := Parallax2D.new()
 	layer.scroll_scale = Vector2(1.25, 1.0)
 	layer.z_index = 11
 	add_child(layer)
-	var dark := Color(0.08, 0.07, 0.1, 1.0)
+	var dark: Color = _norm(cave.rock_mid_color).lerp(Color(0.5, 0.55, 0.65), 0.3) * 0.42
+	dark.a = 1.0
+	var rim_col: Color = cave.crystal_color.lerp(Color.WHITE, 0.5)
 	var bx: float = _left + 60.0 if _rng.randf() < 0.5 else _right - 60.0
 	var b := _strip("boulders", _rng.randi_range(0, FRAMES["boulders"] - 1), bx, _floor_y(bx) + 1.0, 11, layer, _rng.randf() < 0.5, 1.8)
 	if b:
 		b.modulate = dark
+		_light(Vector2(bx, _floor_y(bx) - 16.0), rim_col, 0.35, 0.55, 10, layer)
 	var ox: float = lerpf(_left, _right, _rng.randf_range(0.3, 0.7))
 	var o := _strip("stalactites", _rng.randi_range(0, FRAMES["stalactites"] - 1), ox, _ceil_y(ox) - 1.0, 11, layer, _rng.randf() < 0.5, 2.0, true)
 	if o:

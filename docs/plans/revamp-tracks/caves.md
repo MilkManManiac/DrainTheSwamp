@@ -188,6 +188,56 @@ both show populated crystal-lit walls and floor clutter). Capture paths:
 `mariana_trench_mid.png`, `coral_cavern_mid.png`,
 `collapsed_mine_signature.png`, `the_underdark_signature.png`.
 
+## Round 3 (2026-09-11, coordinator review)
+
+Muddy Hollow, Collapsed Mine and Coral Cavern approved; lips, stalactites and
+the Unstuck button all good. Two items left:
+
+1. **Mariana Trench / "deep" family still read as an empty dark-blue box** —
+   `bg_deep.png`'s own source plate was too dark/plain to register and the
+   kelp was tiny and barely tinted. Generated one new Gemini plate
+   (`cave-bg-deep-v2.png`, 3rd of the 6-image budget — all 6 now used): an
+   abyssal trench wall with visible rock strata banding, hanging kelp/root
+   silhouettes, and scattered bioluminescent teal spots baked directly into
+   the plate, mid-value so it reads under the dim light. Baked with
+   `plate --width 640` over the old `assets/art/caves/bg_deep.png`. Dropped
+   the family-specific `*1.18` backdrop brightness hack from round 2 (no
+   longer needed — the new plate is bright enough on its own; standard
+   `*0.95` now applies to every family, "deep" included).
+   Kelp/roots for the "deep" family (both the ceiling-hanging roots and the
+   floor-standing ones added in round 2) are now bigger (`1.1-2.1x` scale vs.
+   `0.65-1.3x` elsewhere), spaced closer together (90-170 vs 160-280 world
+   units), lighter-tinted, and sway via a new `_sway()` helper — a looping
+   tween rocking `rotation` a few degrees, "cheap" as asked (no per-frame
+   `_process` cost, just a Tween). Floor crystal density was already boosted
+   for "deep" in round 2 (`span/260` vs `span/420`) so glowing crystal
+   clusters are already present on the floor; left as-is.
+   `the_underdark` is in the **"crystal" family**, not "deep" (see `FAMILY`
+   map in `cave_skin.gd`) — it wasn't touched by this fix. Re-captured it
+   anyway per the ask to confirm the crystal family still reads fine (it
+   does — unchanged from the approved round).
+2. **Foreground framing boulder was a flat pure-black blob** —
+   `_build_foreground()`'s two corner-framing props (a boulder + a
+   stalactite) were tinted a near-black flat `Color(0.08, 0.07, 0.1)`, which
+   crushed the baked boulder's own light/dark facet shading to nothing and
+   read as a solid black cutout, not a rock. Changed the tint to
+   `_norm(rock_mid_color).lerp(Color(0.5,0.55,0.65), 0.3) * 0.42` — still
+   clearly darker/desaturated than a normal floor boulder (so it still
+   reads as background, not competing with real floor props) but keeps
+   enough of the baked shading gradient visible to read as a rock. Also
+   gave `_light()` an optional `parent` argument and added a small, faint
+   cool rim light (crystal-colour-tinted, low energy, parented to the same
+   Parallax2D layer so it scrolls with the boulder) positioned just above
+   it, so the top edge catches a highlight instead of sitting as a flat
+   cutout.
+
+Re-captured and read back: `mariana_trench.png`, `mariana_trench_mid.png`
+(`--camx 1400`), `the_underdark.png`, `collapsed_mine.png`,
+`coral_cavern.png` — all clean (`--check` clean on mariana_trench first).
+Mariana now shows clear rock strata, standing/hanging kelp silhouettes, and
+crystal glow; the framing boulders in Collapsed Mine and Coral Cavern show
+visible facet shading instead of a flat black shape.
+
 ## For other tracks
 
 - `scripts/caves/loot_node.gd` and `scripts/caves/lore_wall.gd` now depend
