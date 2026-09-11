@@ -109,7 +109,7 @@ func build_pump(swamp_index: int, level: int) -> void:
 	var basin: Vector2 = geo["basin_left"]
 	var root := Node2D.new()
 	root.position = Vector2(rim.x + 6.0, rim.y)
-	root.z_index = -1   # behind the player (z 0), like the town buildings
+	root.z_index = 5   # above water walls (z 0) and the per-pool murk tint (skin.gd, z 4)
 	add_child(root)
 	world.pump_props[swamp_index] = root
 	var big: bool = level >= PUMP_BIG_LEVEL
@@ -117,6 +117,10 @@ func build_pump(swamp_index: int, level: int) -> void:
 	var spr: Sprite2D = _strip(name, root)
 	if spr == null:
 		return
+	# The bake keeps the source's dark rust palette, which all but disappears
+	# against the pit's near-black interior; lift it a little so the housing
+	# reads at a glance without breaking the palette.
+	spr.modulate = Color(1.35, 1.28, 1.18)
 	var w: float = spr.texture.get_width() / float(spr.hframes) * SCALE
 	var h: float = spr.texture.get_height() * SCALE
 	# Intake hose: outlet on the basin side of the housing, arcing over the rim
