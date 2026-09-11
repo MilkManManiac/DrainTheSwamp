@@ -74,6 +74,24 @@ static func _tint_mod(tint: Color, amount: float) -> Color:
 	return Color.WHITE.lerp(t, amount)
 
 
+static func wood(pad_x: int = 8, pad_y: int = 6) -> StyleBoxTexture:
+	## Same wood plank panel as the HUD/shop/menu chrome, for dialogs built in
+	## code (no shared Theme resource) — e.g. scene_manager.gd popups.
+	var sb := StyleBoxTexture.new()
+	sb.texture = TEX_WOOD
+	sb.texture_margin_left = 6
+	sb.texture_margin_top = 6
+	sb.texture_margin_right = 6
+	sb.texture_margin_bottom = 6
+	sb.axis_stretch_horizontal = StyleBoxTexture.AXIS_STRETCH_MODE_TILE
+	sb.axis_stretch_vertical = StyleBoxTexture.AXIS_STRETCH_MODE_TILE
+	sb.content_margin_left = pad_x
+	sb.content_margin_right = pad_x
+	sb.content_margin_top = pad_y
+	sb.content_margin_bottom = pad_y
+	return sb
+
+
 static func parchment(pad_x: int = 6, pad_y: int = 4) -> StyleBoxTexture:
 	var sb := StyleBoxTexture.new()
 	sb.texture = TEX_PARCH

@@ -161,6 +161,76 @@ space.
 - Did not commit the large `.import` churn (~175 files) — pre-existing/known
   noise from opening the project in the editor, per instructions.
 
+## Review round 4 (coordinator): popup/dialog reskin in scene_manager.gd
+
+Ask: the tutorial/hint popup ("HOLD SPACE to scoop water" / "[Close]") was
+still a plain black `StyleBoxFlat` box in the default font, built by
+`SceneManager` (`scripts/autoload/scene_manager.gd`), called from
+`game_world.gd` (owned by other tracks — not touched). Reskinned every
+dialog-building function in that file that draws UI chrome, same
+signatures/timing, only touching the UI-construction code:
+
+- **`_build_popup()` / `show_popup()` / `_close_popup()`** — the hint/toast
+  popup. Now a `PixelUI.wood()` card, Silkscreen caption text via
+  `PixelUI.caption()`, `[Close]` as a real pixel wood button
+  (`PixelUI.button()`) instead of a flat text link. `show_popup()`'s
+  recentering math now derives from `cave_popup.size` instead of a
+  hardcoded `320`/`100` so it stays correct if the box size changes again.
+- **`show_document_popup()`** (and its thin wrappers `show_lore_popup()`,
+  `_on_loot_collected()`) — cave inscriptions/discoveries and NA burner-phone
+  texts. Kept the existing "paper" vs "phone" distinction but built from the
+  kit: `PixelUI.parchment()` for paper, `PixelUI.inset()` with a green tint
+  for phone (was two hand-rolled `StyleBoxFlat`s). Title via
+  `PixelUI.header()` (Silkscreen 16), body/prompt via `PixelUI.caption()`
+  (Silkscreen 8) — was an 11/8/9pt mix of the default font.
+- **`show_ending_choice()`** — the "THE GUEST LIST" ending confirm dialog.
+  `PixelUI.wood()` card, `PixelUI.header()` title, `PixelUI.caption()` body,
+  and the two choice buttons now go through `PixelUI.button(btn, accent)`
+  (wood button skin, accent-tinted) instead of one-off `StyleBoxFlat`s.
+- Added `PixelUI.wood()` to `scripts/ui/pixel_ui.gd` — the other helpers
+  (`inset`, `parchment`) already existed but nothing exposed the plain wood
+  panel for code-built dialogs outside a shared `Theme` resource; each
+  reskinned panel now also gets `theme = PixelUI.THEME` so its children pick
+  up Silkscreen/VT323 and theme colors without per-label font overrides.
+
+**Deliberately left alone:** the milestone "SWAMP GAZETTE" newspaper
+(`_build_newspaper_overlay`, `_show_milestone_newspaper`, etc.) — it's an
+in-fiction prop with its own masthead/corner-fold/coffee-stain parchment
+conceit, not generic UI chrome; reskinning it to the wood HUD panel would
+undercut the joke. Not a dialog Wes flagged, and out of the "confirm
+dialogs/story popups" scope as I read it. Flagging here in case that reading
+is wrong.
+
+**Verification:** `tools/capture.py --check` clean (only the known
+pre-existing `Parameter "t" is null` boot error). Triggered the actual hint
+popup in a real capture: game_world.gd only fires it on a truly fresh save
+standing in the Puddle's water (`GameManager.lifetime_earnings <= 0` and
+`swamp_states[0]["gallons_drained"] <= 0.0001`). This worktree has its own
+save via `override.cfg` (`custom_user_dir_name="DrainTheSwamp-wt-hud"`,
+resolving to `%APPDATA%/DrainTheSwamp-wt-hud/`) — confirmed with a throwaway
+`OS.get_user_data_dir()` probe script (not committed) after an earlier wrong
+guess sent me digging in the *shared* `%APPDATA%/Godot/app_userdata/Drain The
+Swamp/` folder instead. Backed that shared save up before touching it and
+restored it byte-for-byte (verified by hash both times) before finding the
+right folder — no data was lost, but noting the detour. Procedure used:
+delete `%APPDATA%/DrainTheSwamp-wt-hud/save_data.json`, capture at
+`--camx 155 --tod 0.3 --wait 4 --interval 0.5` (short wait/interval so the
+periodic debug screenshot lands while the 3.5s auto-close popup is still up),
+then copy the real save from `%APPDATA%/Godot/app_userdata/Drain The Swamp/`
+back into the worktree folder (copy only, never wrote to that shared
+folder). Capture: `_screenshots/revamp-2026-09-11/hud/hint_popup.png`, read
+back — wood card, Silkscreen body text, pixel `[Close]` button, sits next to
+the puddle/town art cleanly.
+
+`show_document_popup()` and `show_ending_choice()` were not individually
+captured — no `DTS_UI` debug hook exists for them (only `shop|menu|touch`,
+wired in `main.gd`), and adding one felt like scope creep past "only touch
+the UI-building parts of scene_manager.gd." They're built from the same
+`PixelUI` helpers already visually verified in the shop/menu/hint captures,
+so I'm confident in them by construction, but flagging that they're
+code-reviewed, not screenshot-verified, in case a future track wants to add
+a capture hook for them.
+
 ## Gemini budget
 
 0 of 5 images used. Track needed none — everything came from the procedural
