@@ -231,7 +231,190 @@ so I'm confident in them by construction, but flagging that they're
 code-reviewed, not screenshot-verified, in case a future track wants to add
 a capture hook for them.
 
+## Review round 5 (coordinator): real design pass, not a texture swap
+
+Wes's core complaint: the UI read as "one wood texture pasted over
+everything" — the AI-tell. This round rebuilt the visual hierarchy and fixed
+several real bugs found along the way. **0 of 5 Gemini images used** —
+everything below is either baked procedurally or reused from the player
+track's sprites.
+
+### New baked assets (`tools/bake/ui_kit.py` → `assets/art/ui/`)
+
+- `panel_frame.png` — darker outer wood, thicker border, brass corner
+  rivets. The outermost of three surfaces.
+- `panel_content.png` — lighter content backdrop, the middle surface.
+- `row_card.png` / `row_card_active.png` (bright green left edge) /
+  `row_card_locked.png` (desaturated) — the lightest surface, one row = one
+  card, three distinguishable states.
+- `scroll_grabber.png` — a real vertical-pill scrollbar handle (was the
+  square button texture stretched thin — read as unskinned).
+- `icon_tool_{spoon,cup,bucket,shovel,wheelbarrow,barrel,water_wagon,hose}.png`
+  — baked from the **player track's** in-hand tool sprites
+  (`assets/art/drainsville/tool_*.png`, copied from `v3/player` at commit
+  `c2af327`, `git show v3/player:...`), auto-cropped, scaled to fit a 13x13
+  slot, outlined. `icon_tool_hands.png` is hand-drawn (no bare-hands sprite
+  exists upstream — it's the implicit default, no held prop).
+- Deepened `button()`'s pressed-state palette (was too close in value to
+  normal, so an active tab and an inactive one looked almost identical).
+
+`scripts/ui/pixel_ui.gd` gained `frame()`, `content()`, `row(state)`,
+`tool_icon()`, and `prompt()` (see below) to hand these out as
+StyleBoxTextures/nodes, same pattern as the existing `inset()`/`parchment()`.
+
+Also copied `assets/art/drainsville/tool_*.png` (8 files) into this
+worktree from `v3/player` — **merge note:** both `v3/hud` and `v3/player`
+now add these same paths with identical content; should merge cleanly
+(identical add on both sides), but flagging it since it's outside this
+track's normal file ownership.
+
+### 1. Popups don't shrink-wrap
+
+`scene_manager.gd`'s `show_popup()` (hint/toast) and `show_document_popup()`
+(lore/NA-phone) both had a hardcoded box size regardless of text length —
+`cave_popup` was a fixed 320x84 with one line crammed at the top; the
+document panel was a fixed 380x240. Fixed:
+
+- `_build_popup()`: `cave_popup` no longer sets `.size` directly; its label
+  gets a fixed-width cap (`POPUP_MAX_WIDTH = 260`) so long toast text (the
+  buyback-window line, etc.) wraps instead of stretching, and the panel's
+  actual anchor-driven size now comes from content. `show_popup()`
+  repositions via `call_deferred` after the container re-sorts to the real
+  (now correct) size — reading `.size` the same frame text changes gets the
+  stale pre-resize value.
+- `show_document_popup()`: same idea, but this panel isn't inside any
+  Container-managed parent, so a bare Control there does **not** auto-fit to
+  its children (that was a real bug: the first attempt produced a
+  full-height black panel with no visible content). Fixed by wrapping it in
+  a `CenterContainer` — the same proven pattern `menu_panel.tscn`'s `Box`
+  already uses — which shrink-wraps and centers it automatically. Verified
+  both `kind="phone"` (long NA text) and `kind="paper"` (short cave
+  inscription) now size correctly to their own content.
+- `show_ending_choice()` ("THE GUEST LIST") — **left untouched per Wes's
+  scope note**: endgame visuals may change, not worth polishing now.
+
+### 2. Shop: three-surface hierarchy
+
+`shop_panel.gd`/`shop_panel.tscn`: added a `ContentPanel` wrapping the
+`ScrollContainer` in the scene. `_ready()` now sets:
+`self` (the whole dialog) → `PixelUI.frame()`; `content_panel` →
+`PixelUI.content()`; every row → `PixelUI.row(state)` (`"normal"` /
+`"active"` / `"locked"`) instead of the old single `PixelUI.inset()` reused
+everywhere with a near-invisible tint. Tabs: the active tab uses the
+(now much darker) pressed stylebox at full opacity with bright accent text;
+inactive tabs are dimmed (`modulate` 0.8 alpha) — previously they used
+almost the same value and were only distinguished by a small font-color
+change. Retinted every blue/purple info and header color to cream/gold/green
+(Stats tab category color: blue → green; category-tint row backgrounds
+dropped entirely — they were nearly invisible and are unnecessary now that
+row state itself carries the color cue). `_register_afford()` now sets
+can't-afford buttons to `PixelUI.RED` instead of falling back to the
+theme's neutral disabled brown.
+
+Fixed two concrete bugs along the way:
+- **Empty inset row under CAMELS**: `_build_camel_section()`'s upgrade row
+  had an expand-filling blank `Control` before the Cap/Spd buttons, pushing
+  them to the right and leaving the row's left half visibly empty. Replaced
+  with a "Camel Upgrades" label.
+- **Script error on every shop open** (found while re-verifying, not part of
+  this round's ask but blocking clean captures): none left — see round 2's
+  fix; re-confirmed still clean.
+
+Tool rows in the Tools tab now show a `PixelUI.tool_icon()` before the name.
+
+### 3. Number formatting
+
+`hud.gd`'s carry-capacity readout was raw floats ("0.0/10803.8"). Added
+`_fmt_gal_compact()` (wraps `Economy.format_gallons`, stripping the " gal"
+suffix and collapsing to "0" at zero) so it now reads "0/10.8K".
+
+### 4. Per-tool pixel icons
+
+Added to both the HUD's bottom-left tool card (`hud.gd::_build_hud_icons()`
+now builds a `tool_icon` TextureRect and swaps its texture in
+`_update_tool_label()`) and every Tools-tab shop row. Sourced from the
+player track per Wes's instruction (see "New baked assets" above) rather
+than generating new ones.
+
+### 5. Milestone newspaper — pixel treatment
+
+`_build_newspaper_overlay()`: the panel's `StyleBoxFlat` (rounded corners)
+is now `PixelUI.parchment()` (pixel border, tiled paper texture), and
+`newspaper_panel.theme = PixelUI.THEME` so every label picks up Silkscreen
+by default instead of per-label default-font overrides. Fixed the
+non-8/16 sizes (headline 12→16, subhead 9→8, photo caption 7→8, prompt
+10→8). `newspaper_paper_style` changed type `StyleBoxFlat`→`StyleBoxTexture`
+and its two age-tint call sites now set `.modulate_color` instead of
+`.bg_color`. Kept it as its own parchment prop (masthead, corner-fold,
+coffee-stain) rather than reskinning to wood dialog chrome — it's an
+in-fiction object with its own conceit, not generic UI chrome.
+
+### 6. In-world prompts outside scripts/ui
+
+Added `PixelUI.prompt(text, color)` — a `Label` with a Silkscreen font
+override (these nodes live directly on world/cave nodes, not under
+`PixelUI.THEME`, so they need an explicit font, not just a size). Routed
+through it, minimum edit (each was a 3-6 line `Label.new()` block replaced
+with one call, same position/z_index/visibility left untouched):
+
+- `scripts/caves/lore_wall.gd` — `hint_label` ("[SPACE]")
+- `scripts/caves/loot_node.gd` — `hint_label` ("[SPACE]")
+- `scripts/world/dead_drop.gd` — `hint_label` ("[SPACE]")
+- `scripts/caves/cave_base.gd` — the `tag` label near line 2006 ("NA
+  COURIER"), plus `unstuck_btn` (was a hand-rolled `StyleBoxFlat`, now
+  `PixelUI.button()`)
+
+**Not reachable for verification:** `lore_wall.gd`/`loot_node.gd` aren't
+currently instantiated anywhere in this worktree (`_setup_loot_and_lore()`
+in `cave_base.gd` is a `pass` stub — presumably wired up by the caves
+track). Confirmed by code review only; the edits are mechanical (same
+3-line pattern as `dead_drop.gd`, which I could verify — see captures).
+Per Wes: left `player.gd`'s floating text alone (signage owns it).
+
+### Dev-only capture hooks added (gated on env vars, inert otherwise)
+
+- `scripts/main.gd`: `DTS_UI=shop:1` / `shop:2` also selects a shop tab;
+  `DTS_UI=hint` / `lore` / `lore_paper` trigger sample popups at real
+  caller-length text so they can be captured without touching any save.
+- `scripts/caves/cave_base.gd`: with `DTS_SHOT` set, calls
+  `GameManager.enter_cave()` so the HUD's air bar is visible when capturing
+  a cave scene directly (`--scene res://scenes/caves/<x>.tscn`, which
+  otherwise skips the overworld's normal cave-entry flow); `DTS_PROMPT=1`
+  additionally sets `prestige_count = max(3)` in memory only (never saved)
+  so the P3 sell-basin "NA COURIER" prompt is reachable for a capture.
+
+### Save-file discipline this round
+
+Per the coordinator's hard rule: never touched
+`%APPDATA%/Godot/app_userdata/Drain The Swamp/` this round, not even to
+read. All state needed for captures came from either the worktree's own
+save (`%APPDATA%/DrainTheSwamp-wt-hud/`, via `override.cfg`) or the
+above in-memory-only DTS_* debug hooks — no save file was read, written, or
+deleted this round.
+
+### Before/after captures (1280x720, all read back)
+
+`_screenshots/revamp-2026-09-11/hud/`, prefixed `r5_`:
+- `r5_hud_day.png` / `r5_hud_night.png` — top-bar number formatting, no
+  regressions at night (before: `town_day.png`/`town_night.png`)
+- `r5_shop_tools.png` / `r5_shop_stats.png` / `r5_shop_influence.png` — all
+  three tabs, frame/content/row hierarchy, active-vs-inactive tabs, tool
+  icons, fixed camel row (before: `shop_open.png`)
+- `r5_menu.png` (before: `menu_open.png`)
+- `r5_hint_popup.png` — shrink-wrapped toast at real text length (before:
+  `hint_popup.png`)
+- `r5_lore_popup.png` (phone/NA text) and `r5_lore_paper.png` (cave
+  inscription) — both document-popup kinds, shrink-wrapped
+- `r5_cave_air.png` — a cave scene with the HUD air bar visible, reskinned
+  Unstuck button
+- `r5_prompt.png` — an in-world `PixelUI.prompt()` ("NA COURIER") live in a
+  cave
+
+`tools/capture.py --check` clean throughout (only the known pre-existing
+`Parameter "t" is null` boot error).
+
 ## Gemini budget
 
-0 of 5 images used. Track needed none — everything came from the procedural
-`tools/bake/ui_kit.py` kit.
+0 of 5 images used across every round. Everything came from the procedural
+`tools/bake/ui_kit.py` kit or (round 5's tool icons) baked from the player
+track's existing sprites.

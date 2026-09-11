@@ -10,6 +10,7 @@ extends CanvasLayer
 @onready var phase_label: Label = $MarginContainer/VBoxContainer/TopBar/HBox/DayCell/PhaseLabel
 @onready var day_icon: TextureRect = $MarginContainer/VBoxContainer/TopBar/HBox/DayCell/Icon
 @onready var tool_label: Label = $MarginContainer/VBoxContainer/BottomBar/LeftCard/HBox/ToolLabel
+var tool_icon: TextureRect = null
 @onready var stamina_bar: ProgressBar = $MarginContainer/VBoxContainer/BottomBar/LeftCard/HBox/StaminaBar
 @onready var hose_label: Label = $MarginContainer/VBoxContainer/BottomBar/LeftCard/HBox/HoseLabel
 @onready var menu_button: Button = $MarginContainer/VBoxContainer/BottomBar/RightCard/HBox/MenuButton
@@ -193,6 +194,8 @@ func _update_water_label() -> void:
 	water_label.text = "%.1f%%" % total_pct
 
 func _update_tool_label() -> void:
+	if tool_icon:
+		tool_icon.texture = PixelUI.TOOL_ICONS.get(GameManager.current_tool_id, PixelUI.TOOL_ICONS["hands"])
 	var tool_data: Dictionary = GameManager.tool_definitions[GameManager.current_tool_id]
 	if GameManager.current_tool_id == "hose":
 		var output: float = GameManager.get_tool_output("hose")
@@ -222,20 +225,33 @@ func _on_stat_upgraded(_stat_id: String, _new_level: int) -> void:
 	_on_water_carried_changed(GameManager.water_carried, GameManager.get_carrying_capacity())
 
 func _on_water_carried_changed(current: float, capacity: float) -> void:
-	if capacity >= 10.0:
-		carry_label.text = "%.1f/%.1f" % [current, capacity]
-	elif capacity >= 1.0:
-		carry_label.text = "%.2f/%.2f" % [current, capacity]
-	else:
-		carry_label.text = "%.3f/%.3f" % [current, capacity]
+	# Compact formatter (Economy.format_gallons minus the " gal" suffix — the
+	# "BAG" cap label already says what unit this is): "0/10.8K" not the raw
+	# "0.0/10803.8" that read as an un-designed float dump.
+	carry_label.text = "%s/%s" % [_fmt_gal_compact(current), _fmt_gal_compact(capacity)]
+
+func _fmt_gal_compact(v: float) -> String:
+	if v <= 0.0:
+		return "0"
+	if v >= 1000.0:
+		return Economy.format_gallons(v).trim_suffix(" gal")  # "10.8K"
+	if v >= 10.0:
+		return "%.1f" % v
+	if v >= 1.0:
+		return "%.2f" % v
+	return "%.3f" % v
 
 func _on_swamp_completed(swamp_index: int, _reward: float) -> void:
 	_update_water_label()
 
 func _build_hud_icons() -> void:
-	# Icons are pixel textures placed in hud.tscn (assets/art/ui/icon_*.png);
-	# nothing to build. Kept so the _ready order reads the same as before.
-	pass
+	# Top-bar icons are pixel textures placed in hud.tscn (assets/art/ui/icon_*.png).
+	# The tool icon is per-tool (assets/art/ui/icon_tool_*.png from the player
+	# track's sprites) so it's built here and inserted before ToolLabel.
+	tool_icon = PixelUI.tool_icon(GameManager.current_tool_id, 12)
+	var hbox: HBoxContainer = tool_label.get_parent()
+	hbox.add_child(tool_icon)
+	hbox.move_child(tool_icon, tool_label.get_index())
 
 func _setup_news_ticker() -> void:
 	# Throttled headline strip (one fading headline / ~45s) under the top bar.

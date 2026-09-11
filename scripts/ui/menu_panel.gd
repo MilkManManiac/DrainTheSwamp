@@ -43,7 +43,7 @@ func _build_buttons() -> void:
 	var touch_on: bool = GameManager.touch_controls_enabled
 	touch_btn.text = "Touch Controls: " + ("ON" if touch_on else "OFF")
 	touch_btn.custom_minimum_size = Vector2(160, 18)
-	touch_btn.add_theme_color_override("font_color", Color(0.7, 0.85, 1.0))
+	touch_btn.add_theme_color_override("font_color", PixelUI.GOLD)
 	touch_btn.pressed.connect(func() -> void:
 		GameManager.touch_controls_enabled = not GameManager.touch_controls_enabled
 		TouchControls.set_enabled(GameManager.touch_controls_enabled)
@@ -107,7 +107,7 @@ func _build_settings_section() -> void:
 	var audio_header := Label.new()
 	audio_header.text = "Audio"
 	audio_header.add_theme_font_size_override("font_size", 8)
-	audio_header.add_theme_color_override("font_color", Color(0.6, 0.8, 1.0))
+	audio_header.add_theme_color_override("font_color", PixelUI.GREEN)
 	audio_header.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	button_list.add_child(audio_header)
 
@@ -127,7 +127,7 @@ func _build_settings_section() -> void:
 	fs_btn.add_theme_font_size_override("font_size", 16)
 	fs_btn.text = "Fullscreen: " + ("ON" if AudioManager.is_fullscreen() else "OFF")
 	fs_btn.custom_minimum_size = Vector2(160, 18)
-	fs_btn.add_theme_color_override("font_color", Color(0.7, 0.85, 1.0))
+	fs_btn.add_theme_color_override("font_color", PixelUI.GOLD)
 	fs_btn.pressed.connect(func() -> void:
 		AudioManager.set_fullscreen(not AudioManager.is_fullscreen())
 		_build_buttons()

@@ -1,4 +1,4 @@
-[gd_resource type="Theme" load_steps=26 format=3 uid="uid://buitheme0001"]
+[gd_resource type="Theme" load_steps=27 format=3 uid="uid://buitheme0001"]
 
 [ext_resource type="FontFile" path="res://assets/fonts/Silkscreen-Regular.ttf" id="1_font"]
 [ext_resource type="Texture2D" path="res://assets/art/ui/panel_wood.png" id="t_wood"]
@@ -12,6 +12,7 @@
 [ext_resource type="Texture2D" path="res://assets/art/ui/bar_fill.png" id="t_bar_fill"]
 [ext_resource type="Texture2D" path="res://assets/art/ui/slider_grabber.png" id="t_grab"]
 [ext_resource type="Texture2D" path="res://assets/art/ui/slider_grabber_hi.png" id="t_grab_hi"]
+[ext_resource type="Texture2D" path="res://assets/art/ui/scroll_grabber.png" id="t_scroll_grab"]
 
 [sub_resource type="StyleBoxTexture" id="sb_wood"]
 content_margin_left = 8.0
@@ -134,11 +135,13 @@ axis_stretch_horizontal = 1
 modulate_color = Color(0.85, 0.7, 0.35, 1)
 
 [sub_resource type="StyleBoxTexture" id="scroll_grab"]
-texture = ExtResource("t_btn_n")
-texture_margin_left = 3.0
-texture_margin_top = 3.0
-texture_margin_right = 3.0
-texture_margin_bottom = 3.0
+texture = ExtResource("t_scroll_grab")
+texture_margin_left = 2.0
+texture_margin_top = 5.0
+texture_margin_right = 2.0
+texture_margin_bottom = 5.0
+content_margin_left = 7.0
+content_margin_right = 7.0
 
 [sub_resource type="StyleBoxEmpty" id="sb_empty"]
 

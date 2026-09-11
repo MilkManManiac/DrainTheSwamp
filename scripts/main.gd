@@ -33,14 +33,33 @@ func _ready() -> void:
 		_debug_open_ui.call_deferred(ui_dbg)
 
 func _debug_open_ui(which: String) -> void:
-	match which:
+	# "shop:1" / "shop:2" also selects a tab (0=Tools default, 1=Stats,
+	# 2=Influence) so tools/capture.py can shoot each one.
+	var parts: PackedStringArray = which.split(":")
+	match parts[0]:
 		"shop":
 			_on_shop_pressed()
+			if parts.size() > 1:
+				shop_panel.current_tab = parts[1].to_int()
+				shop_panel._refresh()
 		"menu":
 			_on_menu_pressed()
 			get_tree().paused = false  # keep the DTS_SHOT timer ticking
 		"touch":
 			TouchControls.set_enabled(true)
+		"hint":
+			# Sample toast text at real caller length (see game_world.gd's
+			# buyback-window line) so the shrink-wrap capture reflects an
+			# actual message, not a placeholder.
+			SceneManager.show_popup("EMERGENCY BUYBACK WINDOW OPEN\nSomeone needs this water gone before an audit — 2x prices for 30s!", 0.0)
+		"lore":
+			SceneManager.show_document_popup(
+				"The trucks that refill the water at night — we have photographed the drivers. For no reason. We photograph many things.\n\nAlso: the drop box at the west edge of town. It is ours. Check it when the flag is up.\n\n— a Friend",
+				"MESSAGE RECEIVED", "phone")
+		"lore_paper":
+			SceneManager.show_document_popup(
+				"HERE LIES WHAT THE WATER TOOK\n\nSix names, one date, no stone big enough.",
+				"CAVE INSCRIPTION", "paper")
 
 func _close_all_panels() -> void:
 	shop_panel.visible = false

@@ -53,10 +53,7 @@ func _build_interaction() -> void:
 	area.body_entered.connect(_on_body_entered)
 	area.body_exited.connect(_on_body_exited)
 
-	hint_label = Label.new()
-	hint_label.text = "[SPACE]"
-	hint_label.add_theme_font_size_override("font_size", 10)
-	hint_label.add_theme_color_override("font_color", Color(0.8, 0.75, 0.6, 0.8))
+	hint_label = PixelUI.prompt("[SPACE]", Color(0.8, 0.75, 0.6, 0.9))
 	hint_label.position = Vector2(-16, -36)
 	hint_label.z_index = 8
 	hint_label.visible = false

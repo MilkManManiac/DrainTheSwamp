@@ -62,6 +62,17 @@ var _basin_in_range: bool = false
 var _basin_sell_cooldown: float = 0.0
 
 func _ready() -> void:
+	# Dev-only (v3 hud track): capturing a cave scene directly via
+	# `capture.py --scene res://scenes/caves/<x>.tscn` skips the overworld's
+	# normal cave-entrance flow, so GameManager.in_cave/cave_air never get
+	# set and the HUD's air bar stays hidden. No-op without DTS_SHOT.
+	if OS.get_environment("DTS_SHOT") != "" and not GameManager.in_cave:
+		GameManager.enter_cave(cave_id)
+		# DTS_PROMPT=1 also unlocks the P3 sell-basin (in-memory only, never
+		# saved) so tools/capture.py can shoot its "NA COURIER" PixelUI.prompt()
+		# tag — otherwise unreachable without hours of real play.
+		if OS.get_environment("DTS_PROMPT") != "":
+			GameManager.prestige_count = maxi(GameManager.prestige_count, 3)
 	_setup_cave()
 
 func _setup_cave() -> void:
@@ -2003,10 +2014,7 @@ func _build_sell_basin() -> void:
 		Vector2(-8, -6), Vector2(8, -6), Vector2(6, -2), Vector2(-6, -2)])
 	liquid.color = Color(0.35, 0.85, 0.55, 0.85)
 	root.add_child(liquid)
-	var tag := Label.new()
-	tag.text = "NA COURIER"
-	tag.add_theme_font_size_override("font_size", 6)
-	tag.add_theme_color_override("font_color", Color(0.55, 0.85, 0.60, 0.85))
+	var tag := PixelUI.prompt("NA COURIER", Color(0.55, 0.85, 0.60, 0.9))
 	tag.position = Vector2(-22, -20)
 	root.add_child(tag)
 
@@ -2062,19 +2070,8 @@ func _setup_cave_ui() -> void:
 	add_child(unstuck_layer)
 	var unstuck_btn := Button.new()
 	unstuck_btn.text = "Unstuck"
-	unstuck_btn.add_theme_font_size_override("font_size", 10)
-	unstuck_btn.add_theme_color_override("font_color", Color(0.85, 0.75, 0.55))
-	var btn_style := StyleBoxFlat.new()
-	btn_style.bg_color = Color(0.15, 0.13, 0.1, 0.7)
-	btn_style.border_color = Color(0.4, 0.35, 0.25, 0.6)
-	btn_style.set_border_width_all(1)
-	btn_style.set_corner_radius_all(3)
-	btn_style.set_content_margin_all(4)
-	unstuck_btn.add_theme_stylebox_override("normal", btn_style)
-	var hover_style := btn_style.duplicate() as StyleBoxFlat
-	hover_style.bg_color = Color(0.22, 0.18, 0.12, 0.85)
-	unstuck_btn.add_theme_stylebox_override("hover", hover_style)
-	unstuck_btn.add_theme_stylebox_override("pressed", hover_style)
+	unstuck_btn.custom_minimum_size = Vector2(56, 16)
+	PixelUI.button(unstuck_btn, Color(0.85, 0.75, 0.55))
 	var vp_size: Vector2 = get_viewport_rect().size
 	unstuck_btn.position = Vector2(vp_size.x - 70, vp_size.y - 60)
 	unstuck_btn.pressed.connect(_on_unstuck_pressed)

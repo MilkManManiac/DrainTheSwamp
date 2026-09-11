@@ -1,6 +1,7 @@
 extends PanelContainer
 
-@onready var tool_list: VBoxContainer = $MarginContainer/VBoxContainer/ScrollContainer/ToolList
+@onready var tool_list: VBoxContainer = $MarginContainer/VBoxContainer/ContentPanel/ScrollContainer/ToolList
+@onready var content_panel: PanelContainer = $MarginContainer/VBoxContainer/ContentPanel
 @onready var close_button: Button = $MarginContainer/VBoxContainer/TopBar/CloseButton
 @onready var title_label: Label = $MarginContainer/VBoxContainer/TopBar/TitleLabel
 
@@ -20,6 +21,11 @@ var tab_buttons: Array[Button] = []
 var confirming_sellout: bool = false
 
 func _ready() -> void:
+	# Three-surface hierarchy: this panel (frame, darker wood + rivets) >
+	# content_panel (lighter content backdrop) > each row (lightest, its own
+	# card) — was one flat wood texture reused at every level.
+	add_theme_stylebox_override("panel", PixelUI.frame(10, 8))
+	content_panel.add_theme_stylebox_override("panel", PixelUI.content(4, 4))
 	close_button.pressed.connect(func() -> void: close())
 	# Money changes constantly while selling — soft refresh only.
 	GameManager.money_changed.connect(func(_m: float) -> void: _dirty = true)
@@ -71,7 +77,10 @@ func _register_afford(btn: Button, cost: float, active_color: Color, extra_ok: b
 		if ok:
 			btn.add_theme_color_override("font_color", active_color)
 		else:
-			btn.remove_theme_color_override("font_color")
+			# Can't-afford reads as red now (was: fall back to the theme's
+			# neutral disabled brown, which didn't say "you can't afford this"
+			# any louder than "this button is off").
+			btn.add_theme_color_override("font_color", PixelUI.RED)
 	)
 
 func open() -> void:
@@ -109,8 +118,8 @@ func _refresh() -> void:
 	var tab_names: Array[String] = ["Tools", "Stats", "Influence"]
 	var tab_colors: Array[Color] = [
 		Color(0.55, 0.48, 0.2),   # Gold for tools
-		Color(0.3, 0.5, 0.8),     # Blue for stats
-		Color(0.6, 0.3, 0.7),     # Purple for influence
+		Color(0.32, 0.5, 0.32),   # Green for stats (was blue — fails on brown)
+		Color(0.55, 0.32, 0.52),  # Warm magenta-purple for influence
 	]
 	for i in range(3):
 		var tab_idx: int = i
@@ -119,15 +128,19 @@ func _refresh() -> void:
 		btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		btn.custom_minimum_size = Vector2(0, 20)
 
-		# Active tab sits "pressed" into the wood; inactive tabs are raised.
+		# Active tab sits pressed-in (dark, bright accent text, full opacity);
+		# inactive tabs stay raised and visibly duller so the pair doesn't
+		# read as "nearly identical" wood at the same value.
 		PixelUI.button(btn, tab_colors[i])
 		if current_tab == i:
 			var down: StyleBox = btn.get_theme_stylebox("pressed")
 			btn.add_theme_stylebox_override("normal", down)
 			btn.add_theme_stylebox_override("hover", down)
-			btn.add_theme_color_override("font_color", tab_colors[i].lightened(0.45))
+			btn.add_theme_color_override("font_color", tab_colors[i].lightened(0.55))
+			btn.modulate = Color(1, 1, 1, 1)
 		else:
 			btn.add_theme_color_override("font_color", PixelUI.CREAM_DIM)
+			btn.modulate = Color(0.8, 0.8, 0.78, 1)
 
 		btn.pressed.connect(func() -> void:
 			current_tab = tab_idx
@@ -171,14 +184,15 @@ func _build_tools_tab() -> void:
 		var row_panel := PanelContainer.new()
 		# StyleBoxTexture has no border_width_left/border_color (StyleBoxFlat-only
 		# properties — setting them threw a script error every time the shop
-		# opened). Equipped state now reads through a brighter green tint plus
-		# the label colour instead.
+		# opened). Equipped state reads through the row card's own bright-green
+		# left edge (row_card_active.png) instead.
 		var equipped: bool = GameManager.current_tool_id == tid
-		var row_style: StyleBoxTexture = PixelUI.inset(Color(0.35, 0.95, 0.45) if equipped else Color(0.12, 0.12, 0.16))
-		row_panel.add_theme_stylebox_override("panel", row_style)
+		var row_state: String = "active" if equipped else ("locked" if not owned_data["owned"] else "normal")
+		row_panel.add_theme_stylebox_override("panel", PixelUI.row(6, 4, row_state))
 
 		var entry := HBoxContainer.new()
 		entry.add_theme_constant_override("separation", 8)
+		entry.add_child(PixelUI.tool_icon(tid))
 
 		var info_label := Label.new()
 		info_label.add_theme_font_size_override("font_size", 8)
@@ -198,12 +212,12 @@ func _build_tools_tab() -> void:
 			else:
 				info_label.text = "%s Lv%d (%.4f g)" % [defn["name"], owned_data["level"], output]
 			if GameManager.current_tool_id == tid:
-				info_label.add_theme_color_override("font_color", Color(0.3, 1.0, 0.4))
+				info_label.add_theme_color_override("font_color", PixelUI.GREEN)
 			else:
-				info_label.add_theme_color_override("font_color", Color(0.85, 0.85, 0.9))
+				info_label.add_theme_color_override("font_color", PixelUI.CREAM)
 		else:
 			info_label.text = "%s [LOCKED]" % defn["name"]
-			info_label.add_theme_color_override("font_color", Color(0.68, 0.68, 0.74))
+			info_label.add_theme_color_override("font_color", Color(0.6, 0.56, 0.48))
 
 		entry.add_child(info_label)
 
@@ -229,7 +243,7 @@ func _build_tools_tab() -> void:
 			upgrade_btn.custom_minimum_size = Vector2(96, 0)
 			var ut: String = tid
 			upgrade_btn.pressed.connect(func() -> void: GameManager.upgrade_tool(ut))
-			_register_afford(upgrade_btn, cost, Color(0.5, 0.85, 1.0))
+			_register_afford(upgrade_btn, cost, PixelUI.GOLD)
 			_style_button(upgrade_btn, Color(0.1, 0.18, 0.3))
 			entry.add_child(upgrade_btn)
 		else:
@@ -269,7 +283,7 @@ func _build_stats_tab() -> void:
 	var core_header := Label.new()
 	core_header.text = "-- Core Stats --"
 	core_header.add_theme_font_size_override("font_size", 8)
-	core_header.add_theme_color_override("font_color", Color(0.4, 0.7, 0.9))
+	core_header.add_theme_color_override("font_color", PixelUI.GREEN)
 	core_header.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	tool_list.add_child(core_header)
 
@@ -293,7 +307,7 @@ func _build_stats_tab() -> void:
 		var value: float = GameManager.get_stat_value(stat_id)
 
 		var row_panel := PanelContainer.new()
-		var row_style: StyleBoxTexture = PixelUI.inset(Color(0.1, 0.12, 0.18, 0.6))
+		var row_style: StyleBoxTexture = PixelUI.row()
 		row_panel.add_theme_stylebox_override("panel", row_style)
 
 		var row := HBoxContainer.new()
@@ -310,10 +324,10 @@ func _build_stats_tab() -> void:
 		var value_str: String = _format_stat_value(stat_id, defn, value)
 		if level > 0:
 			info_label.text = "%s Lv%d (%s)" % [defn["name"], level, value_str]
-			info_label.add_theme_color_override("font_color", Color(0.7, 0.85, 1.0))
+			info_label.add_theme_color_override("font_color", PixelUI.GREEN)
 		else:
 			info_label.text = "%s (%s)" % [defn["name"], value_str]
-			info_label.add_theme_color_override("font_color", Color(0.72, 0.76, 0.86))
+			info_label.add_theme_color_override("font_color", PixelUI.CREAM)
 		row.add_child(info_label)
 
 		# Upgrade button
@@ -331,7 +345,7 @@ func _build_stats_tab() -> void:
 			up_btn.custom_minimum_size = Vector2(110, 0)
 			var sid: String = stat_id
 			up_btn.pressed.connect(func() -> void: GameManager.upgrade_stat(sid))
-			_register_afford(up_btn, cost, Color(0.5, 0.85, 1.0))
+			_register_afford(up_btn, cost, PixelUI.GOLD)
 			_style_button(up_btn, Color(0.1, 0.18, 0.3))
 			row.add_child(up_btn)
 
@@ -363,7 +377,7 @@ func _build_stats_tab() -> void:
 		var is_maxed: bool = GameManager.is_upgrade_maxed(uid)
 
 		var u_panel := PanelContainer.new()
-		var u_style: StyleBoxTexture = PixelUI.inset(Color(0.1, 0.14, 0.1, 0.6))
+		var u_style: StyleBoxTexture = PixelUI.row()
 		u_panel.add_theme_stylebox_override("panel", u_style)
 
 		var u_row := HBoxContainer.new()
@@ -432,7 +446,7 @@ func _build_prestige_tab() -> void:
 
 	# --- Sell Out panel ---
 	var sellout_panel := PanelContainer.new()
-	var sellout_style: StyleBoxTexture = PixelUI.inset(Color(0.14, 0.08, 0.16, 0.6))
+	var sellout_style: StyleBoxTexture = PixelUI.row(10, 8)
 	sellout_panel.add_theme_stylebox_override("panel", sellout_style)
 
 	var sellout_col := VBoxContainer.new()
@@ -571,7 +585,7 @@ func _build_prestige_tab() -> void:
 	for perk in perks:
 		var unlocked: bool = GameManager.prestige_count >= perk["p"]
 		var perk_panel := PanelContainer.new()
-		var perk_style: StyleBoxTexture = PixelUI.inset(Color(0.08, 0.14, 0.10, 0.6) if unlocked else Color(0.10, 0.10, 0.12, 0.5))
+		var perk_style: StyleBoxTexture = PixelUI.row(6, 4, "normal" if unlocked else "locked")
 		perk_panel.add_theme_stylebox_override("panel", perk_style)
 		var perk_lbl := Label.new()
 		perk_lbl.add_theme_font_size_override("font_size", 8)
@@ -592,7 +606,7 @@ func _build_prestige_upgrade_row(key: String, display_name: String, effect: Stri
 	var cost: int = GameManager.get_prestige_upgrade_cost(key)
 
 	var row_panel := PanelContainer.new()
-	var row_style: StyleBoxTexture = PixelUI.inset(Color(0.12, 0.09, 0.16, 0.6))
+	var row_style: StyleBoxTexture = PixelUI.row()
 	row_panel.add_theme_stylebox_override("panel", row_style)
 
 	var row := HBoxContainer.new()
@@ -784,7 +798,7 @@ func _build_pump_section() -> void:
 		var cost: float = GameManager.get_pump_cost(idx)
 
 		var row_panel := PanelContainer.new()
-		var style: StyleBoxTexture = PixelUI.inset(Color(0.07, 0.12, 0.15, 0.6))
+		var style: StyleBoxTexture = PixelUI.row()
 		row_panel.add_theme_stylebox_override("panel", style)
 
 		var row := HBoxContainer.new()
@@ -798,10 +812,10 @@ func _build_pump_section() -> void:
 		info.add_theme_constant_override("shadow_offset_y", 1)
 		if level > 0:
 			info.text = "%s Pump Lv%d (%s/s)" % [d["name"], level, Economy.format_gallons(GameManager.get_pump_rate(idx))]
-			info.add_theme_color_override("font_color", Color(0.55, 0.85, 0.95))
+			info.add_theme_color_override("font_color", PixelUI.GREEN)
 		else:
 			info.text = "%s Pump" % d["name"]
-			info.add_theme_color_override("font_color", Color(0.7, 0.82, 0.88))
+			info.add_theme_color_override("font_color", PixelUI.CREAM)
 		row.add_child(info)
 
 		if level >= GameManager.PUMP_MAX_LEVEL:
@@ -820,7 +834,7 @@ func _build_pump_section() -> void:
 			btn.custom_minimum_size = Vector2(130, 0)
 			var pump_idx: int = idx
 			btn.pressed.connect(func() -> void: GameManager.buy_pump(pump_idx))
-			_register_afford(btn, cost, Color(0.55, 0.85, 0.95))
+			_register_afford(btn, cost, PixelUI.GREEN)
 			_style_button(btn, Color(0.06, 0.14, 0.18))
 			row.add_child(btn)
 
@@ -848,7 +862,7 @@ func _build_camel_section() -> void:
 	tool_list.add_child(camel_header)
 
 	var camel_buy_panel := PanelContainer.new()
-	var camel_buy_style: StyleBoxTexture = PixelUI.inset(Color(0.16, 0.12, 0.06, 0.6))
+	var camel_buy_style: StyleBoxTexture = PixelUI.row()
 	camel_buy_panel.add_theme_stylebox_override("panel", camel_buy_style)
 
 	var camel_buy_row := HBoxContainer.new()
@@ -902,15 +916,15 @@ func _build_camel_section() -> void:
 	# Camel upgrades (only if camel owned)
 	if GameManager.camel_count > 0:
 		var upgrade_panel := PanelContainer.new()
-		var up_style: StyleBoxTexture = PixelUI.inset(Color(0.14, 0.1, 0.05, 0.6))
+		var up_style: StyleBoxTexture = PixelUI.row()
 		upgrade_panel.add_theme_stylebox_override("panel", up_style)
 
 		var up_row := HBoxContainer.new()
 		up_row.add_theme_constant_override("separation", 8)
 
-		var up_spacer := Control.new()
-		up_spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		up_row.add_child(up_spacer)
+		var up_label := PixelUI.caption("Camel Upgrades", PixelUI.CREAM_DIM)
+		up_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		up_row.add_child(up_label)
 
 		var cap_btn := Button.new()
 		cap_btn.add_theme_font_size_override("font_size", 8)
@@ -921,7 +935,7 @@ func _build_camel_section() -> void:
 		var next_cap: float = cur_cap * 1.25
 		cap_btn.tooltip_text = "Camel Capacity Lv%d\nCurrent: %.1f gal\nNext: %.1f gal (+25%%)\nCost: %s" % [GameManager.camel_capacity_level, cur_cap, next_cap, Economy.format_money(cap_cost)]
 		cap_btn.pressed.connect(func() -> void: GameManager.upgrade_camel_capacity())
-		_register_afford(cap_btn, cap_cost, Color(0.5, 0.85, 1.0))
+		_register_afford(cap_btn, cap_cost, PixelUI.GOLD)
 		_style_button(cap_btn, Color(0.1, 0.15, 0.2))
 		up_row.add_child(cap_btn)
 
@@ -941,7 +955,7 @@ func _build_camel_section() -> void:
 			var next_spd: float = 35.0 * pow(1.20, GameManager.camel_speed_level + 1)
 			spd_btn.tooltip_text = "Camel Speed Lv%d\nCurrent: %.0f px/s\nNext: %.0f px/s (+20%%)\nCost: %s" % [GameManager.camel_speed_level, cur_spd, next_spd, Economy.format_money(spd_cost)]
 			spd_btn.pressed.connect(func() -> void: GameManager.upgrade_camel_speed())
-			_register_afford(spd_btn, spd_cost, Color(0.5, 0.85, 1.0))
+			_register_afford(spd_btn, spd_cost, PixelUI.GOLD)
 			_style_button(spd_btn, Color(0.1, 0.15, 0.2))
 			up_row.add_child(spd_btn)
 

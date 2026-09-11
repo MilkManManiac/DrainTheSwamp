@@ -32,6 +32,18 @@ P_BASE = (214, 190, 142)
 P_DARK = (190, 164, 116)
 P_LIGHT = (232, 212, 168)
 P_LINE = (156, 126, 84)
+# content surface: light warm wood the rows sit on, between S_LIGHT and
+# parchment in value — the middle step of frame(dark) > content(light) > row(lighter)
+C_BASE = (150, 118, 82)
+C_DARK = (124, 96, 64)
+C_LIGHT = (176, 144, 104)
+# row card: lightest surface, a raised chip each row sits on
+R_BASE = (192, 160, 116)
+R_DARK = (162, 130, 90)
+R_LIGHT = (214, 186, 144)
+# brass rivet accent for frame corners
+BRASS = (196, 158, 74)
+BRASS_HI = (232, 200, 120)
 
 
 def new(w, h):
@@ -92,6 +104,78 @@ def panel_inset(size=12):
     return img
 
 
+def panel_frame(size=28):
+    """Darker outer frame than panel_wood, thicker border, brass corner rivets —
+    the outermost of the three surfaces (frame > content > row) so a dialog
+    reads as layered instead of one flat plank everywhere."""
+    img = new(size, size)
+    plank_fill(img, 2, 2, size - 3, size - 3, seed=11, base=W_DARK, light=W_MID, dark=(44, 30, 18), line=(24, 16, 10), step=7)
+    d = ImageDraw.Draw(img)
+    # thick dark border, 2px
+    d.rectangle((0, 0, size - 1, size - 1), outline=OUTLINE)
+    d.rectangle((1, 1, size - 2, size - 2), outline=(18, 12, 8))
+    d.line((2, 2, size - 3, 2), fill=W_MID)
+    d.line((2, 2, 2, size - 3), fill=W_MID)
+    # brass rivets, one per corner, inset by 4px
+    for cx, cy in [(4, 4), (size - 5, 4), (4, size - 5), (size - 5, size - 5)]:
+        d.point([(cx, cy), (cx + 1, cy), (cx, cy + 1), (cx + 1, cy + 1)], fill=BRASS)
+        d.point([(cx, cy)], fill=BRASS_HI)
+    return img
+
+
+def panel_content(size=16):
+    """Lighter content surface (shop scroll area, popup body backdrop) — the
+    middle step between the dark frame and the lighter row cards."""
+    img = new(size, size)
+    d = ImageDraw.Draw(img)
+    rect(d, 0, 0, size - 1, size - 1, C_BASE)
+    rng = random.Random(21)
+    for _ in range(size * 2):
+        img.putpixel((rng.randint(1, size - 2), rng.randint(1, size - 2)), C_DARK if rng.random() < 0.6 else C_LIGHT)
+    d.rectangle((0, 0, size - 1, size - 1), outline=(40, 28, 18))
+    d.line((1, 1, size - 2, 1), fill=C_DARK)
+    d.line((1, 1, 1, size - 2), fill=C_DARK)
+    return img
+
+
+def row_card(size=12, active=False, locked=False):
+    """A single shop/list row as its own raised chip — lightest of the three
+    surfaces. `active` (equipped/selected) gets a bright left accent edge;
+    `locked` is desaturated and darker so it visibly recedes."""
+    img = new(size, size)
+    d = ImageDraw.Draw(img)
+    if locked:
+        base, light, dark = (108, 96, 84), (128, 114, 100), (86, 76, 66)
+    else:
+        base, light, dark = R_BASE, R_LIGHT, R_DARK
+    rect(d, 0, 0, size - 1, size - 1, base)
+    d.line((0, 0, size - 1, 0), fill=light)
+    d.line((0, 0, 0, size - 1), fill=light)
+    d.line((0, size - 1, size - 1, size - 1), fill=dark)
+    d.rectangle((0, 0, size - 1, size - 1), outline=(40, 28, 18))
+    if active:
+        # bright accent stripe down the left edge
+        d.line((0, 0, 0, size - 1), fill=(110, 226, 130))
+        d.line((1, 0, 1, size - 1), fill=(70, 180, 95))
+    return img
+
+
+def scroll_grabber(w=7, h=14):
+    """Dedicated vertical scrollbar handle (was reusing the square button
+    texture stretched thin, which read as an unskinned/raw scrollbar)."""
+    img = new(w, h)
+    d = ImageDraw.Draw(img)
+    rect(d, 0, 0, w - 1, h - 1, R_BASE)
+    d.line((0, 0, w - 1, 0), fill=R_LIGHT)
+    d.line((0, 0, 0, h - 1), fill=R_LIGHT)
+    d.line((0, h - 1, w - 1, h - 1), fill=R_DARK)
+    d.line((w - 1, 0, w - 1, h - 1), fill=R_DARK)
+    d.rectangle((0, 0, w - 1, h - 1), outline=OUTLINE)
+    for y in range(4, h - 4, 3):
+        d.point((w // 2, y), fill=R_DARK)
+    return img
+
+
 def slider_grabber(size=8, highlight=False):
     """Small brass/wood knob for HSlider (replaces the default smooth white
     circle, which read as programmer art next to the baked wood panels)."""
@@ -127,7 +211,10 @@ def button(state, size=16):
     elif state == "hover":
         base, light, dark, hi = W_LIGHT, W_HI, W_MID, (200, 160, 110)
     elif state == "pressed":
-        base, light, dark, hi = W_MID, W_BASE, W_DARK, W_BASE
+        # Deepened vs. "normal" (was W_MID, too close in value to W_BASE) so a
+        # pressed/active tab visibly recedes instead of nearly matching raised
+        # tabs next to it.
+        base, light, dark, hi = W_DARK, W_MID, (28, 18, 10), W_MID
     else:
         base, light, dark, hi = W_BASE, W_LIGHT, W_MID, W_HI
     rect(d, 1, 1, size - 2, size - 2, base)
@@ -275,6 +362,65 @@ def icon(name):
     return img
 
 
+SRC = Path(__file__).resolve().parent.parent.parent / "assets" / "art" / "drainsville"
+
+TOOL_ICON_SOURCES = {
+    "spoon": "tool_spoon.png",
+    "cup": "tool_cup.png",
+    "bucket": "tool_bucket.png",
+    "shovel": "tool_shovel.png",
+    "wheelbarrow": "tool_wheelbarrow.png",
+    "barrel": "tool_barrel.png",
+    "water_wagon": "tool_water_wagon.png",
+    "hose": "tool_hose.png",
+}
+
+
+def tool_icon(tool_id, size=13):
+    """Small square UI icon baked from the player track's in-hand tool sprite
+    (assets/art/drainsville/tool_*.png — elongated held-tool shapes), scaled
+    to fit a square icon slot with a 1px dark outline ring so it reads at
+    HUD/shop-row size instead of at in-hand scale."""
+    src_path = SRC / TOOL_ICON_SOURCES[tool_id]
+    src = Image.open(src_path).convert("RGBA")
+    bbox = src.getbbox()
+    if bbox:
+        src = src.crop(bbox)
+    inner = size - 2
+    scale = min(inner / src.width, inner / src.height)
+    new_w = max(1, round(src.width * scale))
+    new_h = max(1, round(src.height * scale))
+    scaled = src.resize((new_w, new_h), Image.NEAREST)
+    img = new(size, size)
+    ox = (size - new_w) // 2
+    oy = (size - new_h) // 2
+    # 1px outline ring: stamp the alpha mask shifted 4 ways in outline colour first
+    mask = scaled.split()[3]
+    for dx, dy in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
+        ring = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+        ring.paste(Image.new("RGBA", (new_w, new_h), OUTLINE + (255,)), (ox + dx, oy + dy), mask)
+        img.alpha_composite(ring)
+    img.alpha_composite(scaled, (ox, oy))
+    return img
+
+
+def hands_icon(size=13):
+    """Baked, not baked-from-source: no bare-hands sprite exists on the
+    player track (it's the implicit default, no held prop). Small mitten
+    silhouette in the same outline language as the tool icons."""
+    img = new(size, size)
+    d = ImageDraw.Draw(img)
+    skin, skin_hi = (198, 150, 110), (222, 178, 136)
+    d.ellipse((3, 4, 9, 11), fill=skin, outline=OUTLINE)
+    d.ellipse((3, 3, 6, 6), fill=skin_hi)
+    for fx in (4, 6, 8):
+        d.line((fx, 4, fx, 1), fill=skin, width=2)
+    d.rectangle((3, 1, 4, 3), fill=skin)
+    d.rectangle((5, 1, 6, 3), fill=skin)
+    d.rectangle((7, 1, 8, 3), fill=skin)
+    return img
+
+
 def touch_button(kind, size, pressed):
     img = new(size, size)
     plank_fill(img, 1, 1, size - 2, size - 2, seed=5, base=W_MID if pressed else W_BASE,
@@ -321,6 +467,11 @@ def main():
         "panel_wood.png": panel_wood(24),
         "panel_inset.png": panel_inset(12),
         "panel_parchment.png": panel_parchment(16),
+        "panel_frame.png": panel_frame(28),
+        "panel_content.png": panel_content(16),
+        "row_card.png": row_card(12, active=False),
+        "row_card_active.png": row_card(12, active=True),
+        "row_card_locked.png": row_card(12, locked=True),
         "btn_normal.png": button("normal"),
         "btn_hover.png": button("hover"),
         "btn_pressed.png": button("pressed"),
@@ -329,6 +480,7 @@ def main():
         "bar_fill.png": bar_fill(),
         "slider_grabber.png": slider_grabber(8, False),
         "slider_grabber_hi.png": slider_grabber(8, True),
+        "scroll_grabber.png": scroll_grabber(),
         "touch_left.png": touch_button("left", 40, False),
         "touch_left_p.png": touch_button("left", 40, True),
         "touch_right.png": touch_button("right", 40, False),
@@ -338,6 +490,9 @@ def main():
     }
     for n in ICONS:
         files[f"icon_{n}.png"] = icon(n)
+    for tid in TOOL_ICON_SOURCES:
+        files[f"icon_tool_{tid}.png"] = tool_icon(tid)
+    files["icon_tool_hands.png"] = hands_icon()
     for name, img in files.items():
         img.save(OUT / name)
         print(f"[ui_kit] {name} {img.width}x{img.height}")
