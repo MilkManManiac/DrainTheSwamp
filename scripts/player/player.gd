@@ -376,16 +376,25 @@ func _scoop_feedback() -> void:
 	tool_tween.tween_property(tool_sprite, "rotation", -0.7, 0.08)
 	tool_tween.tween_property(tool_sprite, "rotation", 0.0, 0.12)
 
-	# Show gallons actually collected (blue) — honest amount, not raw tool output
+	# Show gallons actually collected (blue) — honest amount, not raw tool
+	# output. v3 signage (scripts/world/signage.gd) owns pixel-art float text;
+	# route through it when present so the display stays Silkscreen-sized and
+	# skips the popup entirely on a zero scoop (display-only — the gallon
+	# math above is untouched). Falls back to the old plain-font popup if the
+	# signage module isn't in the tree (e.g. V3_SIGNAGE off).
 	var output: float = GameManager.last_scoop_gallons
-	var gal_text: String
-	if output >= 10.0:
-		gal_text = "+%.1f gal" % output
-	elif output >= 1.0:
-		gal_text = "+%.2f gal" % output
+	var signage: Node = get_tree().get_first_node_in_group("signage")
+	if signage and signage.has_method("spawn_gal_float"):
+		signage.spawn_gal_float(self, output)
 	else:
-		gal_text = "+%.4f gal" % output
-	_spawn_floating_text(gal_text, Color(0.4, 0.8, 1.0))
+		var gal_text: String
+		if output >= 10.0:
+			gal_text = "+%.1f gal" % output
+		elif output >= 1.0:
+			gal_text = "+%.2f gal" % output
+		else:
+			gal_text = "+%.4f gal" % output
+		_spawn_floating_text(gal_text, Color(0.4, 0.8, 1.0))
 
 	# Splash particles
 	_spawn_splash()

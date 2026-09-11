@@ -14,17 +14,25 @@ extends Node2D
 const ART := "res://assets/art/drainsville/"
 const SCALE := 0.5
 const FONT_PATH := "res://assets/fonts/Silkscreen-Regular.ttf"
-const NUM_FONT_PATH := "res://assets/fonts/VT323-Regular.ttf"
 
 const INK := Color(0.16, 0.12, 0.09)          # dark ink on pale board
 const PLANK_INK := Color(0.93, 0.85, 0.62)    # cream paint on dark wood
 const OUTLINE := Color(0.06, 0.05, 0.04, 0.95)
 const DONE_GREEN := Color(0.45, 0.95, 0.5)
+const LAMP_WARM := Color(1.0, 0.72, 0.38)
+
+# HUD-clear bands, in the base 640x360 logical viewport (Wes: "bottom 62 px
+# / top 66 px at 720p", halved since 720p is 2x the base viewport). Basin
+# post labels are pushed clear of these every frame so they never render
+# under the top bar or the bottom bar / MENU button, regardless of camera.
+const HUD_TOP_CLEAR := 33.0
+const HUD_BOTTOM_CLEAR := 31.0
 
 # Board face rects in texture px (unflipped), measured off the baked sprites
-# (billboard.png 528x300, sign_post.png 178x164, sign_stake.png 84x92,
-# sign_stake_l.png 152x140 — see assets/art/drainsville/).
-const BILLBOARD_FACE := Rect2(20, 15, 488, 160)
+# (billboard.png 352x200 — rebaked smaller per Wes's 2026-09-11 review;
+# sign_post.png 178x164, sign_stake.png 84x92, sign_stake_l.png 152x140 —
+# see assets/art/drainsville/).
+const BILLBOARD_FACE := Rect2(13, 10, 325, 107)
 const POST_FACE := Rect2(14, 10, 150, 70)
 const STAKE_FACE := Rect2(6, 6, 72, 42)
 const STAKE_L_FACE := Rect2(12, 10, 128, 70)
@@ -48,17 +56,19 @@ const BLUE_TINT := Color(0.82, 0.87, 0.98)
 
 var world: Node2D = null
 var _font: FontFile = null
-var _num_font: FontFile = null
+var _lamp_tex: ImageTexture = null
 var _snap: Array = []        # adopted Labels, pixel-snapped before every draw
-var _basin: Array = []       # per basin {name: Label, pct: Label, gal: Label}
+var _basin: Array = []       # per basin {name: Label, pct: Label, gal: Label, fx, fy, fw: float}
 var _caves: Array = []       # {ce: Dictionary, sealed: Sprite2D, mouth: Sprite2D, plank: Node2D}
+var _billboard_spans: Array = []  # [{x: float, half_w: float}] — for basin-post overlap avoidance
+var _glow_layers: Array = []  # [{node: CanvasItem, day: Color, night: Color}], driven by _glow_t() each frame
 var _tower_sell_built: bool = false
 
 func _ready() -> void:
 	texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	add_to_group("signage")
 	_font = _pixel_font(FONT_PATH)
-	_num_font = _pixel_font(NUM_FONT_PATH)
+	_lamp_tex = _make_lamp_texture()
 	get_tree().node_added.connect(_on_node_added)
 	RenderingServer.frame_pre_draw.connect(_snap_labels)
 	call_deferred("_build")
@@ -116,6 +126,94 @@ func _label(text: String, size: int, col: Color, font: FontFile = null) -> Label
 	lbl.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	return lbl
 
+# Tiny hand-pixelled gooseneck lamp: a 6x10 art-grid image, nearest-doubled to
+# 12x20 like everything baked through tools/bake/bake.py, so it sits at the
+# same pixel density as the rest of the art.
+func _make_lamp_texture() -> ImageTexture:
+	var post_c := Color(0.22, 0.15, 0.10, 1.0)
+	var arm_c := Color(0.30, 0.20, 0.13, 1.0)
+	var bulb_c := Color(1.0, 0.88, 0.55, 1.0)
+	var bulb_edge := Color(0.85, 0.6, 0.25, 1.0)
+	# 6 wide x 10 tall, row-major, top to bottom.
+	var rows: Array[String] = [
+		"..bb..",
+		".bBBb.",
+		".bBBb.",
+		"..be..",
+		"...a..",
+		"..aa..",
+		"...a..",
+		"..aa..",
+		"..pp..",
+		"..pp..",
+	]
+	var small := Image.create(6, 10, false, Image.FORMAT_RGBA8)
+	for y in range(10):
+		var row: String = rows[y]
+		for x in range(6):
+			var c: String = row[x]
+			var col: Color
+			match c:
+				"B": col = bulb_c
+				"b", "e": col = bulb_edge
+				"a": col = arm_c
+				"p": col = post_c
+				_: col = Color(0, 0, 0, 0)
+			small.set_pixel(x, y, col)
+	# Nearest x2 upscale (matches the bake pipeline's "--no-x2" default off).
+	var up := Image.create(12, 20, false, Image.FORMAT_RGBA8)
+	for y in range(10):
+		for x in range(6):
+			var col: Color = small.get_pixel(x, y)
+			up.set_pixel(x * 2, y * 2, col)
+			up.set_pixel(x * 2 + 1, y * 2, col)
+			up.set_pixel(x * 2, y * 2 + 1, col)
+			up.set_pixel(x * 2 + 1, y * 2 + 1, col)
+	return ImageTexture.create_from_image(up)
+
+# Time-of-day → glow strength, mirrored from game_world.gd's town-light curve
+# (GameManager.cycle_progress is written there every frame); off in daylight,
+# warm from dusk through dawn.
+func _glow_t() -> float:
+	var t: float = GameManager.cycle_progress
+	if t > 0.62 or t < 0.18:
+		return 1.0
+	elif t >= 0.55 and t <= 0.62:
+		return (t - 0.55) / 0.07
+	elif t >= 0.18 and t <= 0.25:
+		return 1.0 - (t - 0.18) / 0.07
+	return 0.0
+
+# The world's night tint (game_world.gd::_get_cycle_color's "night" constant,
+# applied to the whole scene via CanvasModulate) — used to compute an exact
+# inverse boost so a "lit" node reads at its full daylight brightness even
+# while everything around it is night-dark, instead of guessing at an
+# additive glow that may or may not show up against the multiply.
+const NIGHT_CANVAS := Color(0.38, 0.42, 0.66)
+const NIGHT_BOOST := Color(1.0 / 0.38, 1.0 / 0.42, 1.0 / 0.66)
+
+# Registers a CanvasItem so _process fades its modulate from its normal
+# day_col up to a night-boosted (lamp-lit) version as _glow_t() rises.
+# strength 1.0 = fully counter the night tint (reads exactly as bright as
+# daytime); lower values stay partway dim.
+func _register_glow(node: CanvasItem, day_col: Color, strength: float = 1.0) -> void:
+	var boost := Color(1, 1, 1, 1).lerp(NIGHT_BOOST, strength)
+	var night_col := Color(day_col.r * boost.r, day_col.g * boost.g, day_col.b * boost.b, day_col.a)
+	node.modulate = day_col
+	_glow_layers.append({"node": node, "day": day_col, "night": night_col})
+
+# A small fixture sprite (bottom-anchored at world x, top_y): a decorative
+# gooseneck lamp that itself glows warmer at night.
+func _add_lamp(x: float, top_y: float, z: int) -> void:
+	var fixture := Sprite2D.new()
+	fixture.texture = _lamp_tex
+	fixture.centered = false
+	fixture.scale = Vector2(SCALE, SCALE)
+	fixture.position = Vector2(x - _lamp_tex.get_width() * SCALE * 0.5, top_y - _lamp_tex.get_height() * SCALE).round()
+	fixture.z_index = z
+	add_child(fixture)
+	_register_glow(fixture, Color(1, 1, 1, 1), 1.0)
+
 func _outline(lbl: Label, px: int = 1) -> void:
 	lbl.add_theme_color_override("font_outline_color", OUTLINE)
 	lbl.add_theme_constant_override("outline_size", px)
@@ -133,6 +231,7 @@ func _build() -> void:
 
 # --- billboards: one wooden board per ridge, story text in Silkscreen -------
 func _build_billboards() -> void:
+	_billboard_spans.clear()
 	for ridge_i in range(world.SWAMP_COUNT - 1):
 		if ridge_i >= BILLBOARD_TEXTS.size():
 			break
@@ -145,11 +244,29 @@ func _build_billboards() -> void:
 		if gy < 0.0:
 			continue
 		var board := _sprite("billboard", mid_x, gy + 2.0, -1, ridge_i % 2 == 1)
-		board.modulate = RED_TINT if (ridge_i % 2 == 0) else BLUE_TINT
+		var tint: Color = RED_TINT if (ridge_i % 2 == 0) else BLUE_TINT
 		var face := BILLBOARD_FACE
 		if board.flip_h:
 			face.position.x = board.texture.get_width() - face.position.x - face.size.x
-		_face_label(board, face, BILLBOARD_TEXTS[ridge_i], 8, INK)
+		var text_lbl := _face_label(board, face, BILLBOARD_TEXTS[ridge_i], 8, INK)
+		var half_w: float = board.texture.get_width() * SCALE * 0.5
+		_billboard_spans.append({"x": mid_x, "half_w": half_w})
+		# Small gooseneck lamp on top; board + ink both self-brighten at night
+		# so the whole face reads regardless of the CanvasModulate night tint.
+		_add_lamp(mid_x, board.position.y, board.z_index)
+		_register_glow(board, tint, 1.0)
+		_register_glow(text_lbl, Color(1, 1, 1, 1), 1.0)
+
+# Nudge a basin-post x away from any billboard (or its posts) it would
+# otherwise overlap, sliding further onto the basin's own side.
+func _clear_of_billboards(x: float, half_w: float) -> float:
+	var margin := 8.0
+	for span in _billboard_spans:
+		var bx: float = span["x"]
+		var min_sep: float = (span["half_w"] as float) + half_w + margin
+		if absf(x - bx) < min_sep:
+			x = bx + (min_sep if x >= bx else -min_sep)
+	return x
 
 # --- basin name posts: name + percent + gallons on a plank at the near rim ---
 func _build_basin_signs() -> void:
@@ -157,7 +274,10 @@ func _build_basin_signs() -> void:
 	for i in range(world.SWAMP_COUNT):
 		var geo: Dictionary = world._get_swamp_geometry(i)
 		var et: Vector2 = geo["entry_top"]
-		var x: float = et.x - 34.0
+		# Just inside the entry rim (same side as before), then nudged clear
+		# of any billboard so the two never overlap — pushing it deeper into
+		# the pool instead risks colliding with that pool's cave entrance.
+		var x: float = _clear_of_billboards(et.x - 34.0, 44.5)
 		var gy: float = world._get_terrain_y_at(x)
 		var post := _sprite("sign_post", x, gy + 2.0, -1)
 		var face := POST_FACE
@@ -169,20 +289,26 @@ func _build_basin_signs() -> void:
 		name_lbl.size = Vector2(fw, 10.0)
 		name_lbl.z_index = -1
 		add_child(name_lbl)
-		var pct_lbl := _label("", 8, Color(0.85, 0.80, 0.62), _num_font)
+		var pct_lbl := _label("", 8, Color(0.85, 0.80, 0.62))
 		pct_lbl.position = Vector2(fx, fy + 11.0).round()
 		pct_lbl.size = Vector2(fw, 9.0)
 		pct_lbl.z_index = -1
 		add_child(pct_lbl)
-		var gal_lbl := _label("", 8, Color(0.62, 0.78, 0.92), _num_font)
+		var gal_lbl := _label("", 8, Color(0.62, 0.78, 0.92))
 		gal_lbl.position = Vector2(fx, fy + 20.0).round()
 		gal_lbl.size = Vector2(fw, 9.0)
 		gal_lbl.z_index = -1
 		add_child(gal_lbl)
-		_basin.append({"name": name_lbl, "pct": pct_lbl, "gal": gal_lbl})
+		_basin.append({"name": name_lbl, "pct": pct_lbl, "gal": gal_lbl, "fx": fx, "fy": fy, "fw": fw})
 		_refresh_basin(i)
 		if GameManager.swamp_states[i]["completed"]:
 			_mark_basin_done(i)
+		# Small lamp fixture; the post itself stays dim at night (per Wes: ok),
+		# but its three text lines self-brighten so they stay legible.
+		_add_lamp(x, post.position.y, post.z_index)
+		_register_glow(name_lbl, Color(1, 1, 1, 1), 0.85)
+		_register_glow(pct_lbl, Color(1, 1, 1, 1), 0.85)
+		_register_glow(gal_lbl, Color(1, 1, 1, 1), 0.85)
 
 func _refresh_basin(i: int) -> void:
 	if i < 0 or i >= _basin.size():
@@ -262,7 +388,7 @@ func _build_cave_mouths() -> void:
 		stake.scale = Vector2(SCALE, SCALE)
 		stake.position = Vector2(-stake.texture.get_width() * SCALE * 0.5, 1.0 - stake.texture.get_height() * SCALE).round()
 		plank.add_child(stake)
-		var lbl := _label(cave_name, 8, PLANK_INK, _num_font)
+		var lbl := _label(cave_name, 8, PLANK_INK)
 		lbl.position = (stake.position + STAKE_L_FACE.position * SCALE).round()
 		lbl.size = (STAKE_L_FACE.size * SCALE).round()
 		lbl.autowrap_mode = TextServer.AUTOWRAP_WORD
@@ -296,6 +422,29 @@ func _sync_caves() -> void:
 		if open_vis:
 			var pulse: float = (sin(world.wave_time * 2.0 + ce["x"] * 0.1) + 1.0) * 0.5
 			(c["glow"] as PointLight2D).energy = lerpf(0.35, 0.8, pulse)
+
+# --- public: pixel-art gallons float text ----------------------------------
+# Called by player.gd (owned by the player track) instead of it building its
+# own smooth-font Label, so the scoop "+N gal" popup gets the same
+# Silkscreen/outline/size treatment as everything else in this file, is
+# formatted through Economy.format_gallons (money-style K/M/B suffixes at
+# large amounts), and is skipped entirely when it would display as zero.
+# Display only — does not touch GameManager.last_scoop_gallons or any
+# gallon math, which stays in player.gd.
+func spawn_gal_float(parent: Node2D, amount: float, local_pos: Vector2 = Vector2(-14.0, -48.0)) -> void:
+	if absf(amount) < 0.00005:
+		return
+	var txt: String = ("+" if amount >= 0.0 else "-") + Economy.format_gallons(absf(amount))
+	var lbl := _label(txt, 8, Color(0.4, 0.8, 1.0))
+	_outline(lbl, 1)
+	lbl.position = local_pos
+	lbl.z_index = 10
+	parent.add_child(lbl)
+	_snap.append(lbl)
+	var tween := lbl.create_tween()
+	tween.tween_property(lbl, "position:y", local_pos.y - 20.0, 0.8)
+	tween.parallel().tween_property(lbl, "modulate:a", 0.0, 0.8)
+	tween.tween_callback(lbl.queue_free)
 
 # --- float text adoption ---------------------------------------------------
 func _on_node_added(n: Node) -> void:
@@ -339,3 +488,33 @@ func _process(_dt: float) -> void:
 	if not _tower_sell_built and world.east_tower_built:
 		_build_tower_sell()
 	_sync_caves()
+	var gt: float = _glow_t()
+	for gl in _glow_layers:
+		(gl["node"] as CanvasItem).modulate = (gl["day"] as Color).lerp(gl["night"], gt)
+	_keep_basin_labels_clear_of_hud()
+
+# Basin post text has a fixed world position but the camera moves with the
+# player, so at some camera framings the label group can land under the
+# HUD's top bar or bottom bar / MENU button. Re-derive each frame from the
+# camera's canvas transform and nudge the whole group (name/pct/gal move
+# together, keeping their relative spacing) just enough to clear both bands.
+func _keep_basin_labels_clear_of_hud() -> void:
+	var vp := get_viewport()
+	if vp == null:
+		return
+	var ct: Transform2D = vp.canvas_transform
+	var ct_inv: Transform2D = ct.affine_inverse()
+	for b in _basin:
+		var fx: float = b["fx"]
+		var fy: float = b["fy"]
+		var top_screen_y: float = (ct * Vector2(fx, fy + 1.0)).y
+		var bottom_screen_y: float = (ct * Vector2(fx, fy + 20.0 + 9.0)).y
+		var shift_screen := 0.0
+		if bottom_screen_y > 360.0 - HUD_BOTTOM_CLEAR:
+			shift_screen = (360.0 - HUD_BOTTOM_CLEAR) - bottom_screen_y
+		elif top_screen_y < HUD_TOP_CLEAR:
+			shift_screen = HUD_TOP_CLEAR - top_screen_y
+		var shift_world: float = ct_inv.basis_xform(Vector2(0, shift_screen)).y
+		(b["name"] as Label).position.y = round(fy + 1.0 + shift_world)
+		(b["pct"] as Label).position.y = round(fy + 11.0 + shift_world)
+		(b["gal"] as Label).position.y = round(fy + 20.0 + shift_world)

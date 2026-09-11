@@ -35,3 +35,7 @@ ERROR: Condition "format != FORMAT_RGB8 && format != FORMAT_RGBA8" is true.
    at: linear_to_srgb (core/io/image.cpp:4196)
    GDScript backtrace (most recent call first):
        [0] _save_debug_shot (res://scripts/game_world.gd:6081)
+ERROR: Condition "format != FORMAT_RGB8 && format != FORMAT_RGBA8" is true.
+   at: linear_to_srgb (core/io/image.cpp:4196)
+   GDScript backtrace (most recent call first):
+       [0] _save_debug_shot (res://scripts/game_world.gd:6081)

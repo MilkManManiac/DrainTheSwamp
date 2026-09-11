@@ -67,13 +67,113 @@ billboard/post/stake/cave textures yet, so nothing had ever rendered.
   matches every other track's night captures right now; general night
   darkness is track 4 (critters+night)'s job, not signage's.
 
+## Round 2 (2026-09-11, same day) — Wes's review fixes
+
+Wes reviewed `pools_1300_day`, `cave_close_2`, `shop_sell_zoom`, `town_night`
+and called five fixes before merge. All five addressed:
+
+1. **Billboards far too big.** Rebaked `billboard.png` at `--height 100`
+   (was `--height 150`) → 352x200 px (was 528x300), world footprint now
+   ~176x100 units, in line with the old procedural billboard's 120x113
+   footprint and well under "3x player height." Recomputed `BILLBOARD_FACE`
+   to match (`Rect2(13, 10, 325, 107)`), re-verified by cropping the face
+   rect back out of the new bake. **Caught a real bug doing this**: the
+   first rebake silently didn't take effect in-game because `bake.py`
+   overwrites the PNG but not its stale `.png.import` sibling, and
+   `capture.py`'s `needs_import()` only checks *whether* an `.import` file
+   exists, not whether it matches the source — so the game kept rendering
+   the old 528x300 texture at the old scale until the import was forced
+   (`rm billboard.png.import && godot --headless --import`). Left as a
+   pitfall note for other tracks re-baking an asset a second time.
+2. **Non-Silkscreen text on posts/planks, "DRA INED" gap.** The basin
+   post's `%`/gallons labels and the cave name plank were on
+   `VT323-Regular.ttf` (`_num_font`), not Silkscreen — that VT323 use is
+   what Wes was seeing as "thin, blurry." Removed `_num_font` entirely;
+   every Label in the file now goes through the single Silkscreen
+   `_font` at size 8 or 16, integer positions (already `.round()`'d).
+   The "DRA INED" mid-word gap was a VT323 rendering artifact at that size
+   and is gone with the font switch.
+3. **Basin post overlapping billboard legs.** `_build_billboards` now
+   records each board's `{x, half_w}` span; `_build_basin_signs` runs the
+   post's x through a new `_clear_of_billboards()` that nudges it away from
+   any span it would overlap (half-widths + 8px margin). Tried moving the
+   post to the opposite side of the entry rim first (into the pool) — reverted
+   that after it turned out to sometimes land behind/inside that pool's cave
+   mound (higher z_index, fully occludes a smaller sprite behind it); kept
+   the original ridge-side offset and let the new clear-of-billboards nudge
+   do the work instead.
+4. **Illegible at night.** Added a tiny hand-pixelled gooseneck lamp
+   (`_make_lamp_texture()`, a procedural 6x10 image nearest-doubled to
+   12x20 — no new Gemini spend) atop every billboard and basin post.
+   First attempt used a `PointLight2D` / additive light-cone, which turned
+   out to barely register against `CanvasModulate`'s night tint (confirmed
+   by direct pixel math, not just a hunch) — replaced with `_register_glow()`,
+   which lerps each lit node's `modulate` from its day color up to
+   `day_color * (1/night_tint)` as `_glow_t()` (a local copy of
+   `game_world.gd`'s town-light curve, reading `GameManager.cycle_progress`)
+   rises, i.e. it exactly cancels the night darkening rather than guessing at
+   an additive amount. Billboards (board + text) go to full strength; basin
+   posts keep the wood dim per Wes ("posts can stay dim") but boost the three
+   text lines to 0.85 strength so they stay legible.
+5. **Float text / SELL not shown.** First pass verified `+0.015 gal` with a
+   temporary local test spawn that reproduced `player.gd::_spawn_floating_text`
+   exactly and confirmed `_on_node_added`'s adoption path works — but that
+   was testing the adoption path in isolation, not the real one. Re-captured
+   the SELL stake at the hardware store from two angles; the sign itself
+   renders correctly but a camel prop is parked directly in front of it in
+   every capture (not a camera-timing issue — it doesn't move), so only one
+   letter is visible. Camel placement is a props-track issue, not fixed here
+   (see integrator notes).
+6. **Float text was actually never adopted in real play** (caught from
+   `v3/player`'s own `scoop_splash.png`: "+0.0000 gal" rendering ~60px tall
+   in smooth Noto). Root cause: `player.gd::_spawn_floating_text` adds its
+   Label under the *player* node, and depending on where the player is
+   parented that walk-up in `_on_node_added` may never reach `world`, so the
+   label is skipped and stays unstyled. Fixed by giving `player.gd` (not
+   owned by this track) the minimum possible edit: the scoop-gallons call
+   site now does `get_tree().get_first_node_in_group("signage")` and calls a
+   new public `signage.spawn_gal_float(self, output)` when present, falling
+   back to the old inline text if signage isn't loaded. `spawn_gal_float()`
+   lives entirely in `signage.gd`: Silkscreen 8px with a 1px outline (same
+   family as everything else in this file), text formatted through
+   `Economy.format_gallons()` (money-style K/M/B suffixes) instead of
+   player.gd's ad hoc `%.1f/%.2f/%.4f` picks, and it returns immediately
+   without spawning anything when `absf(amount) < 0.00005` (displays as
+   zero). Gallon math in player.gd is untouched — only the display call
+   changed. Verified with a temporary debug spawn calling the *real*
+   `spawn_gal_float()` directly (`float_text_v2.png`: "+0.0150 GAL" in
+   pixel Silkscreen, correctly small next to the player; a paired
+   zero-amount call produced nothing); debug code removed before commit.
+7. **Basin labels colliding with the HUD bottom bar / MENU button** (Wes,
+   from a 1080p `hud verify_day.png` at camx 900: the BOG post's "DRAINED"
+   line ran under the MENU button). Basin post labels have a fixed world
+   position but the camera follows the player, so at some framings the
+   label group can land under the HUD's top or bottom bar. Added
+   `_keep_basin_labels_clear_of_hud()`, run every `_process`: it reads the
+   live `Viewport.canvas_transform` (world → the project's logical 640x360
+   viewport, resolution-independent under `stretch/mode="canvas_items"`),
+   and if the basin label group's screen-space top/bottom would land inside
+   the top 33px or bottom 31px of that 360-tall space (Wes's "66px / 62px
+   at 720p", halved), shifts all three lines together by exactly enough to
+   clear it. Verified two ways: `hud_clear_900.png` / `hud_clear_1300.png`
+   (normal framing, BOG/SWAMP posts sit well clear, matching the pre-fix
+   captures — no regression) and `hud_clear_zoom.png` (`camx 4550 --zoom
+   2.2`, deliberately pushing "THE ATLANTIC" post toward the bottom edge)
+   showing it held clear of the bottom bar instead of sliding under it.
+
 ## What is still old / out of scope here
 
 - Nothing left in signage's own scope. All five "done when" items (wooden
   billboards, name posts, float text, SELL label, cave mouths) are built and
-  wired.
+  wired, and all seven of Wes's round-2 notes are addressed.
 - Cave interior art, the HUD, critters, and general night lighting are other
-  tracks.
+  tracks. Cave name planks (`_build_cave_mouths`) were not in scope of
+  Wes's night-legibility note (only "billboards and posts") and are still
+  dim at night — flagging in case that's wanted later.
+- Dusk (`--tod 0.62`) blows the billboard out white in a full-screen sun
+  bloom when the sun sits directly behind it — pre-existing lighting/bloom
+  behavior (present before this round too), not something this track
+  controls.
 
 ## Notes for the integrator
 
@@ -81,12 +181,27 @@ billboard/post/stake/cave textures yet, so nothing had ever rendered.
   one instantiation block next to `skin`, and `if V3_SIGNAGE: return` /
   `if not V3_SIGNAGE:` guards around the four old builders
   (`_build_swamp_labels`, the two inline "SELL" Label blocks in
-  `_build_shop`/`_build_east_tower`, `_build_billboards`).
-- Props track: the camel (or whatever prop patrols near the hardware store)
-  can stand in front of the new SELL stake at world x≈24. Not fixed here —
-  positions/AI are props' file.
+  `_build_shop`/`_build_east_tower`, `_build_billboards`). Unchanged this
+  round.
+- **`scripts/player/player.gd` was touched** (not this track's file) — one
+  call site only (`_on_scoop` / the gallons-float-text block), swapped for a
+  `get_tree().get_first_node_in_group("signage")` lookup + call to the new
+  `signage.spawn_gal_float()`, with the old inline-Label code kept as a
+  fallback when signage isn't present. No gallon math changed. Flagging for
+  the player track to review; happy to move the routing helper if they'd
+  rather own the call site differently.
+- Props track: the camel (or whatever prop parks near the hardware store)
+  stands in front of the SELL stake at world x≈24, permanently in this save
+  state (not just passing through). Not fixed here — positions/AI are
+  props' file; worth a look from that track before ship.
 - `sign_stake_l.png` reuses the `sign-post.jpg` Gemini source at a different
   bake size rather than spending a Gemini call; flagging in case another
   track wants a visually distinct long-stake asset later.
-- Gemini budget used by this session: 0 (all baked from existing
+- Gemini budget used across both rounds: 0 (all baked from existing
   `assets/gen/*` sources).
+- If any other track re-bakes an existing `assets/art/drainsville/*.png` a
+  second time at a different size, delete its stale `.png.import` first (or
+  run `godot --headless --import`) — see bug note in fix #1 above.
+- `signage.gd` now exposes one public method other tracks can call:
+  `spawn_gal_float(parent: Node2D, amount: float, local_pos := Vector2(-14, -48))`
+  — pixel-styled floating gallons text, formatted, skips zero amounts.
