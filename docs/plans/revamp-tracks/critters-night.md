@@ -146,6 +146,30 @@ Before/after crops (3x zoom) at the coordinator's exact coordinates:
 - `pools_day_d0.png` (tod 0.3): fog alpha is 0 by day in the existing
   formula (unchanged) — confirmed no similar patches show.
 
+## Round 5 (coordinator review: hard horizontal seam across the screen)
+
+Confirmed the coordinator's guess: `night.gd`'s floor wash was a flat
+`ColorRect` (`position.y = 20`, `height = 520`) with a full, uniform alpha
+the instant it started — a hard top edge that, once the sky above it stayed
+unlit, read as a dead-straight seam crossing the whole screen at night
+(before/after crops below, x 0-1280 y 320-400, confirm both the defect and
+the fix at the same coordinates).
+
+Fix: added `_build_vertical_falloff_texture()` — a `GradientTexture2D`,
+`FILL_LINEAR` top-to-bottom, transparent at offset 0.0 ramping to full alpha
+by offset 0.10 (≈ 52 world units on the 520-tall band, inside the
+requested 40-60 art px), flat for the rest. `_floor_wash` changed from a
+`ColorRect` to a `Sprite2D` using this texture, `TEXTURE_FILTER_LINEAR` on
+the node, stretched to the same world footprint the rect used to cover.
+Same `modulate.a` drive from `update()`, just renamed from `.color.a`.
+
+Verified: before/after crops (x 0-1280, y 320-400) in both
+`town_night.png` and `pools_night_d0.png` (tod 0.85) — hard line gone,
+smooth fade. Also checked `pools_dusk_d0.png` / `town_dusk.png` (tod 0.62,
+new this round): no seam, because night_alpha is 0 there in the existing,
+unchanged threshold logic (the wash is fully transparent by day/dusk
+regardless of shape).
+
 ## Captures (read back)
 
 `_screenshots/revamp-2026-09-11/critters-night/`:
