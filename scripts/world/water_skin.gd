@@ -14,8 +14,12 @@ const SHADER := preload("res://shaders/pixel_water.gdshader")
 const RIM := 2.0   # foam rim thickness, art px
 
 # Palettes: [top, surf, mid, deep, hi]
+# Murky was originally a yellow-olive that sat almost on top of the grass/mud
+# hue (both ~equal R/G, low B) and vanished by day. Shifted blue-forward so it
+# reads as swamp WATER (silty, but still water) against the green banks at any
+# time of day; kept darker than CLEAR so heal still visibly brightens it.
 const MURKY: Array = [
-	Color(0.60, 0.60, 0.34), Color(0.30, 0.34, 0.14), Color(0.19, 0.22, 0.09), Color(0.10, 0.12, 0.05), Color(0.84, 0.80, 0.48)]
+	Color(0.40, 0.46, 0.38), Color(0.20, 0.30, 0.28), Color(0.12, 0.20, 0.20), Color(0.06, 0.11, 0.13), Color(0.68, 0.70, 0.56)]
 const CLEAR: Array = [
 	Color(0.74, 0.90, 0.78), Color(0.18, 0.60, 0.58), Color(0.10, 0.42, 0.46), Color(0.05, 0.24, 0.30), Color(1.00, 0.92, 0.62)]
 const NIGHT: Array = [
@@ -119,14 +123,20 @@ func _poly(i: int) -> PackedVector2Array:
 	return out
 
 # Shrink the water polygon by RIM on the bank sides, keep the top at the waterline.
+# Small/narrow basins can collapse under a miter offset (Geometry2D returns
+# empty, or a degenerate sliver) — fall back to the unshrunk polygon so the
+# banded water always draws; losing the 2px rim inset there is a minor polish
+# loss, not a basin reading as flat/invisible water.
 func _inner(poly: PackedVector2Array, surface_y: float) -> PackedVector2Array:
 	var res: Array = Geometry2D.offset_polygon(poly, -RIM, Geometry2D.JOIN_MITER)
-	if res.is_empty():
-		return PackedVector2Array()
-	var best: PackedVector2Array = res[0]
-	for p in res:
-		if p.size() > best.size():
-			best = p
+	var best: PackedVector2Array = PackedVector2Array()
+	if not res.is_empty():
+		best = res[0]
+		for p in res:
+			if p.size() > best.size():
+				best = p
+	if best.size() < 3:
+		best = poly
 	var out := PackedVector2Array()
 	for v in best:
 		if v.y < surface_y + RIM + 0.6:
