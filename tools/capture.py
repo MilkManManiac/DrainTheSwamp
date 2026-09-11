@@ -14,6 +14,8 @@ Flags map 1:1 to the env hooks in game_world.gd / cave_base.gd / player.gd:
   --wait S      seconds to let the game run before killing it (default 7)
   --interval S  DTS_SHOT_INTERVAL (default 1.0)
   --scene RES   scene to boot (default res://scenes/main.tscn = the game world)
+Any other DTS_* var in the environment passes through, e.g. DTS_UI=shop|menu|touch
+(main.gd) opens that panel / shows the touch controls for a HUD capture.
 
 Runs `--headless --import` first whenever a PNG under assets/ has no .import
 sibling or .godot/ is missing (new art, fresh worktree). Works from any

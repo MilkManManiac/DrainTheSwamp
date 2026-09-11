@@ -1,4 +1,14 @@
 extends CanvasLayer
+# On-screen touch controls (autoload). v3 pixel skin: wood plank buttons from
+# assets/art/ui/touch_*.png (drawn by tools/bake/ui_kit.py), Silkscreen label
+# on SCOOP. Input wiring is unchanged (Input.action_press/release).
+#
+# Visibility: the saved GameManager.touch_controls_enabled flag only makes the
+# controls *eligible*. They show once this session has seen a real screen
+# touch (first tap on a phone / tablet) or the menu toggle was used; a desktop
+# never sees a touch, so it stays clean. The old code switched them on for
+# any machine that merely reported a touchscreen (touch-capable laptops), and
+# that flag is still in older saves, hence the session gate.
 
 var enabled: bool = false
 var _left_pressed: bool = false
@@ -10,6 +20,19 @@ var right_btn: TouchScreenButton
 var scoop_btn: TouchScreenButton
 
 var _container: Control
+var _touched: bool = false  # a real screen touch happened this session
+
+func has_touched() -> bool:
+	## True once this session has seen a real InputEventScreenTouch. Used by
+	## menu_panel.gd to decide whether the "Touch Controls" row belongs on
+	## screen at all (a desktop session never touches, so it never should).
+	return _touched
+
+const TEX := {
+	"<": ["res://assets/art/ui/touch_left.png", "res://assets/art/ui/touch_left_p.png"],
+	">": ["res://assets/art/ui/touch_right.png", "res://assets/art/ui/touch_right_p.png"],
+	"SCOOP": ["res://assets/art/ui/touch_scoop.png", "res://assets/art/ui/touch_scoop_p.png"],
+}
 
 func _ready() -> void:
 	layer = 12
@@ -18,92 +41,48 @@ func _ready() -> void:
 	_container = Control.new()
 	_container.set_anchors_preset(Control.PRESET_FULL_RECT)
 	_container.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_container.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	add_child(_container)
 
-	left_btn = _create_button("<", Vector2(50, 50))
-	right_btn = _create_button(">", Vector2(50, 50))
-	scoop_btn = _create_button("SCOOP", Vector2(72, 72))
+	left_btn = _create_button("<")
+	right_btn = _create_button(">")
+	scoop_btn = _create_button("SCOOP")
 
-	# Position: left side bottom, above bottom bar (~40px from bottom)
-	# Viewport is 640x360
-	left_btn.position = Vector2(8, 260)
-	right_btn.position = Vector2(66, 260)
-	scoop_btn.position = Vector2(560, 248)
+	# Viewport is 640x360: arrows bottom-left above the tool card, SCOOP
+	# bottom-right above the MENU card.
+	left_btn.position = Vector2(8, 276)
+	right_btn.position = Vector2(56, 276)
+	scoop_btn.position = Vector2(576, 260)
 
 	_container.add_child(left_btn)
 	_container.add_child(right_btn)
 	_container.add_child(scoop_btn)
 
-	# Auto-detect touchscreen on first run
-	if not GameManager.touch_controls_enabled:
-		if DisplayServer.is_touchscreen_available():
-			GameManager.touch_controls_enabled = true
+	_deactivate()
 
-	# Apply initial state
-	if GameManager.touch_controls_enabled:
+func _input(event: InputEvent) -> void:
+	if enabled or _touched:
+		return
+	if event is InputEventScreenTouch and event.pressed:
+		_touched = true
+		GameManager.touch_controls_enabled = true
 		_activate()
-	else:
-		_deactivate()
 
-func _create_button(text: String, btn_size: Vector2) -> TouchScreenButton:
+func _create_button(text: String) -> TouchScreenButton:
 	var btn := TouchScreenButton.new()
-
-	# Create a texture from a styled rect
-	var img := Image.create(int(btn_size.x), int(btn_size.y), false, Image.FORMAT_RGBA8)
-	var bg_color := Color(0.15, 0.2, 0.25, 0.45)
-	var border_color := Color(0.4, 0.5, 0.6, 0.5)
-	var radius: int = 6
-
-	# Fill background
-	img.fill(bg_color)
-	# Draw border (top, bottom, left, right edges)
-	for x in range(int(btn_size.x)):
-		for y in range(2):
-			img.set_pixel(x, y, border_color)
-			img.set_pixel(x, int(btn_size.y) - 1 - y, border_color)
-	for y in range(int(btn_size.y)):
-		for x in range(2):
-			img.set_pixel(x, y, border_color)
-			img.set_pixel(int(btn_size.x) - 1 - x, y, border_color)
-
-	var tex := ImageTexture.create_from_image(img)
-	btn.texture_normal = tex
-
-	# Pressed state
-	var img_pressed := Image.create(int(btn_size.x), int(btn_size.y), false, Image.FORMAT_RGBA8)
-	img_pressed.fill(Color(0.25, 0.35, 0.45, 0.6))
-	for x in range(int(btn_size.x)):
-		for y in range(2):
-			img_pressed.set_pixel(x, y, Color(0.5, 0.65, 0.8, 0.7))
-			img_pressed.set_pixel(x, int(btn_size.y) - 1 - y, Color(0.5, 0.65, 0.8, 0.7))
-	for y in range(int(btn_size.y)):
-		for x in range(2):
-			img_pressed.set_pixel(x, y, Color(0.5, 0.65, 0.8, 0.7))
-			img_pressed.set_pixel(int(btn_size.x) - 1 - x, y, Color(0.5, 0.65, 0.8, 0.7))
-	btn.texture_pressed = ImageTexture.create_from_image(img_pressed)
-
+	btn.texture_normal = load(TEX[text][0])
+	btn.texture_pressed = load(TEX[text][1])
 	btn.passby_press = true
 
-	# Add label as child
-	var label := Label.new()
-	label.text = text
-	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	label.set_anchors_preset(Control.PRESET_FULL_RECT)
-	label.size = btn_size
-	label.add_theme_color_override("font_color", Color(0.85, 0.9, 0.95, 0.8))
-	label.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.5))
-	label.add_theme_constant_override("shadow_offset_x", 1)
-	label.add_theme_constant_override("shadow_offset_y", 1)
 	if text == "SCOOP":
-		label.add_theme_font_size_override("font_size", 14)
-	else:
-		label.add_theme_font_size_override("font_size", 20)
-	btn.add_child(label)
+		var label := PixelUI.caption("SCOOP", Color(0.94, 0.88, 0.72), true)
+		label.position = Vector2(0, 40)
+		label.size = Vector2(56, 12)
+		label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		btn.add_child(label)
 
 	btn.pressed.connect(_on_button_pressed.bind(text))
 	btn.released.connect(_on_button_released.bind(text))
-
 	return btn
 
 func _on_button_pressed(which: String) -> void:

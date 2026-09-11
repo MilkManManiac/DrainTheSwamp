@@ -68,7 +68,30 @@ var _basin_in_range: bool = false
 var _basin_sell_cooldown: float = 0.0
 
 func _ready() -> void:
+	# Dev-only (v3 hud track): capturing a cave scene directly via
+	# `capture.py --scene res://scenes/caves/<x>.tscn` skips the overworld's
+	# normal cave-entrance flow, so GameManager.in_cave/cave_air never get
+	# set and the HUD's air bar stays hidden. No-op without DTS_SHOT.
+	if OS.get_environment("DTS_SHOT") != "" and not GameManager.in_cave:
+		GameManager.enter_cave(cave_id)
+		# DTS_PROMPT=1 also unlocks the P3 sell-basin (in-memory only, never
+		# saved) so tools/capture.py can shoot its "NA COURIER" PixelUI.prompt()
+		# tag — otherwise unreachable without hours of real play.
+		if OS.get_environment("DTS_PROMPT") != "":
+			GameManager.prestige_count = maxi(GameManager.prestige_count, 3)
+			# Also force any loot_node/lore_wall hint_label visible so their
+			# PixelUI.prompt() can be captured without real play (they're
+			# normally hidden until the pool completes / the player walks up).
+			call_deferred("_debug_force_hint_prompts")
 	_setup_cave()
+
+func _debug_force_hint_prompts(node: Node = self) -> void:
+	for child in node.get_children():
+		var hint = child.get("hint_label")
+		if hint is Label:
+			child.visible = true
+			hint.visible = true
+		_debug_force_hint_prompts(child)
 
 func _setup_cave() -> void:
 	# CanvasModulate — moody but readable. Lifted further so the back wall + parallax
@@ -2049,10 +2072,7 @@ func _build_sell_basin() -> void:
 		Vector2(-8, -6), Vector2(8, -6), Vector2(6, -2), Vector2(-6, -2)])
 	liquid.color = Color(0.35, 0.85, 0.55, 0.85)
 	root.add_child(liquid)
-	var tag := Label.new()
-	tag.text = "NA COURIER"
-	tag.add_theme_font_size_override("font_size", 6)
-	tag.add_theme_color_override("font_color", Color(0.55, 0.85, 0.60, 0.85))
+	var tag := PixelUI.prompt("NA COURIER", Color(0.55, 0.85, 0.60, 0.9))
 	tag.position = Vector2(-22, -20)
 	root.add_child(tag)
 
