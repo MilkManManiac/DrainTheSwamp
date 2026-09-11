@@ -9,6 +9,7 @@ const FRICTION: float = 2000.0
 
 signal shop_requested()
 signal cave_entrance_requested(cave_id: String)
+signal scooped()  # v3 skin plays its scoop strip off this (fired with the arm tween)
 
 var near_water: bool = false
 var near_swamp_index: int = -1
@@ -66,6 +67,8 @@ var tool_visuals: Array[ColorRect] = []
 
 var _hdr_glow: bool = false  # Forward+/Mobile: lantern emits overbright to bloom under HDR glow
 var _shot_camx: float = NAN  # debug: env DTS_CAMX parks the player at a world X for screenshots
+var _dbg_lantern: bool = false  # debug: env DTS_LANTERN=1 lights the lantern without the upgrade (captures)
+var _skin: Node = null  # v3 skin — queried for the tool's on-screen anchor (splash origin)
 
 func _ready() -> void:
 	add_to_group("player")
@@ -73,12 +76,14 @@ func _ready() -> void:
 	var cx: String = OS.get_environment("DTS_CAMX")
 	if cx != "":
 		_shot_camx = cx.to_float()
+	_dbg_lantern = OS.get_environment("DTS_LANTERN") != ""
 	GameManager.tool_changed.connect(func(_d: Dictionary) -> void: _update_tool_visual())
 	_update_tool_visual()
 	_setup_lantern()
 	var skin := preload("res://scripts/player/player_skin.gd").new()
 	skin.player = self
 	add_child(skin)
+	_skin = skin
 
 func _unhandled_input(event: InputEvent) -> void:
 	# Dev cheats (F4/F5) only available in debug builds — never in Steam/app releases
@@ -365,6 +370,7 @@ func _scoop_feedback() -> void:
 	flash_tween.tween_property(visual, "modulate", Color.WHITE, 0.15)
 
 	# Scoop arm animation
+	scooped.emit()
 	var scoop_tween := create_tween()
 	scoop_tween.tween_property(arm_right, "rotation", -0.5, 0.08)
 	scoop_tween.tween_property(arm_right, "rotation", 0.0, 0.12)
@@ -406,73 +412,80 @@ func _flash_red() -> void:
 	visual.modulate = Color(2.0, 0.3, 0.3)
 	flash_tween.tween_property(visual, "modulate", Color.WHITE, 0.25)
 
+## Splash droplet palette — matches scripts/world/water_skin.gd's CLEAR bands
+## (surf/hi) so scoop splash reads as the same water as the basins, not a
+## generic flat sky-blue. 2026-09-11 review: dots were several art px across
+## (several TIMES the art grid) and pure flat blue; now 1-2 art px, water-teal,
+## with a light highlight variant for sparkle.
+const SPLASH_MAIN := Color(0.18, 0.60, 0.58, 1.0)
+const SPLASH_DEEP := Color(0.10, 0.42, 0.46, 1.0)
+const SPLASH_HI := Color(0.74, 0.90, 0.78, 1.0)
+
 func _spawn_splash() -> void:
 	var tid: String = GameManager.current_tool_id
 	var count: int = 4
-	var spread_x: float = 10.0
-	var spread_y: float = 16.0
-	var dot_size: Vector2 = Vector2(2, 2)
-	var life: float = 0.4
-	var base_color: Color = Color(0.4, 0.65, 0.85, 0.8)
+	var spread_x: float = 8.0
+	var spread_y: float = 10.0
+	var dot_size: float = 1.0
+	var life: float = 0.28
 	var shake_amount: float = 0.0
 
 	match tid:
 		"hands":
 			count = 3
-			spread_x = 6.0
-			spread_y = 10.0
-			dot_size = Vector2(1, 1)
-			life = 0.3
+			spread_x = 5.0
+			spread_y = 6.0
+			life = 0.22
 		"spoon":
 			count = 4
-			spread_x = 8.0
-			spread_y = 12.0
+			spread_x = 6.0
+			spread_y = 8.0
+			life = 0.24
 		"cup":
 			count = 5
-			spread_x = 10.0
-			spread_y = 14.0
+			spread_x = 7.0
+			spread_y = 9.0
+			life = 0.26
 		"bucket":
 			count = 8
-			spread_x = 16.0
-			spread_y = 22.0
-			dot_size = Vector2(3, 3)
-			life = 0.5
+			spread_x = 10.0
+			spread_y = 13.0
+			dot_size = 2.0
+			life = 0.32
 			shake_amount = 1.0
 		"shovel":
 			count = 10
-			spread_x = 18.0
-			spread_y = 24.0
-			dot_size = Vector2(3, 2)
-			life = 0.5
+			spread_x = 11.0
+			spread_y = 14.0
+			dot_size = 2.0
+			life = 0.32
 			shake_amount = 1.5
 		"wheelbarrow":
 			count = 14
-			spread_x = 24.0
-			spread_y = 28.0
-			dot_size = Vector2(3, 3)
-			life = 0.55
+			spread_x = 13.0
+			spread_y = 16.0
+			dot_size = 2.0
+			life = 0.36
 			shake_amount = 2.0
 		"barrel":
 			count = 18
-			spread_x = 28.0
-			spread_y = 32.0
-			dot_size = Vector2(4, 3)
-			life = 0.6
+			spread_x = 15.0
+			spread_y = 18.0
+			dot_size = 2.0
+			life = 0.38
 			shake_amount = 2.5
 		"water_wagon":
 			count = 24
-			spread_x = 32.0
-			spread_y = 36.0
-			dot_size = Vector2(4, 4)
-			life = 0.65
+			spread_x = 17.0
+			spread_y = 20.0
+			dot_size = 2.0
+			life = 0.4
 			shake_amount = 3.0
 		"hose":
 			count = 8
-			spread_x = 20.0
-			spread_y = 6.0
-			dot_size = Vector2(1, 1)
-			life = 0.3
-			base_color = Color(0.5, 0.75, 0.9, 0.6)
+			spread_x = 12.0
+			spread_y = 4.0
+			life = 0.22
 
 	# Screen shake via camera
 	if shake_amount > 0.0:
@@ -482,18 +495,42 @@ func _spawn_splash() -> void:
 			shake_tw.tween_property(cam, "offset", Vector2(randf_range(-shake_amount, shake_amount), randf_range(-shake_amount, shake_amount)), 0.05)
 			shake_tw.tween_property(cam, "offset", Vector2.ZERO, 0.1)
 
+	# Origin: the tool's actual on-screen grip point this frame (hand tool or
+	# scoop overlay), not a fixed player-local offset — 2026-09-11 review:
+	# the old fixed "-4" plus the rise arc's "-spread_y" read as head height.
+	var origin: Vector2 = Vector2(0.0, -8.0)
+	if _skin != null and _skin.has_method("get_tool_anchor_world"):
+		origin = to_local(_skin.get_tool_anchor_world())
+
 	for i in range(count):
 		var dot := ColorRect.new()
-		dot.size = dot_size
-		dot.color = base_color
-		dot.position = Vector2(randf_range(-spread_x * 0.5, spread_x * 0.5), -4)
+		var sz: float = dot_size if randf() > 0.35 else maxf(1.0, dot_size - 1.0)
+		dot.size = Vector2(sz, sz)
+		dot.color = SPLASH_HI if randf() < 0.2 else (SPLASH_MAIN if randf() < 0.7 else SPLASH_DEEP)
+		var start: Vector2 = origin + Vector2(randf_range(-spread_x * 0.5, spread_x * 0.5), randf_range(-1.0, 1.0))
+		dot.position = start
 		dot.z_index = 8
 		add_child(dot)
 
+		# A few ms of stagger so a big splash (water_wagon: 24 dots) fans out
+		# from the first frame instead of drawing as one solid bar of dots
+		# all moving in lockstep.
+		var delay: float = randf_range(0.0, 0.05)
+		# Short ballistic arc: rise (ease out) then fall (ease in), fading the
+		# whole way — a real arc + fade instead of one straight random hop.
+		var side: float = randf_range(-spread_x, spread_x)
+		var peak: Vector2 = start + Vector2(side * 0.4, -spread_y)
+		var land: Vector2 = start + Vector2(side, randf_range(-1.0, 2.0))
 		var tw := create_tween()
-		tw.tween_property(dot, "position", dot.position + Vector2(randf_range(-spread_x, spread_x), randf_range(-spread_y, -spread_y * 0.3)), life)
-		tw.parallel().tween_property(dot, "modulate:a", 0.0, life)
+		tw.tween_interval(delay)
+		tw.tween_property(dot, "position", peak, life * 0.4).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+		tw.tween_property(dot, "position", land, life * 0.6).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
 		tw.tween_callback(dot.queue_free)
+		# Fade must finish by the time the position tween above frees the dot
+		# (delay + life), so keep delay+duration <= life.
+		var fade_tw := create_tween()
+		fade_tw.tween_interval(delay + life * 0.15)
+		fade_tw.tween_property(dot, "modulate:a", 0.0, life * 0.85)
 
 	# Shovel-specific: dirt chunk particles
 	if tid == "shovel":
@@ -797,6 +834,8 @@ func _setup_lantern() -> void:
 
 func _update_lantern(delta: float) -> void:
 	var lantern_level: int = GameManager.upgrades_owned["lantern"]
+	if _dbg_lantern:
+		lantern_level = 1
 	var darkness: float = GameManager.get_darkness_factor()
 	var should_be_active: bool = lantern_level > 0 and darkness > 0.05
 
@@ -814,11 +853,11 @@ func _update_lantern(delta: float) -> void:
 	var flicker: float = 1.0 + sin(lantern_flicker_time * 12.0) * 0.08 + sin(lantern_flicker_time * 7.3) * 0.05 + sin(lantern_flicker_time * 19.7) * 0.03
 
 	# Scale energy by darkness factor (gentle at dusk, full at night)
-	var base_energy: float = GameManager.get_lantern_energy()
+	var base_energy: float = 3.0 if _dbg_lantern else GameManager.get_lantern_energy()
 	lantern_light.energy = base_energy * darkness * flicker
 
 	# Texture scale: radius to texture mapping
-	var radius: float = GameManager.get_lantern_radius()
+	var radius: float = 200.0 if _dbg_lantern else GameManager.get_lantern_radius()
 	lantern_light.texture_scale = (radius * 2.0) / 256.0 * 0.88
 
 	# Animate flame color and size (overbright on HDR so it blooms into a warm halo)

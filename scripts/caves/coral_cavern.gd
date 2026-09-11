@@ -103,6 +103,9 @@ func _setup_loot_and_lore() -> void:
 	lore1.position = Vector2(900, _get_cave_terrain_y_at(900))
 	add_child(lore1)
 
+	if V3_CAVES:
+		return  # v3 pixel kit (cave_skin.gd) draws the decoration now; old ColorRect/Line2D clutter below is quarantined
+
 	# Coral formations (organic branching shapes)
 	for i in range(14):
 		var cx: float = randf_range(100, 2500)

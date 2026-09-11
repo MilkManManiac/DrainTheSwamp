@@ -24,7 +24,7 @@ var newspaper_headline: Label = null
 var newspaper_subhead: Label = null
 var newspaper_body: Label = null
 var newspaper_prompt: Label = null
-var newspaper_paper_style: StyleBoxFlat = null
+var newspaper_paper_style: StyleBoxTexture = null
 var newspaper_corner_fold: Polygon2D = null
 var newspaper_coffee_stain: Polygon2D = null
 var newspaper_photo_label: Label = null
@@ -109,45 +109,36 @@ func _ready() -> void:
 	_init_milestone_newspapers()
 	_build_newspaper_overlay()
 
+const POPUP_MAX_WIDTH: float = 260.0
+
 func _build_popup() -> void:
+	# v3 hud: pixel wood card (was a flat StyleBoxFlat + default font — the
+	# "HOLD SPACE to scoop water" hint popup Wes flagged as plain/smooth).
+	# Shrink-wraps to content now (round 5: was a fixed 320x210-ish box with
+	# one line crammed at the top and the rest empty plank) — width is capped
+	# so long toast text (the buyback-window / audit lines) still wraps
+	# instead of stretching edge to edge; height comes from the wrapped text.
 	cave_popup = PanelContainer.new()
 	cave_popup.visible = false
+	cave_popup.theme = PixelUI.THEME
 	cave_popup.anchors_preset = Control.PRESET_CENTER_BOTTOM
-	cave_popup.position = Vector2(160, 280)
-	cave_popup.size = Vector2(320, 80)
-
-	var style := StyleBoxFlat.new()
-	style.bg_color = Color(0.1, 0.08, 0.06, 0.92)
-	style.border_color = Color(0.6, 0.5, 0.3, 0.8)
-	style.border_width_top = 2
-	style.border_width_bottom = 2
-	style.border_width_left = 2
-	style.border_width_right = 2
-	style.corner_radius_top_left = 4
-	style.corner_radius_top_right = 4
-	style.corner_radius_bottom_left = 4
-	style.corner_radius_bottom_right = 4
-	style.content_margin_left = 12
-	style.content_margin_right = 12
-	style.content_margin_top = 8
-	style.content_margin_bottom = 8
-	cave_popup.add_theme_stylebox_override("panel", style)
+	cave_popup.add_theme_stylebox_override("panel", PixelUI.frame(10, 8))
 
 	var vbox := VBoxContainer.new()
+	vbox.add_theme_constant_override("separation", 6)
+	vbox.alignment = BoxContainer.ALIGNMENT_CENTER
 	cave_popup.add_child(vbox)
 
-	popup_label = Label.new()
-	popup_label.text = ""
-	popup_label.add_theme_font_size_override("font_size", 12)
-	popup_label.add_theme_color_override("font_color", Color(0.9, 0.85, 0.7))
+	popup_label = PixelUI.caption("", PixelUI.CREAM, true)
 	popup_label.autowrap_mode = TextServer.AUTOWRAP_WORD
-	popup_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	popup_label.custom_minimum_size = Vector2(POPUP_MAX_WIDTH, 0)
 	vbox.add_child(popup_label)
 
 	popup_close_btn = Button.new()
 	popup_close_btn.text = "[Close]"
-	popup_close_btn.add_theme_font_size_override("font_size", 10)
-	popup_close_btn.flat = true
+	popup_close_btn.custom_minimum_size = Vector2(72, 14)
+	popup_close_btn.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	PixelUI.button(popup_close_btn)
 	popup_close_btn.pressed.connect(_close_popup)
 	vbox.add_child(popup_close_btn)
 
@@ -214,9 +205,14 @@ func show_popup(text: String, auto_close_time: float = 0.0) -> void:
 	cave_popup.visible = true
 	popup_timer = 0.0
 	popup_auto_close = auto_close_time
-	# Center horizontally
+	# Reposition after the container re-sorts to its (now correct,
+	# shrink-wrapped) minimum size for this text — sizing a Control the same
+	# frame its content changes reads its stale pre-resize size.
+	call_deferred("_position_cave_popup")
+
+func _position_cave_popup() -> void:
 	var vp_size: Vector2 = get_viewport().get_visible_rect().size
-	cave_popup.position = Vector2((vp_size.x - 320) * 0.5, vp_size.y - 100)
+	cave_popup.position = Vector2((vp_size.x - cave_popup.size.x) * 0.5, vp_size.y - cave_popup.size.y - 16.0)
 
 func _close_popup() -> void:
 	cave_popup.visible = false
@@ -241,39 +237,34 @@ func show_document_popup(text: String, title: String = "CAVE INSCRIPTION", kind:
 	overlay.mouse_filter = Control.MOUSE_FILTER_STOP
 	lore_layer.add_child(overlay)
 
-	var panel := PanelContainer.new()
-	var panel_w: float = 380.0
-	var panel_h: float = 240.0
-	panel.position = Vector2((vp_size.x - panel_w) * 0.5, (vp_size.y - panel_h) * 0.5)
-	panel.size = Vector2(panel_w, panel_h)
-	panel.modulate = Color(1, 1, 1, 0)
+	# CenterContainer does the shrink-wrap + centering (same proven pattern as
+	# menu_panel.tscn's Box): a bare Control outside any Container parent does
+	# NOT auto-fit to its children's minimum size, which is what produced a
+	# giant blank/black panel here before this container was added.
+	var centerer := CenterContainer.new()
+	centerer.size = vp_size
+	centerer.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	overlay.add_child(centerer)
 
-	var style := StyleBoxFlat.new()
-	style.bg_color = Color(0.07, 0.09, 0.08, 0.97) if is_phone else Color(0.92, 0.88, 0.78)
-	style.border_color = Color(0.30, 0.50, 0.38) if is_phone else Color(0.3, 0.25, 0.2)
-	style.border_width_top = 2
-	style.border_width_bottom = 2
-	style.border_width_left = 2
-	style.border_width_right = 2
-	style.corner_radius_top_left = 2
-	style.corner_radius_top_right = 2
-	style.corner_radius_bottom_left = 2
-	style.corner_radius_bottom_right = 2
-	style.content_margin_left = 16
-	style.content_margin_right = 16
-	style.content_margin_top = 12
-	style.content_margin_bottom = 12
-	panel.add_theme_stylebox_override("panel", style)
+	# v3 hud: pixel panel instead of flat StyleBoxFlat + default font. "paper"
+	# (cave inscriptions/discoveries) reads as parchment; "phone" (burner-phone
+	# NA texts) reads as a dark wood card with a green terminal-text tint —
+	# same two-kind distinction as before, just built from the baked kit.
+	# Shrink-wraps to content (round 5): fixed WIDTH so short hints and long
+	# NA-phone paragraphs wrap the same way, auto HEIGHT from the wrapped
+	# text instead of a one-size 380x240 box.
+	var panel := PanelContainer.new()
+	panel.theme = PixelUI.THEME
+	panel.modulate = Color(1, 1, 1, 0)
+	panel.add_theme_stylebox_override("panel",
+		PixelUI.inset(Color(0.35, 0.85, 0.55), 16, 12) if is_phone else PixelUI.parchment(16, 12))
 
 	var vbox := VBoxContainer.new()
 	vbox.add_theme_constant_override("separation", 4)
+	vbox.custom_minimum_size = Vector2(260.0, 0.0)
 	panel.add_child(vbox)
 
-	var title_lbl := Label.new()
-	title_lbl.text = title
-	title_lbl.add_theme_font_size_override("font_size", 11)
-	title_lbl.add_theme_color_override("font_color", Color(0.55, 0.85, 0.60) if is_phone else Color(0.15, 0.12, 0.10))
-	title_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	var title_lbl := PixelUI.header(title, Color(0.55, 0.85, 0.60) if is_phone else PixelUI.INK)
 	vbox.add_child(title_lbl)
 
 	var sep := HSeparator.new()
@@ -284,23 +275,15 @@ func show_document_popup(text: String, title: String = "CAVE INSCRIPTION", kind:
 	sep.add_theme_stylebox_override("separator", sep_style)
 	vbox.add_child(sep)
 
-	var body := Label.new()
-	body.text = text
-	body.add_theme_font_size_override("font_size", 8)
-	body.add_theme_color_override("font_color", Color(0.72, 0.88, 0.75) if is_phone else Color(0.18, 0.15, 0.12))
+	var body := PixelUI.caption(text, Color(0.72, 0.88, 0.75) if is_phone else PixelUI.INK, true)
 	body.autowrap_mode = TextServer.AUTOWRAP_WORD
-	body.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	body.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	body.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	vbox.add_child(body)
 
-	var prompt := Label.new()
-	prompt.text = "[Press any key to close]"
-	prompt.add_theme_font_size_override("font_size", 9)
-	prompt.add_theme_color_override("font_color", Color(0.9, 0.75, 0.4))
-	prompt.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	var prompt := PixelUI.caption("[Press any key to close]", PixelUI.GOLD, true)
 	vbox.add_child(prompt)
 
-	overlay.add_child(panel)
+	centerer.add_child(panel)
 
 	# Fade in
 	var tw := create_tween()
@@ -475,22 +458,13 @@ func _build_newspaper_overlay() -> void:
 	newspaper_panel.position = Vector2(panel_x, panel_y)
 	newspaper_panel.size = Vector2(panel_w, panel_h)
 	newspaper_panel.modulate = Color(1, 1, 1, 0)
-
-	newspaper_paper_style = StyleBoxFlat.new()
-	newspaper_paper_style.bg_color = Color(0.92, 0.88, 0.78)
-	newspaper_paper_style.border_color = Color(0.3, 0.25, 0.2)
-	newspaper_paper_style.border_width_top = 2
-	newspaper_paper_style.border_width_bottom = 2
-	newspaper_paper_style.border_width_left = 2
-	newspaper_paper_style.border_width_right = 2
-	newspaper_paper_style.corner_radius_top_left = 2
-	newspaper_paper_style.corner_radius_top_right = 2
-	newspaper_paper_style.corner_radius_bottom_left = 2
-	newspaper_paper_style.corner_radius_bottom_right = 2
-	newspaper_paper_style.content_margin_left = 16
-	newspaper_paper_style.content_margin_right = 16
-	newspaper_paper_style.content_margin_top = 12
-	newspaper_paper_style.content_margin_bottom = 12
+	# v3 hud round 5: pixel parchment border (was a smooth rounded-corner
+	# StyleBoxFlat) + Silkscreen throughout via the shared theme, instead of
+	# per-label default-font overrides. Kept as its own parchment prop
+	# (masthead/corner-fold/coffee-stain), not reskinned to the wood dialog
+	# chrome — see hud.md.
+	newspaper_panel.theme = PixelUI.THEME
+	newspaper_paper_style = PixelUI.parchment(16, 12)
 	newspaper_panel.add_theme_stylebox_override("panel", newspaper_paper_style)
 
 	# Corner fold — small triangle in top-right corner
@@ -548,14 +522,14 @@ func _build_newspaper_overlay() -> void:
 	vbox.add_child(sep1)
 
 	newspaper_headline = Label.new()
-	newspaper_headline.add_theme_font_size_override("font_size", 12)
+	newspaper_headline.add_theme_font_size_override("font_size", 16)
 	newspaper_headline.add_theme_color_override("font_color", Color(0.12, 0.10, 0.08))
 	newspaper_headline.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	newspaper_headline.autowrap_mode = TextServer.AUTOWRAP_WORD
 	vbox.add_child(newspaper_headline)
 
 	newspaper_subhead = Label.new()
-	newspaper_subhead.add_theme_font_size_override("font_size", 9)
+	newspaper_subhead.add_theme_font_size_override("font_size", 8)
 	newspaper_subhead.add_theme_color_override("font_color", Color(0.35, 0.32, 0.28))
 	newspaper_subhead.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	newspaper_subhead.autowrap_mode = TextServer.AUTOWRAP_WORD
@@ -571,7 +545,7 @@ func _build_newspaper_overlay() -> void:
 
 	# Photo placeholder — gray box with italic caption, hidden by default
 	newspaper_photo_label = Label.new()
-	newspaper_photo_label.add_theme_font_size_override("font_size", 7)
+	newspaper_photo_label.add_theme_font_size_override("font_size", 8)
 	newspaper_photo_label.add_theme_color_override("font_color", Color(0.45, 0.42, 0.38))
 	newspaper_photo_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	newspaper_photo_label.visible = false
@@ -593,7 +567,7 @@ func _build_newspaper_overlay() -> void:
 
 	newspaper_prompt = Label.new()
 	newspaper_prompt.text = "[Press any key to continue]"
-	newspaper_prompt.add_theme_font_size_override("font_size", 10)
+	newspaper_prompt.add_theme_font_size_override("font_size", 8)
 	newspaper_prompt.add_theme_color_override("font_color", Color(0.9, 0.75, 0.4))
 	newspaper_prompt.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	vbox.add_child(newspaper_prompt)
@@ -633,7 +607,7 @@ func _show_milestone_newspaper(swamp_index: int) -> void:
 		act = 2
 	elif swamp_index >= 3:
 		act = 1
-	newspaper_paper_style.bg_color = age_colors[act]
+	newspaper_paper_style.modulate_color = age_colors[act]
 
 	# Corner fold color matches paper but darker
 	var fold_color: Color = age_colors[act].darkened(0.15)
@@ -735,7 +709,7 @@ func _show_newspaper_data(data: Dictionary) -> void:
 	newspaper_subhead.text = data.get("subhead", "")
 	newspaper_body.text = data.get("body", "")
 	# Aged paper for endgame
-	newspaper_paper_style.bg_color = Color(0.82, 0.76, 0.60)
+	newspaper_paper_style.modulate_color = Color(0.82, 0.76, 0.60)
 	newspaper_corner_fold.color = Color(0.82, 0.76, 0.60).darkened(0.15)
 	newspaper_coffee_stain.visible = true
 	newspaper_coffee_stain.position = Vector2(310, 210)
@@ -780,44 +754,30 @@ func show_ending_choice(on_choice: Callable) -> void:
 	overlay.mouse_filter = Control.MOUSE_FILTER_STOP
 	ending_choice_layer.add_child(overlay)
 
+	# v3 hud: wood card + Silkscreen instead of flat StyleBoxFlat + default
+	# font — this is the ending "confirm dialog" (hand over the list / swing).
 	var panel := PanelContainer.new()
+	panel.theme = PixelUI.THEME
 	var panel_w: float = 430.0
 	var panel_h: float = 210.0
 	panel.position = Vector2((vp_size.x - panel_w) * 0.5, (vp_size.y - panel_h) * 0.5)
 	panel.size = Vector2(panel_w, panel_h)
 	panel.modulate = Color(1, 1, 1, 0)
-
-	var style := StyleBoxFlat.new()
-	style.bg_color = Color(0.06, 0.07, 0.08, 0.97)
-	style.border_color = Color(0.55, 0.50, 0.35)
-	style.border_width_top = 2
-	style.border_width_bottom = 2
-	style.border_width_left = 2
-	style.border_width_right = 2
-	style.content_margin_left = 18
-	style.content_margin_right = 18
-	style.content_margin_top = 12
-	style.content_margin_bottom = 12
-	panel.add_theme_stylebox_override("panel", style)
+	panel.add_theme_stylebox_override("panel", PixelUI.wood(18, 12))
 
 	var vbox := VBoxContainer.new()
 	vbox.add_theme_constant_override("separation", 8)
 	panel.add_child(vbox)
 
-	var title_lbl := Label.new()
-	title_lbl.text = "THE GUEST LIST"
-	title_lbl.add_theme_font_size_override("font_size", 14)
-	title_lbl.add_theme_color_override("font_color", Color(0.9, 0.78, 0.45))
-	title_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	var title_lbl := PixelUI.header("THE GUEST LIST", PixelUI.GOLD)
 	vbox.add_child(title_lbl)
 
-	var body := Label.new()
-	body.text = "Seven officials. One mansion. Nowhere left to hide.\n\nThe burner phone buzzes once: \"The List. Now. — NA\"\n\nIn your bag: every name, every date, every flight.\nIn your hand: the hammer you came here to swing."
-	body.add_theme_font_size_override("font_size", 9)
-	body.add_theme_color_override("font_color", Color(0.82, 0.80, 0.72))
+	var body := PixelUI.caption(
+		"Seven officials. One mansion. Nowhere left to hide.\n\nThe burner phone buzzes once: \"The List. Now. — NA\"\n\nIn your bag: every name, every date, every flight.\nIn your hand: the hammer you came here to swing.",
+		PixelUI.CREAM, true)
 	body.autowrap_mode = TextServer.AUTOWRAP_WORD
-	body.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	body.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	body.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	vbox.add_child(body)
 
 	var btn_row := HBoxContainer.new()
@@ -828,21 +788,9 @@ func show_ending_choice(on_choice: Callable) -> void:
 	var make_btn := func(label_text: String, choice: String, accent: Color) -> Button:
 		var b := Button.new()
 		b.text = label_text
-		b.add_theme_font_size_override("font_size", 11)
-		b.add_theme_color_override("font_color", accent)
 		b.custom_minimum_size = Vector2(160, 28)
-		var bs := StyleBoxFlat.new()
-		bs.bg_color = Color(0.13, 0.12, 0.10)
-		bs.border_color = accent.darkened(0.3)
-		bs.border_width_top = 1
-		bs.border_width_bottom = 1
-		bs.border_width_left = 1
-		bs.border_width_right = 1
-		b.add_theme_stylebox_override("normal", bs)
-		var bs_hover: StyleBoxFlat = bs.duplicate()
-		bs_hover.bg_color = Color(0.20, 0.18, 0.14)
-		b.add_theme_stylebox_override("hover", bs_hover)
-		b.add_theme_stylebox_override("focus", bs_hover)
+		PixelUI.button(b, accent)
+		b.add_theme_color_override("font_color", accent.lightened(0.2))
 		b.pressed.connect(func() -> void:
 			var layer_ref: CanvasLayer = ending_choice_layer
 			ending_choice_layer = null

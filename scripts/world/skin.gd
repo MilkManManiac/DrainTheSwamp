@@ -17,6 +17,9 @@ var _cypress_fill: Polygon2D = null
 var _cypress: Array = []
 var _water_tints: Array = []
 var _sky_fill: ColorRect = null
+var _fill_day := Color(0.60, 0.83, 0.89)
+var _fill_dusk := Color(0.96, 0.74, 0.60)
+var _fill_night := Color(0.18, 0.30, 0.51)
 var _sun: Sprite2D = null
 var _moon: Sprite2D = null
 
@@ -66,6 +69,26 @@ func _build_sky() -> void:
 	sl.add_child(_sky)
 	_sky_dusk = _sky_layer_sprite(sl, "sky_dusk")
 	_sky_night = _sky_layer_sprite(sl, "sky_night")
+	# The painted skies stop at world y 180; the fill below must be exactly their
+	# bottom row or the edge reads as a straight seam across the screen at night.
+	_fill_day = _bottom_row_color(_sky.texture, _fill_day)
+	_fill_dusk = _bottom_row_color(_sky_dusk.texture, _fill_dusk)
+	_fill_night = _bottom_row_color(_sky_night.texture, _fill_night)
+
+func _bottom_row_color(tex: Texture2D, fallback: Color) -> Color:
+	var img: Image = tex.get_image() if tex else null
+	if img == null:
+		return fallback
+	if img.is_compressed():
+		img.decompress()
+	var h: int = img.get_height()
+	var acc := Color(0, 0, 0, 0)
+	var n: int = 0
+	for y in range(h - 2, h):
+		for x in range(0, img.get_width(), 4):
+			acc += img.get_pixel(x, y)
+			n += 1
+	return Color(acc.r / n, acc.g / n, acc.b / n, 1.0) if n > 0 else fallback
 
 func _sky_layer_sprite(sl: ParallaxLayer, name: String) -> Sprite2D:
 	var s := Sprite2D.new()
@@ -328,9 +351,12 @@ func _process(_dt: float) -> void:
 			_sky.modulate = Color(tint, tint, tint)
 			_sky_dusk.modulate = Color(tint, tint, tint, dusk_amt)
 			_sky_night.modulate.a = night_amt
-			# Fill matches the bottom row of whichever sky is showing.
-			var fill: Color = Color(0.60, 0.83, 0.89).lerp(Color(0.96, 0.74, 0.60), dusk_amt).lerp(Color(0.18, 0.30, 0.51), night_amt)
-			_sky_fill.modulate = fill * tint
+			# Fill composites the sampled bottom rows the same way the sprites stack:
+			# day and dusk carry the tint, night is drawn untinted on top.
+			var dd: Color = (_fill_day * tint).lerp(_fill_dusk * tint, dusk_amt)
+			var fill: Color = dd.lerp(_fill_night, night_amt)
+			fill.a = 1.0
+			_sky_fill.modulate = fill
 			if _tree_fill:
 				_tree_fill.modulate = Color(tint, tint, tint).lerp(Color(0.12, 0.16, 0.22), night_amt)
 			if _cypress_fill:

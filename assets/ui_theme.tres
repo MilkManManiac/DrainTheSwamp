@@ -1,79 +1,192 @@
-[gd_resource type="Theme" load_steps=6 format=3 uid="uid://buitheme0001"]
+[gd_resource type="Theme" load_steps=27 format=3 uid="uid://buitheme0001"]
 
 [ext_resource type="FontFile" path="res://assets/fonts/Silkscreen-Regular.ttf" id="1_font"]
+[ext_resource type="Texture2D" path="res://assets/art/ui/panel_wood.png" id="t_wood"]
+[ext_resource type="Texture2D" path="res://assets/art/ui/panel_inset.png" id="t_inset"]
+[ext_resource type="Texture2D" path="res://assets/art/ui/panel_parchment.png" id="t_parch"]
+[ext_resource type="Texture2D" path="res://assets/art/ui/btn_normal.png" id="t_btn_n"]
+[ext_resource type="Texture2D" path="res://assets/art/ui/btn_hover.png" id="t_btn_h"]
+[ext_resource type="Texture2D" path="res://assets/art/ui/btn_pressed.png" id="t_btn_p"]
+[ext_resource type="Texture2D" path="res://assets/art/ui/btn_disabled.png" id="t_btn_d"]
+[ext_resource type="Texture2D" path="res://assets/art/ui/bar_frame.png" id="t_bar_frame"]
+[ext_resource type="Texture2D" path="res://assets/art/ui/bar_fill.png" id="t_bar_fill"]
+[ext_resource type="Texture2D" path="res://assets/art/ui/slider_grabber.png" id="t_grab"]
+[ext_resource type="Texture2D" path="res://assets/art/ui/slider_grabber_hi.png" id="t_grab_hi"]
+[ext_resource type="Texture2D" path="res://assets/art/ui/scroll_grabber.png" id="t_scroll_grab"]
 
-[sub_resource type="StyleBoxFlat" id="btn_normal"]
-bg_color = Color(0.10, 0.12, 0.11, 0.94)
-border_width_left = 1
-border_width_top = 1
-border_width_right = 1
-border_width_bottom = 2
-border_color = Color(0.42, 0.38, 0.22, 1)
-corner_radius_top_left = 3
-corner_radius_top_right = 3
-corner_radius_bottom_left = 3
-corner_radius_bottom_right = 3
+[sub_resource type="StyleBoxTexture" id="sb_wood"]
 content_margin_left = 8.0
-content_margin_top = 3.0
+content_margin_top = 6.0
 content_margin_right = 8.0
-content_margin_bottom = 3.0
+content_margin_bottom = 6.0
+texture = ExtResource("t_wood")
+texture_margin_left = 6.0
+texture_margin_top = 6.0
+texture_margin_right = 6.0
+texture_margin_bottom = 6.0
+axis_stretch_horizontal = 1
+axis_stretch_vertical = 1
 
-[sub_resource type="StyleBoxFlat" id="btn_hover"]
-bg_color = Color(0.16, 0.19, 0.16, 0.96)
-border_width_left = 1
-border_width_top = 1
-border_width_right = 1
-border_width_bottom = 2
-border_color = Color(0.65, 0.57, 0.28, 1)
-corner_radius_top_left = 3
-corner_radius_top_right = 3
-corner_radius_bottom_left = 3
-corner_radius_bottom_right = 3
-content_margin_left = 8.0
-content_margin_top = 3.0
-content_margin_right = 8.0
-content_margin_bottom = 3.0
+[sub_resource type="StyleBoxTexture" id="sb_inset"]
+content_margin_left = 6.0
+content_margin_top = 4.0
+content_margin_right = 6.0
+content_margin_bottom = 4.0
+texture = ExtResource("t_inset")
+texture_margin_left = 3.0
+texture_margin_top = 3.0
+texture_margin_right = 3.0
+texture_margin_bottom = 3.0
 
-[sub_resource type="StyleBoxFlat" id="btn_pressed"]
-bg_color = Color(0.05, 0.06, 0.06, 0.96)
-border_width_left = 1
-border_width_top = 2
-border_width_right = 1
-border_width_bottom = 1
-border_color = Color(0.65, 0.57, 0.28, 1)
-corner_radius_top_left = 3
-corner_radius_top_right = 3
-corner_radius_bottom_left = 3
-corner_radius_bottom_right = 3
+[sub_resource type="StyleBoxTexture" id="sb_parch"]
+content_margin_left = 6.0
+content_margin_top = 4.0
+content_margin_right = 6.0
+content_margin_bottom = 4.0
+texture = ExtResource("t_parch")
+texture_margin_left = 3.0
+texture_margin_top = 3.0
+texture_margin_right = 3.0
+texture_margin_bottom = 3.0
+axis_stretch_horizontal = 1
+axis_stretch_vertical = 1
+
+[sub_resource type="StyleBoxTexture" id="btn_normal"]
 content_margin_left = 8.0
 content_margin_top = 4.0
 content_margin_right = 8.0
-content_margin_bottom = 2.0
+content_margin_bottom = 5.0
+texture = ExtResource("t_btn_n")
+texture_margin_left = 5.0
+texture_margin_top = 5.0
+texture_margin_right = 5.0
+texture_margin_bottom = 5.0
 
-[sub_resource type="StyleBoxFlat" id="btn_disabled"]
-bg_color = Color(0.09, 0.09, 0.10, 0.6)
-border_width_left = 1
-border_width_top = 1
-border_width_right = 1
-border_width_bottom = 2
-border_color = Color(0.25, 0.24, 0.20, 1)
-corner_radius_top_left = 3
-corner_radius_top_right = 3
-corner_radius_bottom_left = 3
-corner_radius_bottom_right = 3
+[sub_resource type="StyleBoxTexture" id="btn_hover"]
 content_margin_left = 8.0
-content_margin_top = 3.0
+content_margin_top = 4.0
 content_margin_right = 8.0
-content_margin_bottom = 3.0
+content_margin_bottom = 5.0
+texture = ExtResource("t_btn_h")
+texture_margin_left = 5.0
+texture_margin_top = 5.0
+texture_margin_right = 5.0
+texture_margin_bottom = 5.0
+
+[sub_resource type="StyleBoxTexture" id="btn_pressed"]
+content_margin_left = 8.0
+content_margin_top = 5.0
+content_margin_right = 8.0
+content_margin_bottom = 4.0
+texture = ExtResource("t_btn_p")
+texture_margin_left = 5.0
+texture_margin_top = 5.0
+texture_margin_right = 5.0
+texture_margin_bottom = 5.0
+
+[sub_resource type="StyleBoxTexture" id="btn_disabled"]
+content_margin_left = 8.0
+content_margin_top = 4.0
+content_margin_right = 8.0
+content_margin_bottom = 5.0
+texture = ExtResource("t_btn_d")
+texture_margin_left = 5.0
+texture_margin_top = 5.0
+texture_margin_right = 5.0
+texture_margin_bottom = 5.0
+
+[sub_resource type="StyleBoxTexture" id="btn_focus"]
+draw_center = false
+texture = ExtResource("t_btn_h")
+texture_margin_left = 5.0
+texture_margin_top = 5.0
+texture_margin_right = 5.0
+texture_margin_bottom = 5.0
+modulate_color = Color(1, 1, 1, 0)
+
+[sub_resource type="StyleBoxTexture" id="bar_bg"]
+content_margin_left = 2.0
+content_margin_top = 2.0
+content_margin_right = 2.0
+content_margin_bottom = 2.0
+texture = ExtResource("t_bar_frame")
+texture_margin_left = 2.0
+texture_margin_top = 2.0
+texture_margin_right = 2.0
+texture_margin_bottom = 2.0
+
+[sub_resource type="StyleBoxTexture" id="bar_fill"]
+texture = ExtResource("t_bar_fill")
+axis_stretch_horizontal = 1
+modulate_color = Color(0.35, 0.8, 0.35, 1)
+
+[sub_resource type="StyleBoxTexture" id="slider_track"]
+content_margin_top = 2.0
+content_margin_bottom = 2.0
+texture = ExtResource("t_bar_frame")
+texture_margin_left = 2.0
+texture_margin_top = 2.0
+texture_margin_right = 2.0
+texture_margin_bottom = 2.0
+
+[sub_resource type="StyleBoxTexture" id="slider_fill"]
+texture = ExtResource("t_bar_fill")
+axis_stretch_horizontal = 1
+modulate_color = Color(0.85, 0.7, 0.35, 1)
+
+[sub_resource type="StyleBoxTexture" id="scroll_grab"]
+texture = ExtResource("t_scroll_grab")
+texture_margin_left = 2.0
+texture_margin_top = 5.0
+texture_margin_right = 2.0
+texture_margin_bottom = 5.0
+content_margin_left = 7.0
+content_margin_right = 7.0
+
+[sub_resource type="StyleBoxEmpty" id="sb_empty"]
 
 [resource]
 default_font = ExtResource("1_font")
 default_font_size = 8
-Button/colors/font_color = Color(0.92, 0.88, 0.72, 1)
-Button/colors/font_disabled_color = Color(0.55, 0.53, 0.45, 1)
-Button/colors/font_hover_color = Color(1, 0.95, 0.75, 1)
-Button/colors/font_pressed_color = Color(0.85, 0.8, 0.6, 1)
+Button/colors/font_color = Color(0.96, 0.9, 0.74, 1)
+Button/colors/font_disabled_color = Color(0.6, 0.55, 0.45, 1)
+Button/colors/font_focus_color = Color(0.96, 0.9, 0.74, 1)
+Button/colors/font_hover_color = Color(1, 0.98, 0.86, 1)
+Button/colors/font_hover_pressed_color = Color(1, 0.98, 0.86, 1)
+Button/colors/font_pressed_color = Color(0.9, 0.82, 0.62, 1)
+Button/colors/font_outline_color = Color(0.12, 0.08, 0.05, 1)
+Button/constants/outline_size = 0
 Button/styles/disabled = SubResource("btn_disabled")
+Button/styles/focus = SubResource("btn_focus")
 Button/styles/hover = SubResource("btn_hover")
 Button/styles/normal = SubResource("btn_normal")
 Button/styles/pressed = SubResource("btn_pressed")
+Button/styles/hover_pressed = SubResource("btn_pressed")
+HSeparator/constants/separation = 6
+HSeparator/styles/separator = SubResource("sb_empty")
+HSlider/styles/grabber_area = SubResource("slider_fill")
+HSlider/styles/grabber_area_highlight = SubResource("slider_fill")
+HSlider/styles/slider = SubResource("slider_track")
+HSlider/icons/grabber = ExtResource("t_grab")
+HSlider/icons/grabber_highlight = ExtResource("t_grab_hi")
+HSlider/icons/grabber_disabled = ExtResource("t_grab")
+HSlider/constants/center_grabber = 0
+HSlider/constants/grabber_offset = 0
+Label/colors/font_color = Color(0.94, 0.88, 0.72, 1)
+Label/colors/font_shadow_color = Color(0.1, 0.06, 0.04, 0.75)
+Label/constants/shadow_offset_x = 1
+Label/constants/shadow_offset_y = 1
+PanelContainer/styles/panel = SubResource("sb_wood")
+Panel/styles/panel = SubResource("sb_wood")
+ProgressBar/styles/background = SubResource("bar_bg")
+ProgressBar/styles/fill = SubResource("bar_fill")
+ScrollContainer/styles/panel = SubResource("sb_empty")
+TooltipLabel/colors/font_color = Color(0.2, 0.14, 0.08, 1)
+TooltipLabel/colors/font_shadow_color = Color(0, 0, 0, 0)
+TooltipLabel/font_sizes/font_size = 8
+TooltipPanel/styles/panel = SubResource("sb_parch")
+VScrollBar/styles/grabber = SubResource("scroll_grab")
+VScrollBar/styles/grabber_highlight = SubResource("scroll_grab")
+VScrollBar/styles/grabber_pressed = SubResource("scroll_grab")
+VScrollBar/styles/scroll = SubResource("bar_bg")
+VScrollBar/styles/scroll_focus = SubResource("bar_bg")

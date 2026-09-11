@@ -14,6 +14,8 @@ Flags map 1:1 to the env hooks in game_world.gd / cave_base.gd / player.gd:
   --wait S      seconds to let the game run before killing it (default 7)
   --interval S  DTS_SHOT_INTERVAL (default 1.0)
   --scene RES   scene to boot (default res://scenes/main.tscn = the game world)
+Any other DTS_* var in the environment passes through, e.g. DTS_UI=shop|menu|touch
+(main.gd) opens that panel / shows the touch controls for a HUD capture.
 
 Runs `--headless --import` first whenever a PNG under assets/ has no .import
 sibling or .godot/ is missing (new art, fresh worktree). Works from any
@@ -38,8 +40,35 @@ def needs_import() -> bool:
     if not (ROOT / ".godot" / "imported").exists():
         return True
     for p in (ROOT / "assets").rglob("*.png"):
-        if not p.with_name(p.name + ".import").exists():
+        imp = p.with_name(p.name + ".import")
+        if not imp.exists():
             return True
+        # .import's dest_files hash is derived from the resource path/uid, not
+        # content, so a `git merge`/checkout that changes a PNG's bytes (a
+        # track's art regenerated with the same filename) leaves the old
+        # cached .ctex in place with the same name and Godot never notices -
+        # the game silently keeps rendering the stale texture. Catch both:
+        # (a) the cached file is simply missing (merge into a fresh worktree
+        # that never imported this path), and (b) the source PNG is newer
+        # than the cached file (content changed since the last import).
+        src_mtime = p.stat().st_mtime
+        found_dest = False
+        for line in imp.read_text(encoding="utf-8", errors="replace").splitlines():
+            if line.startswith("path=") and line[5:].strip('"').startswith("res://"):
+                dest = ROOT / line[5:].strip('"')[len("res://"):]
+                if not dest.exists() or dest.stat().st_mtime < src_mtime:
+                    return True
+                found_dest = True
+                break
+            if line.startswith("dest_files=") and not found_dest:
+                # multi-file remap (e.g. VRAM variants): any stale/missing dest triggers reimport
+                for part in line[len("dest_files="):].strip("[]").split(","):
+                    part = part.strip().strip('"')
+                    if not part.startswith("res://"):
+                        continue
+                    dest = ROOT / part[len("res://"):]
+                    if not dest.exists() or dest.stat().st_mtime < src_mtime:
+                        return True
     return False
 
 

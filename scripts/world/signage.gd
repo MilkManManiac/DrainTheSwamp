@@ -411,7 +411,11 @@ func _on_swamp_completed(swamp_index: int, _reward: float) -> void:
 
 # --- SELL planks ----------------------------------------------------------
 func _sell_plank(x: float, ground_y: float) -> void:
-	var stake := _sprite("sign_stake", x, ground_y + 1.0, -1)
+	# z 6: props.gd's camels (z 5) converge on the player, who's often
+	# standing right here to sell — same fix props round 3 applied to the
+	# old inline SELL label in game_world.gd, applied here too since ours is
+	# the one actually on screen while V3_SIGNAGE is on.
+	var stake := _sprite("sign_stake", x, ground_y + 1.0, 6)
 	_face_label(stake, STAKE_FACE, "SELL", 8, Color(1.0, 0.88, 0.35))
 
 func _build_shop_sell() -> void:
