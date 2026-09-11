@@ -92,6 +92,37 @@ addressed:
    which are confirmed working. Not independently visually confirmed;
    flagging rather than claiming it.
 
+## Round 3 (coordinator review: blocky light textures)
+
+The lamp ground-glow, lamp `PointLight2D`, and moon wash all reused
+`glow_16.png` — a hand-baked PIXEL glow (6 stepped alpha rings on a 32px
+texture, x2 NEAREST like every other art asset). Correct at firefly/
+glow-plant scale (1-2 art px), but scaled up 5-10x for lamps/moon it read as
+blocky NEAREST-filtered squares, exactly the "JPEG blocking" the coordinator
+flagged.
+
+Fix in `night.gd`:
+- Added `_build_smooth_glow_texture()`: a `GradientTexture2D`, radial fill,
+  128x128, white-to-transparent. Lights aren't art (rule 4's explicit
+  exception), so this is real smooth falloff, not a pixel asset.
+- Lamp glow sprite, lamp `PointLight2D`, and moon wash all switched from
+  `glow_16.png` to this texture, each with `texture_filter =
+  CanvasItem.TEXTURE_FILTER_LINEAR` set explicitly on that node only (the
+  module root stays `TEXTURE_FILTER_NEAREST` for every pixel-art sprite).
+- Also shrank and re-anchored the lamp ground glow (scale 5.5x2.8 → 0.55x0.16,
+  position raised) so it sits mostly above the surface line instead of
+  bleeding down into the underground dirt cross-section on sloped terrain,
+  and shrank the `PointLight2D` radius (texture_scale 10 → 1.4) and the moon
+  wash (scale 14x7 → 3.2x1.4, position shifted closer to the moon) for the
+  same reason.
+
+Re-captured `pools_night_d0.png` and `town_night.png` (camx 1500 / 900, tod
+0.85): lamp ground pools and the moon wash now read as soft gradients, no
+visible stepping at 3x pixel-crop zoom (checked). `town_night.png` also
+happens to show a frog sprite near the town-edge lamp post on a lily pad —
+the first direct confirmation of frog rendering in this session (turtle
+still unconfirmed).
+
 ## Captures (read back)
 
 `_screenshots/revamp-2026-09-11/critters-night/`:
