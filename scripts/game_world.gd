@@ -5170,8 +5170,9 @@ func _update_camels(delta: float) -> void:
 						cs["state_timer"] = 0.0
 
 			"to_shop":
-				# Walk left to shop to sell (x≈6)
-				var pump_x: float = 6.0
+				# Walk left to shop to sell, parked clear of the SELL label and
+				# wanted poster (both sit roughly x -2..64; v3 props round 3).
+				var pump_x: float = -40.0
 				var dx2: float = pump_x - cs["x"]
 				if absf(dx2) > 5.0:
 					var dir2: float = signf(dx2)
@@ -5449,7 +5450,13 @@ func _build_shop() -> void:
 	sell_lbl.add_theme_constant_override("shadow_offset_x", 1)
 	sell_lbl.add_theme_constant_override("shadow_offset_y", 1)
 	sell_lbl.position = Vector2(sx + 20, shop_y - 8)
-	sell_lbl.z_index = 5
+	# z 6, not 5: camels converge on wherever the player is standing (their
+	# "to_player" state has no standoff distance), and the player is often
+	# standing right here to sell. At the same z_index (5) as the camel body,
+	# whichever was added to the tree later won the tie and blocked the
+	# label. Keep it one z above the camel/player so SELL always reads
+	# (v3 props round 3).
+	sell_lbl.z_index = 6
 	add_child(sell_lbl)
 
 	# Shop interaction Area2D
@@ -5467,12 +5474,16 @@ func _build_shop() -> void:
 	shop_area.body_entered.connect(_on_shop_body_entered)
 	shop_area.body_exited.connect(_on_shop_body_exited)
 
-	# Wanted poster — hidden until pool 4 drained
+	# Wanted poster — hidden until pool 4 drained. Nudged left of the SELL
+	# label (which draws from about sx+20) so it isn't dead-center over it;
+	# the real fix for legibility is the z bump below, since the shop wall is
+	# too narrow to fully separate the poster from the label by x alone
+	# (v3 props round 3).
 	wanted_poster = Node2D.new()
-	wanted_poster.position = Vector2(sx + 42, shop_y - 38)
+	wanted_poster.position = Vector2(sx + 16, shop_y - 38)
 	wanted_poster.rotation_degrees = 4.0
-	wanted_poster.z_index = 5
-	wanted_poster.visible = GameManager.is_swamp_completed(4)
+	wanted_poster.z_index = 6  # above the camel/player (z 5); same tie as SELL, see above
+	wanted_poster.visible = GameManager.is_swamp_completed(4) or OS.get_environment("DTS_FORCE_WANTED") != ""
 	add_child(wanted_poster)
 
 	var poster_bg := ColorRect.new()

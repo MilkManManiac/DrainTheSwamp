@@ -146,6 +146,106 @@ altitude" follow-up did not happen.
 - **Wanted poster** still not verified live (needs `GameManager.
   is_swamp_completed(4)` true; no debug hook exists for it).
 
+## Round 3 (post-integrate merge: missing pump + SELL blocked)
+
+`v3/props` merged `v3/integrate` (commit `40a2090`, now also carrying water,
+title, caves, critters-night) via `git merge v3/integrate` — fast-forward,
+no conflicts (`v3/integrate` already contained our round-2 commit, so
+`v3/props` simply advanced to the same commit; nothing to resolve on
+`player_skin.gd.uid` or the `game_world.gd` const/module blocks).
+
+### 1. "Big pump gone at the Bog basin" — could not reproduce; hardened the likely cause
+
+Coordinator reported that at `camx 1050`/`1150`, `tod 0.3` on `v3/integrate`,
+the small pump showed but the big red flywheel pump at Bog did not, and
+ruled out z-order themselves (props root z 5 vs. water_skin.gd's z -2/2/3).
+
+Reproduced in this worktree, post-merge, at the exact coordinates given
+(`DTS_PROPS=pumps`, `--camx 1050` and `--camx 1150`, `tod 0.3/0.62/0.85`)
+multiple times, including once after `rm -rf .godot/imported` and an
+explicit `godot --headless --import` to rule out any of *my own* caching —
+**the big pump renders correctly every time** (`proof_1050_day.png`,
+`proof_1150_day.png`, etc.). Checked the merge commit's blob hash for
+`prop_pump_big.png` against the working tree: identical, so the correct
+(round-2, red/yellow) art really did land in `v3/integrate`. Searched for
+anything else that could cover it — the caves track's overworld cave
+entrance now sits at the Bog basin too (visible as "Press SPACE to enter"
+in the captures), but its root is z 3, positioned at the pool's *deepest*
+point not the rim, and its skin (`cave_skin.gd`) only runs inside the cave
+scene, not the overworld — no conflict found there or anywhere else.
+
+Given I cannot reproduce a real scene-graph bug, the most coherent
+explanation is a stale Godot import cache: `.import` sidecar files are
+committed (per the plan's own convention), and Godot's cached `.ctex` file
+name is derived from the resource path/uid, not content — so a `git merge`
+that changes a tracked PNG's *bytes* under an unchanged filename leaves the
+old cached texture in place with nothing forcing a reimport, in any
+worktree that had already been imported once before the merge landed. Since
+this bug class isn't specific to my track, hardened `tools/capture.py`'s
+shared `needs_import()` to also compare each PNG's mtime against its cached
+`.import` destination's mtime (previously it only checked for the
+`.import`/cached-file's *existence*, not staleness). This is a shared tool,
+not props-owned, so flagging it here per the "call it out" rule rather than
+silently expanding scope.
+
+**No node/line in props.gd or game_world.gd was found to hide the pump.**
+If it's still missing in someone else's view of `integrate`, the next step
+is `rm -rf .godot/imported && godot --headless --import` in that specific
+worktree, not a further code change.
+
+### 2. SELL blocked at the shop — real bug, fixed
+
+Reproduced: `GameManager.camel_states`' `"to_player"` state has no standoff
+distance — a camel walks to within 15 world units of wherever the player is
+standing, so a player at the shop (to click SELL) reliably pulls a camel
+right in front of the label. The `sell_lbl` (`_build_shop()`) and the camel
+body (`_build_camels()`) were both `z_index = 5`; Godot breaks same-z-index
+ties by scene-tree add order, and camels are added later in `_ready()`, so
+the camel always won and fully hid the text. The wanted poster had the
+identical problem (`wanted_poster.z_index = 5`, same tie, same camel drawn
+over it) — confirmed by temporarily forcing it visible (`DTS_FORCE_WANTED`,
+see below) and watching it disappear behind a camel at the shop.
+
+Fixed with the minimum edit that's actually load-bearing — z-index, not
+position, since position alone can't reliably separate a fast-moving camel
+from a static label:
+
+- `sell_lbl.z_index` 5 → 6 (`scripts/game_world.gd`, `_build_shop()`).
+- `wanted_poster.z_index` 5 → 6, same spot.
+
+Also did the two things asked for directly:
+
+- **Parked the camel clear of the label.** The `"to_shop"` (sell/unload)
+  state's `pump_x` target was `6.0`, inside the SELL label's footprint;
+  moved to `-40.0`, clear of both the label and the poster.
+- **Moved the poster off the label.** `wanted_poster.position.x` from
+  `sx + 42` to `sx + 16`. The shop wall is only 46 world units wide and the
+  label already covers most of the right two-thirds of it, so x alone
+  can't fully separate them (see code comment) — the z fix above is what
+  actually guarantees legibility regardless of exact position.
+- Added a `DTS_FORCE_WANTED` debug env hook (`wanted_poster.visible`, same
+  pattern as the rest of the `DTS_*` capture hooks) so the poster can be
+  verified without needing `is_swamp_completed(4)` true — used for this
+  round's proof captures and left in for future verification.
+
+Verified with `proof_shop_day/dusk/night.png` (`--camx -20` day to dodge
+the shop's auto-open trigger, `--camx 6` for dusk/night): SELL reads
+cleanly through the camel at every time of day, and the wanted poster (with
+`DTS_FORCE_WANTED=1`) reads on top of the camel too.
+
+## Captures (round 3, `_screenshots/revamp-2026-09-11/props/`)
+
+- `proof_1050_day/dusk/night.png`, `proof_1150_day/dusk/night.png`,
+  `proof_1500_day/dusk/night.png` — big/small pump visible at all three
+  basins, all three times of day, post-merge.
+- `proof_town900_day/dusk/night.png` — wide town-area reference at the
+  project's standard `camx 900` (this doesn't actually frame the shop —
+  the shop sits around world x -22 to 24, `camx 900` shows the Marsh/Bog
+  area — captured as specified regardless).
+- `proof_shop_day/dusk/night.png` — SELL label and wanted poster (forced
+  visible) both reading cleanly on top of a camel parked at the shop.
+- `--check` clean (only the documented pre-existing boot error).
+
 ## For other tracks
 
 - The murk-tint Polygon2D in `scripts/world/skin.gd` (z_index 4, per-pool,
@@ -154,20 +254,28 @@ altitude" follow-up did not happen.
   should build above z 4, not just above the water walls at z 0.
 - The flat dark block to the right of the island in `island_day.png` is a
   pool's water-murk tint, not props' — flagging for the water track.
-- `game_world.gd` edits stayed within the plan's switch-only rule throughout
-  both rounds: one `const V3_PROPS`, the `_ready()` instantiation block, and
-  early-return guards in `_build_island_house`, `_spawn_helicopter`,
-  `_build_pump_prop` (all pre-existing from the resumed WIP, untouched).
+- `tools/capture.py`'s `needs_import()` now also checks cached-texture
+  staleness (mtime), not just existence — relevant to every track: if art
+  you regenerate under an existing filename doesn't seem to show up after a
+  merge, `rm -rf .godot/imported` and reimport before assuming a code bug.
+- `game_world.gd` edits stayed within the plan's switch-only rule through
+  round 2. Round 3 touched two more spots outside that rule (the SELL
+  label/wanted-poster z-index and position, and the camel `"to_shop"`
+  target x) at the coordinator's explicit direction to fix the SELL
+  blockage — these are gameplay-adjacent (camel state machine target,
+  UI-ish label z-order) rather than art, flagged here since they're outside
+  the normal "switches only" convention.
 
 ## Commits
 
 - `v3 props: bake remaining assets, fix pump z-order bug, verify all five
   props with captures` (round 1)
 - `v3 props: readable pump art, island slab/politicians fix, helicopter
-  rotor fix — descope island/politicians/heli per Wes` (round 2, this
-  session)
+  rotor fix — descope island/politicians/heli per Wes` (round 2)
+- `v3 props: merge v3/integrate, harden capture.py's stale-cache check,
+  fix SELL blocked by camel/poster` (round 3, this session)
 
 ## Gemini budget used
 
-3 of 6 images this round: `prop-pump-small-v2`, `prop-pump-big-v2`,
-`prop-politicians-v2`. 3 remain unused.
+3 of 6 images total (all in round 2): `prop-pump-small-v2`,
+`prop-pump-big-v2`, `prop-politicians-v2`. 3 remain unused; round 3 used 0.
