@@ -20,8 +20,9 @@ const LAMP_TEX: Texture2D = preload("res://assets/art/drainsville/street_lamp.pn
 # radial gradient at a smooth resolution instead, with LINEAR filtering set
 # on just those nodes (the module root stays NEAREST for everything else).
 var smooth_glow: GradientTexture2D
+var _vfalloff: GradientTexture2D
 
-var _floor_wash: ColorRect
+var _floor_wash: Sprite2D
 var _lamps: Array[Dictionary] = []
 var _edges: Array[Dictionary] = []
 var _moon_wash: Sprite2D
@@ -29,6 +30,7 @@ var _moon_wash: Sprite2D
 func _ready() -> void:
 	texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	_build_smooth_glow_texture()
+	_build_vertical_falloff_texture()
 	_build_floor_wash()
 	_build_moon_wash()
 	_build_lamps()
@@ -45,6 +47,23 @@ func _build_smooth_glow_texture() -> void:
 	smooth_glow.fill = GradientTexture2D.FILL_RADIAL
 	smooth_glow.fill_from = Vector2(0.5, 0.5)
 	smooth_glow.fill_to = Vector2(1.0, 0.5)
+
+## Vertical top-to-bottom falloff (transparent top, ramping to full over the
+## first ~10% of the texture, flat for the rest) for the floor wash below --
+## a flat ColorRect there had a hard, dead-straight top edge that read as a
+## seam crossing the whole screen at night. width is 1 since the gradient
+## doesn't vary horizontally; the sprite is stretched to full world width.
+func _build_vertical_falloff_texture() -> void:
+	var g := Gradient.new()
+	g.colors = PackedColorArray([Color(1, 1, 1, 0), Color(1, 1, 1, 1), Color(1, 1, 1, 1)])
+	g.offsets = PackedFloat32Array([0.0, 0.10, 1.0])
+	_vfalloff = GradientTexture2D.new()
+	_vfalloff.gradient = g
+	_vfalloff.width = 8
+	_vfalloff.height = 256
+	_vfalloff.fill = GradientTexture2D.FILL_LINEAR
+	_vfalloff.fill_from = Vector2(0.5, 0.0)
+	_vfalloff.fill_to = Vector2(0.5, 1.0)
 
 ## A soft, moderate cool-white glow that tracks the moon, biasing the sky and
 ## upper ground slightly brighter on the moon's side of the screen. Kept
@@ -69,14 +88,19 @@ func _last_x() -> float:
 ## A big, cheap, additive blue wash over the ground band so the night floor
 ## reads as moonlit dirt/water instead of pure black. Alpha ramps with t in
 ## update(); at day it is fully transparent (== no cost, no visual change).
+## Uses the vertical falloff texture instead of a flat rect so the top edge
+## fades in over ~50 world units instead of cutting hard across the screen.
 func _build_floor_wash() -> void:
-	_floor_wash = ColorRect.new()
-	_floor_wash.color = Color(0.16, 0.26, 0.48, 0.0)
-	_floor_wash.z_index = -2
-	_floor_wash.z_as_relative = false
-	_floor_wash.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_floor_wash.size = Vector2(_last_x() + 500.0, 520.0)
+	var band_w: float = _last_x() + 500.0
+	var band_h: float = 520.0
+	_floor_wash = Sprite2D.new()
+	_floor_wash.texture = _vfalloff
+	_floor_wash.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
+	_floor_wash.centered = false
+	_floor_wash.scale = Vector2(band_w / _vfalloff.width, band_h / _vfalloff.height)
 	_floor_wash.position = Vector2(-250.0, 20.0)
+	_floor_wash.modulate = Color(0.16, 0.26, 0.48, 0.0)
+	_floor_wash.z_index = -2
 	var mat := CanvasItemMaterial.new()
 	mat.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
 	_floor_wash.material = mat
@@ -154,7 +178,7 @@ func update(t: float) -> void:
 	elif t < 0.22:
 		night_alpha = clampf(1.0 - (t - 0.15) / 0.07, 0.0, 1.0)
 
-	_floor_wash.color.a = night_alpha * 0.85
+	_floor_wash.modulate.a = night_alpha * 0.85
 
 	if world.moon:
 		_moon_wash.position = Vector2(world.moon.position.x, world.moon.position.y + 30.0)
