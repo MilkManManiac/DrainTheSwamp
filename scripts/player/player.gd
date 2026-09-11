@@ -9,6 +9,7 @@ const FRICTION: float = 2000.0
 
 signal shop_requested()
 signal cave_entrance_requested(cave_id: String)
+signal scooped()  # v3 skin plays its scoop strip off this (fired with the arm tween)
 
 var near_water: bool = false
 var near_swamp_index: int = -1
@@ -66,6 +67,7 @@ var tool_visuals: Array[ColorRect] = []
 
 var _hdr_glow: bool = false  # Forward+/Mobile: lantern emits overbright to bloom under HDR glow
 var _shot_camx: float = NAN  # debug: env DTS_CAMX parks the player at a world X for screenshots
+var _dbg_lantern: bool = false  # debug: env DTS_LANTERN=1 lights the lantern without the upgrade (captures)
 
 func _ready() -> void:
 	add_to_group("player")
@@ -73,6 +75,7 @@ func _ready() -> void:
 	var cx: String = OS.get_environment("DTS_CAMX")
 	if cx != "":
 		_shot_camx = cx.to_float()
+	_dbg_lantern = OS.get_environment("DTS_LANTERN") != ""
 	GameManager.tool_changed.connect(func(_d: Dictionary) -> void: _update_tool_visual())
 	_update_tool_visual()
 	_setup_lantern()
@@ -365,6 +368,7 @@ func _scoop_feedback() -> void:
 	flash_tween.tween_property(visual, "modulate", Color.WHITE, 0.15)
 
 	# Scoop arm animation
+	scooped.emit()
 	var scoop_tween := create_tween()
 	scoop_tween.tween_property(arm_right, "rotation", -0.5, 0.08)
 	scoop_tween.tween_property(arm_right, "rotation", 0.0, 0.12)
@@ -788,6 +792,8 @@ func _setup_lantern() -> void:
 
 func _update_lantern(delta: float) -> void:
 	var lantern_level: int = GameManager.upgrades_owned["lantern"]
+	if _dbg_lantern:
+		lantern_level = 1
 	var darkness: float = GameManager.get_darkness_factor()
 	var should_be_active: bool = lantern_level > 0 and darkness > 0.05
 
@@ -805,11 +811,11 @@ func _update_lantern(delta: float) -> void:
 	var flicker: float = 1.0 + sin(lantern_flicker_time * 12.0) * 0.08 + sin(lantern_flicker_time * 7.3) * 0.05 + sin(lantern_flicker_time * 19.7) * 0.03
 
 	# Scale energy by darkness factor (gentle at dusk, full at night)
-	var base_energy: float = GameManager.get_lantern_energy()
+	var base_energy: float = 3.0 if _dbg_lantern else GameManager.get_lantern_energy()
 	lantern_light.energy = base_energy * darkness * flicker
 
 	# Texture scale: radius to texture mapping
-	var radius: float = GameManager.get_lantern_radius()
+	var radius: float = 200.0 if _dbg_lantern else GameManager.get_lantern_radius()
 	lantern_light.texture_scale = (radius * 2.0) / 256.0 * 0.88
 
 	# Animate flame color and size (overbright on HDR so it blooms into a warm halo)
