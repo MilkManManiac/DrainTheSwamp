@@ -22,6 +22,7 @@ extends Node2D
 const ART := "res://assets/art/drainsville/"
 const DEFAULT_CHAR := "a"
 const WALK_FPS := 8.0
+const WALK_GRACE := 0.15  # s the walk strip survives an airborne blip
 const IDLE_FPS := 4.0
 const SCOOP_FRAME_TIME := 0.1
 # frames per strip [idle, walk], written by bake_char.py / paint_out_bucket.py
@@ -77,6 +78,7 @@ var _tool_id: String = ""
 var _cell: Vector2 = Vector2.ZERO  # current strip cell in art px
 var _t: float = 0.0
 var _was_walking: bool = false
+var _walk_hold: float = 0.0
 var _scoop_t: float = -1.0       # >= 0 while the scoop strip plays
 var _lantern_flame: Sprite2D = null
 var _tool_ground: bool = false
@@ -200,7 +202,14 @@ func _process(dt: float) -> void:
 		if _dbg_scoop_t >= 2.0:
 			_dbg_scoop_t -= 1.0
 			player._scoop_feedback()
-	var walking: bool = player.is_walking or _dbg_walk >= 0
+	# player.is_walking drops for a frame on every terrain bump (is_on_floor
+	# flickers); without this grace each blip restarted the cycle at frame 0
+	# and the walk looked frozen (2026-09-12, Wes: "walking animation stopped").
+	if player.is_walking:
+		_walk_hold = WALK_GRACE
+	else:
+		_walk_hold = maxf(0.0, _walk_hold - dt)
+	var walking: bool = _walk_hold > 0.0 or _dbg_walk >= 0
 	if walking != _was_walking:
 		_was_walking = walking
 		_t = 0.0

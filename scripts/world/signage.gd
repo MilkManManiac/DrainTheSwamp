@@ -443,8 +443,11 @@ func _build_tower_sell() -> void:
 
 # --- cave mouths: ride the old entrance roots; the old ColorRects go fully
 # transparent (their .visible flags still flip on unlock, we mirror them).
-const CAVE_MOUND_HALF_W := 110.0  # cave_mouth.png world half-width — the sprite is already trimmed to its
-# opaque content in the bake, so this is its true footprint, not padding.
+# 2026-09-12, Wes: caves "wayyyy too big, covers up the whole water" — at the
+# sign SCALE the mound was 221x90 world px (the old entrance was 20x16). Half that.
+const CAVE_SCALE := 0.25
+const CAVE_MOUND_HALF_W := 55.0  # cave_mouth.png world half-width at CAVE_SCALE — the sprite is already
+# trimmed to its opaque content in the bake, so this is its true footprint, not padding.
 const CAVE_PLANK_HALF_W := 38.0   # sign_stake_l.png world half-width
 
 func _build_cave_mouths() -> void:
@@ -456,8 +459,8 @@ func _build_cave_mouths() -> void:
 			var n: CanvasItem = ce[key]
 			if is_instance_valid(n):
 				n.modulate = Color(1, 1, 1, 0)
-		var sealed := _child_sprite(root, "cave_sealed", 0.0, 1.0, k % 2 == 1)
-		var mouth := _child_sprite(root, "cave_mouth", 0.0, 1.0, k % 2 == 0)
+		var sealed := _child_sprite(root, "cave_sealed", 0.0, 1.0, k % 2 == 1, CAVE_SCALE)
+		var mouth := _child_sprite(root, "cave_mouth", 0.0, 1.0, k % 2 == 0, CAVE_SCALE)
 		# Warm light in the mouth once open (the old amber rect is invisible now).
 		var glow := PointLight2D.new()
 		if world.has_method("_make_light_texture"):
@@ -515,13 +518,13 @@ func _build_cave_mouths() -> void:
 		k += 1
 	_sync_caves()
 
-func _child_sprite(parent: Node2D, name: String, x: float, ground_y: float, flip: bool) -> Sprite2D:
+func _child_sprite(parent: Node2D, name: String, x: float, ground_y: float, flip: bool, sc: float = SCALE) -> Sprite2D:
 	var s := Sprite2D.new()
 	s.texture = _tex(name)
 	s.centered = false
-	s.scale = Vector2(SCALE, SCALE)
+	s.scale = Vector2(sc, sc)
 	s.flip_h = flip
-	s.position = Vector2(x - s.texture.get_width() * SCALE * 0.5, ground_y - s.texture.get_height() * SCALE).round()
+	s.position = Vector2(x - s.texture.get_width() * sc * 0.5, ground_y - s.texture.get_height() * sc).round()
 	parent.add_child(s)
 	return s
 
