@@ -1,6 +1,6 @@
 # Pixel-art revamp, round 2 — 2026-09-11
 
-**Status: PAUSED 2026-09-11 (Wes: "save the remaining work for later"). Each track's partial work is committed as unverified WIP on its `v3/<track>` branch; see the progress log at the bottom for how to resume.** Continues `visual-direction-pick-2026-09-10.md` (Wes picked B, pixel art; overworld skinned; player A picked). This round finishes the job: everything that is still a procedural Polygon2D / ColorRect / smooth-font surface gets replaced in the same pixel language, using the same process (packs for repeats, Gemini for one-offs, bake to the art grid, capture, judge).
+**Status: WRAPPED 2026-09-11, merged 2026-10-01. All eight tracks are merged; only signage round 4 is unfinished (WIP on `v3/signage`). The open list is in the root `README.md`.** Continues `visual-direction-pick-2026-09-10.md` (Wes picked B, pixel art; overworld skinned; player A picked). This round finishes the job: everything that is still a procedural Polygon2D / ColorRect / smooth-font surface gets replaced in the same pixel language, using the same process (packs for repeats, Gemini for one-offs, bake to the art grid, capture, judge).
 
 Wes, 2026-09-10 night: *"Massive improvement overall."* The direction is right; the gap is coverage. The remaining AI-tell is every place where the old procedural draw still shows next to real pixel art (pink billboards, smooth "Marsh 100.0%" labels, square green frogs, black nights, untouched caves, the HUD).
 
