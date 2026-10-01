@@ -85,6 +85,9 @@ func _setup_loot_and_lore() -> void:
 	lore1.position = Vector2(1100, _get_cave_terrain_y_at(1100))
 	add_child(lore1)
 
+	if V3_CAVES:
+		return  # v3 pixel kit (cave_skin.gd) draws the decoration now; old ColorRect/Line2D clutter below is quarantined
+
 	# Dripping water features (grotto theme)
 	for i in range(15):
 		var dx: float = randf_range(80, 2120)

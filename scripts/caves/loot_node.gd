@@ -21,7 +21,16 @@ func _ready() -> void:
 	_build_visual()
 	_build_interaction()
 
+# v3 pixel kit (2026-09-11): baked prop strip (crate / ore vein / rune slab) from
+# assets/art/caves/loot_props.png; falls back to the old ColorRect box if missing.
+const V3_LOOT_TEX := "res://assets/art/caves/loot_props.png"
+const V3_FONT := "res://assets/fonts/Silkscreen-Regular.ttf"
+var v3_sprite: Sprite2D = null
+
 func _build_visual() -> void:
+	if ResourceLoader.exists(V3_LOOT_TEX):
+		_build_visual_v3()
+		return
 	# Loot pile/box visual
 	var base := ColorRect.new()
 	base.size = Vector2(12, 10)
@@ -61,6 +70,42 @@ func _build_visual() -> void:
 		glow_light.texture_scale = 0.4
 		add_child(glow_light)
 
+func _build_visual_v3() -> void:
+	v3_sprite = Sprite2D.new()
+	v3_sprite.texture = load(V3_LOOT_TEX)
+	v3_sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	v3_sprite.hframes = 3
+	# crate for cash finds, ore vein for stat / tool / camel finds
+	v3_sprite.frame = 0 if reward_money > 0.0 else 1
+	v3_sprite.scale = Vector2(0.5, 0.5)
+	v3_sprite.position = Vector2(0, -v3_sprite.texture.get_height() * 0.25)
+	v3_sprite.z_index = 3
+	if collected:
+		v3_sprite.modulate = Color(0.45, 0.42, 0.4)
+	add_child(v3_sprite)
+	if not collected:
+		glow_light = PointLight2D.new()
+		glow_light.color = Color(1.0, 0.9, 0.4)
+		glow_light.blend_mode = PointLight2D.BLEND_MODE_ADD
+		glow_light.energy = 1.5
+		glow_light.shadow_enabled = false
+		glow_light.position = Vector2(0, -8)
+		var gradient := GradientTexture2D.new()
+		gradient.width = 128
+		gradient.height = 128
+		gradient.fill = GradientTexture2D.FILL_RADIAL
+		gradient.fill_from = Vector2(0.5, 0.5)
+		gradient.fill_to = Vector2(0.5, 0.0)
+		var grad := Gradient.new()
+		grad.set_offset(0, 0.0)
+		grad.set_color(0, Color(1, 1, 1, 1))
+		grad.set_offset(1, 1.0)
+		grad.set_color(1, Color(0, 0, 0, 0))
+		gradient.gradient = grad
+		glow_light.texture = gradient
+		glow_light.texture_scale = 0.4
+		add_child(glow_light)
+
 func _build_interaction() -> void:
 	var area := Area2D.new()
 	area.collision_layer = 0
@@ -76,11 +121,8 @@ func _build_interaction() -> void:
 	area.body_exited.connect(_on_body_exited)
 
 	# Hint label
-	hint_label = Label.new()
-	hint_label.text = "[SPACE]"
-	hint_label.add_theme_font_size_override("font_size", 10)
-	hint_label.add_theme_color_override("font_color", Color(1.0, 0.9, 0.5, 0.8))
-	hint_label.position = Vector2(-16, -28)
+	hint_label = PixelUI.prompt("[SPACE]", Color(1.0, 0.9, 0.5, 0.9))
+	hint_label.position = Vector2(-16, -30)
 	hint_label.z_index = 8
 	hint_label.visible = false
 	add_child(hint_label)
@@ -109,6 +151,9 @@ func _process(delta: float) -> void:
 func _collect() -> void:
 	collected = true
 	hint_label.visible = false
+	if v3_sprite:
+		var ctw := create_tween()
+		ctw.tween_property(v3_sprite, "modulate", Color(0.45, 0.42, 0.4), 0.4)
 
 	# Apply rewards (via GameManager so the Daring Bonus + lifetime earnings apply)
 	if reward_money > 0.0:

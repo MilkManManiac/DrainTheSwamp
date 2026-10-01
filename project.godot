@@ -59,6 +59,10 @@ scoop={
 ]
 }
 
+[gui]
+
+theme/custom="res://assets/ui_theme.tres"
+
 [rendering]
 
 ; R0 high-res overhaul: linear filtering for crisp HD gradients/textures

@@ -90,6 +90,9 @@ func _setup_loot_and_lore() -> void:
 	report1.position = Vector2(1350, _get_cave_terrain_y_at(1350))
 	add_child(report1)
 
+	if V3_CAVES:
+		return  # v3 pixel kit (cave_skin.gd) draws the decoration now; old ColorRect/Line2D clutter below is quarantined
+
 	# Extra water puddles (wet theme) — on ridges only
 	for i in range(6):
 		var px: float = randf_range(620, 880)

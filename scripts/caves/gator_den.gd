@@ -83,6 +83,9 @@ func _setup_loot_and_lore() -> void:
 	report1.position = Vector2(1200, _get_cave_terrain_y_at(1200))
 	add_child(report1)
 
+	if V3_CAVES:
+		return  # v3 pixel kit (cave_skin.gd) draws the decoration now; old ColorRect/Line2D clutter below is quarantined
+
 	# Scattered bones (decorative)
 	for i in range(8):
 		var bx: float = randf_range(100, 1300)

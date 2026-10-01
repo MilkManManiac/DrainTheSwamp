@@ -58,21 +58,16 @@ var _prestige: Array[String] = [
 ]
 
 func _ready() -> void:
+	# v3: wood plank strip (theme PanelContainer style) with Silkscreen 8 text.
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
-	custom_minimum_size = Vector2(0, 13)
-	var style := StyleBoxFlat.new()
-	style.bg_color = Color(0.04, 0.05, 0.07, 0.72)
-	add_theme_stylebox_override("panel", style)
+	custom_minimum_size = Vector2(0, 16)
+	var strip: StyleBoxTexture = PixelUI.THEME.get_stylebox("panel", "PanelContainer").duplicate()
+	strip.content_margin_top = 3
+	strip.content_margin_bottom = 3
+	add_theme_stylebox_override("panel", strip)
 
-	_label = Label.new()
-	_label.add_theme_font_size_override("font_size", 10)
-	_label.add_theme_color_override("font_color", Color(0.85, 0.92, 0.8))
-	_label.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.6))
-	_label.add_theme_constant_override("shadow_offset_x", 1)
-	_label.add_theme_constant_override("shadow_offset_y", 1)
-	_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_label = PixelUI.caption("", PixelUI.CREAM, true)
 	_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
-	_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_label)
 
 	modulate.a = 0.0
@@ -87,7 +82,7 @@ func _process(delta: float) -> void:
 
 func _show_headline() -> void:
 	_showing = true
-	_label.text = "SWAMP TIMES — " + _pick_line()
+	_label.text = "SWAMP TIMES - " + _pick_line()
 	var tw := create_tween()
 	tw.tween_property(self, "modulate:a", 1.0, FADE_TIME)
 	tw.tween_interval(HOLD_TIME)

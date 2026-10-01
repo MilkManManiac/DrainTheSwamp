@@ -91,6 +91,9 @@ func _setup_loot_and_lore() -> void:
 	report1.position = Vector2(1600, _get_cave_terrain_y_at(1600))
 	add_child(report1)
 
+	if V3_CAVES:
+		return  # v3 pixel kit (cave_skin.gd) draws the decoration now; old ColorRect/Line2D clutter below is quarantined
+
 	# Wooden beam supports (mine theme decorations) — only on non-pool terrain
 	var beam_positions: Array[float] = [150.0, 780.0, 920.0, 1550.0, 1700.0]
 	for bx in beam_positions:
