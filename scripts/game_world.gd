@@ -750,6 +750,8 @@ func _on_hint_money(new_money: float) -> void:
 
 func _show_tutorial() -> void:
 	var text := "WASD / ARROWS — Move\nHOLD SPACE near water — Scoop\nSPACE at shop — Open shop\nSPACE near cave — Enter cave\nESC — Menu\n\nScoop water, sell it at the shop, buy upgrades, and drain the swamp!"
+	if TouchControls.enabled:
+		text = "Hold the arrows — Move\nHold SCOOP near water — Scoop\nSCOOP at a shop — Open shop\nSCOOP near a cave — Enter cave\nTap MENU — Open menu\n\nScoop water, sell it at the shop, buy upgrades, and drain the swamp!"
 	SceneManager.show_document_popup(text, "HOW TO PLAY")
 
 # --- Shared foliage sway materials (R3) ---

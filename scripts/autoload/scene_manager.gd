@@ -280,7 +280,8 @@ func show_document_popup(text: String, title: String = "CAVE INSCRIPTION", kind:
 	body.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	vbox.add_child(body)
 
-	var prompt := PixelUI.caption("[Press any key to close]", PixelUI.GOLD, true)
+	var dismiss_text := "[Tap to close]" if TouchControls.enabled else "[Press any key to close]"
+	var prompt := PixelUI.caption(dismiss_text, PixelUI.GOLD, true)
 	vbox.add_child(prompt)
 
 	centerer.add_child(panel)
