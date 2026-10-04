@@ -152,7 +152,10 @@ func set_enabled(value: bool) -> void:
 func _activate() -> void:
 	enabled = true
 	_container.visible = true
-	Input.emulate_mouse_from_touch = false
+	# Godot Control buttons (title, character picker, HUD and menus) need
+	# mouse emulation even while the multi-touch gameplay controls are on.
+	# The player ignores the separate mouse scoop action in touch mode.
+	Input.emulate_mouse_from_touch = true
 
 func _deactivate() -> void:
 	enabled = false

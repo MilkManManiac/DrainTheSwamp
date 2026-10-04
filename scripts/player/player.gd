@@ -286,9 +286,9 @@ func _physics_process(delta: float) -> void:
 	# handler (shop/cave entrance/water); HOLDING the key repeats water scooping only,
 	# so carrying the button held past a shop or cave entrance never triggers them.
 	if scoop_cooldown_timer <= 0.0 and not ui_panel_open:
-		if Input.is_action_just_pressed("scoop"):
+		if Input.is_action_just_pressed("scoop") or (not TouchControls.enabled and Input.is_action_just_pressed("scoop_mouse")):
 			_handle_scoop()
-		elif Input.is_action_pressed("scoop"):
+		elif Input.is_action_pressed("scoop") or (not TouchControls.enabled and Input.is_action_pressed("scoop_mouse")):
 			_auto_scoop_water()
 
 	# Auto-scoop: only near water/cave pool, only when standing still for 3s, only scoops (never shop/pump/cave)
